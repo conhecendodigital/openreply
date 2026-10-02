@@ -3,6 +3,7 @@ import { getCurrentWorkspaceId } from "@/lib/auth";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import { getConversationMessages, MetaApiError } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
+import { extractMessageMedia, type MessageMedia } from "@/lib/meta/message-media";
 
 export interface ThreadMessage {
   id: string;
@@ -10,6 +11,7 @@ export interface ThreadMessage {
   fromMe: boolean;
   fromUsername: string | null;
   createdTime: string | null;
+  media?: MessageMedia[];
 }
 
 export interface ThreadResponse {
@@ -53,6 +55,7 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
         fromMe: m.from?.id === account.instagramId,
         fromUsername: m.from?.username ?? null,
         createdTime: m.created_time ?? null,
+        media: extractMessageMedia(m),
       }))
       .reverse();
 

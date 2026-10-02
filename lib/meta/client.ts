@@ -1,4 +1,5 @@
 import { getMetaGraphApiVersion, requireEnv } from "@/lib/env";
+import type { RawMessageMediaFields } from "@/lib/meta/message-media";
 
 function instagramGraphBase() {
   return `https://graph.instagram.com/${getMetaGraphApiVersion()}`;
@@ -491,12 +492,30 @@ export interface InstagramParticipant {
   username?: string;
 }
 
-export interface InstagramMessage {
+export interface InstagramMessage extends RawMessageMediaFields {
   id: string;
   created_time?: string;
   message?: string;
   from?: InstagramParticipant;
   to?: { data: InstagramParticipant[] };
+}
+
+// Media fields for DMs (photos, videos, audio, shared posts, story replies).
+// Requested separately so that, if Meta rejects one of them, the inbox falls
+// back to text-only instead of breaking.
+const MESSAGE_MEDIA_FIELDS =
+  "attachments{image_data,video_data,audio_data,file_url,mime_type},shares{link},story";
+
+async function fetchWithMediaFallback<T>(
+  buildUrl: (withMedia: boolean) => URL
+): Promise<T> {
+  try {
+    return await handleResponse<T>(await fetch(buildUrl(true).toString()));
+  } catch (err) {
+    if (err instanceof TokenExpiredError || err instanceof RateLimitError) throw err;
+    console.warn("[Meta] Media fields rejected, retrying text-only:", err);
+    return handleResponse<T>(await fetch(buildUrl(false).toString()));
+  }
 }
 
 export interface InstagramConversation {
@@ -515,17 +534,19 @@ export async function getConversations(
   accessToken: string,
   igUserId: string
 ): Promise<InstagramConversation[]> {
-  const url = new URL(`${instagramGraphBase()}/${igUserId}/conversations`);
-  url.searchParams.set("platform", "instagram");
-  url.searchParams.set(
-    "fields",
-    "participants,updated_time,messages.limit(1){message,from,created_time}"
+  const data = await fetchWithMediaFallback<{ data: InstagramConversation[] }>(
+    (withMedia) => {
+      const url = new URL(`${instagramGraphBase()}/${igUserId}/conversations`);
+      url.searchParams.set("platform", "instagram");
+      url.searchParams.set(
+        "fields",
+        `participants,updated_time,messages.limit(1){message,from,created_time${withMedia ? `,${MESSAGE_MEDIA_FIELDS}` : ""}}`
+      );
+      url.searchParams.set("limit", "50");
+      url.searchParams.set("access_token", accessToken);
+      return url;
+    }
   );
-  url.searchParams.set("limit", "50");
-  url.searchParams.set("access_token", accessToken);
-
-  const response = await fetch(url.toString());
-  const data = await handleResponse<{ data: InstagramConversation[] }>(response);
   return data.data ?? [];
 }
 
@@ -537,13 +558,16 @@ export async function getConversationMessages(
   accessToken: string,
   conversationId: string
 ): Promise<InstagramMessage[]> {
-  const url = new URL(`${instagramGraphBase()}/${conversationId}`);
-  url.searchParams.set("fields", "messages{id,created_time,from,to,message}");
-  url.searchParams.set("access_token", accessToken);
-
-  const response = await fetch(url.toString());
-  const data = await handleResponse<{ messages?: { data: InstagramMessage[] } }>(
-    response
+  const data = await fetchWithMediaFallback<{ messages?: { data: InstagramMessage[] } }>(
+    (withMedia) => {
+      const url = new URL(`${instagramGraphBase()}/${conversationId}`);
+      url.searchParams.set(
+        "fields",
+        `messages{id,created_time,from,to,message${withMedia ? `,${MESSAGE_MEDIA_FIELDS}` : ""}}`
+      );
+      url.searchParams.set("access_token", accessToken);
+      return url;
+    }
   );
   return data.messages?.data ?? [];
 }

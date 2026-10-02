@@ -7,6 +7,7 @@ import {
   MetaApiError,
 } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
+import { extractMessageMedia, mediaLabel } from "@/lib/meta/message-media";
 
 export interface ConversationListItem {
   id: string;
@@ -66,7 +67,8 @@ export async function GET(request: NextRequest) {
         updatedTime: c.updated_time ?? null,
         lastMessage: last
           ? {
-              text: last.message ?? "",
+              // A photo/video-only message has no text: show what it is instead.
+              text: last.message || mediaLabel(extractMessageMedia(last)),
               fromMe: last.from?.id === account.instagramId,
               createdTime: last.created_time ?? null,
             }

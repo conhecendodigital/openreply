@@ -24,6 +24,60 @@ const CACHE_MAX_AGE_MS = 60_000;
 const convCacheKey = (accountId: string) => `inbox:convs:${accountId}`;
 const msgCacheKey = (conversationId: string) => `inbox:msgs:${conversationId}`;
 
+// Photos, videos and audio the person sent, plus shared posts and story
+// replies. Meta's media URLs are short-lived, so they are only rendered.
+function MessageMediaList({
+  media,
+  fromMe,
+}: {
+  media: NonNullable<ThreadMessage["media"]>;
+  fromMe: boolean;
+}) {
+  const linkClass = `underline ${fromMe ? "text-white" : "text-accent"}`;
+  return (
+    <div className="mb-1 space-y-2">
+      {media.map((item, index) => {
+        const key = `${item.url}-${index}`;
+        if (item.type === "image") {
+          return (
+            <a key={key} href={item.url} target="_blank" rel="noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL, not optimizable */}
+              <img
+                src={item.url}
+                alt="Photo sent in the conversation"
+                className="max-h-72 w-auto rounded-md"
+                loading="lazy"
+              />
+            </a>
+          );
+        }
+        if (item.type === "video") {
+          return (
+            <video
+              key={key}
+              src={item.url}
+              poster={item.previewUrl}
+              controls
+              preload="metadata"
+              className="max-h-72 w-full rounded-md"
+            />
+          );
+        }
+        if (item.type === "audio") {
+          return <audio key={key} src={item.url} controls className="w-full" />;
+        }
+        const label =
+          item.type === "share" ? "Shared post" : item.type === "story" ? "Story" : "Attachment";
+        return (
+          <a key={key} href={item.url} target="_blank" rel="noreferrer" className={linkClass}>
+            {label} ↗
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 function formatTime(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -364,7 +418,12 @@ export default function InboxPage() {
                             : "bg-surface text-foreground border border-border"
                         }`}
                       >
-                        <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                        {m.media && m.media.length > 0 && (
+                          <MessageMediaList media={m.media} fromMe={m.fromMe} />
+                        )}
+                        {m.text && (
+                          <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                        )}
                         <p
                           className={`mt-1 text-[10px] ${
                             m.fromMe ? "text-white/70" : "text-zinc-500"
