@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { bearerMatches } from "../lib/api-token";
+import {
+  API_TOKEN_PREFIX,
+  bearerMatches,
+  extractBearer,
+  generateApiToken,
+  hashApiToken,
+} from "../lib/api-token";
 import { handleMcpMessage, TOOLS, type InternalCall } from "../lib/mcp/server";
 
 const TOKEN = "a".repeat(40);
@@ -20,6 +26,30 @@ describe("bearerMatches", () => {
   it("stays disabled when the token is unset or too short", () => {
     expect(bearerMatches(`Bearer ${TOKEN}`, undefined)).toBe(false);
     expect(bearerMatches("Bearer changeme", "changeme")).toBe(false);
+  });
+});
+
+describe("workspace API keys", () => {
+  it("generates long, prefixed, unique keys", () => {
+    const a = generateApiToken();
+    const b = generateApiToken();
+    expect(a.token.startsWith(API_TOKEN_PREFIX)).toBe(true);
+    expect(a.token.length).toBeGreaterThanOrEqual(40);
+    expect(a.token).not.toBe(b.token);
+    expect(a.token.startsWith(a.prefix)).toBe(true);
+  });
+
+  it("stores a hash, never the key", () => {
+    const { token, tokenHash } = generateApiToken();
+    expect(tokenHash).toBe(hashApiToken(token));
+    expect(tokenHash).not.toContain(token);
+    expect(tokenHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("reads the key out of a bearer header", () => {
+    expect(extractBearer("Bearer or_abc")).toBe("or_abc");
+    expect(extractBearer("Basic xyz")).toBeNull();
+    expect(extractBearer(undefined)).toBeNull();
   });
 });
 

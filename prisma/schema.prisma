@@ -84,8 +84,28 @@ model Workspace {
   linkClicks        LinkClick[]
   webhookEvents     WebhookEvent[]
   operationalEvents OperationalEvent[]
+  apiTokens         ApiToken[]
 
   @@index([ownerId])
+}
+
+/// Workspace API key for scripts and the MCP endpoint. Only a SHA-256 hash is
+/// stored; the key itself is shown once when created.
+model ApiToken {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  tokenHash   String    @unique
+  /// First characters of the key, so the settings list can tell keys apart.
+  prefix      String
+  createdById String?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 model WorkspaceMember {

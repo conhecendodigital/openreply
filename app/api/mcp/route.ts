@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bearerMatches } from "@/lib/api-token";
+import { resolveApiTokenUserId } from "@/lib/api-token-auth";
 import {
   handleMcpMessage,
   type InternalCall,
@@ -46,7 +46,7 @@ function resolveHandler(method: string, pathname: string): { handler: Handler; i
 
 export async function POST(request: NextRequest) {
   const authorization = request.headers.get("authorization");
-  if (!bearerMatches(authorization, process.env.OPENREPLY_API_TOKEN)) {
+  if (!(await resolveApiTokenUserId(authorization))) {
     return unauthorized();
   }
 
