@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { extractMessageMedia, mediaLabel } from "../lib/meta/message-media";
+import { extractMessageMedia, extractWebhookMedia, mediaLabel } from "../lib/meta/message-media";
+
+describe("extractWebhookMedia", () => {
+  it("reads a voice note from the stored webhook message", () => {
+    expect(
+      extractWebhookMedia({
+        mid: "m1",
+        attachments: [{ type: "audio", payload: { url: "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1" } }],
+      })
+    ).toEqual([{ type: "audio", url: "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1" }]);
+  });
+
+  it("ignores messages without attachments", () => {
+    expect(extractWebhookMedia({ mid: "m1", text: "oi" })).toEqual([]);
+    expect(extractWebhookMedia(null)).toEqual([]);
+  });
+
+  it("accepts unknown *_data shapes from the Graph API", () => {
+    expect(
+      extractMessageMedia({ attachments: { data: [{ voice_data: { url: "https://cdn/v" } } as never] } })
+    ).toEqual([{ type: "file", url: "https://cdn/v" }]);
+  });
+});
 
 describe("extractMessageMedia", () => {
   it("reads photos, videos and audio from Graph API attachments", () => {

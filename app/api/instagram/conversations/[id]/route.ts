@@ -3,7 +3,12 @@ import { getCurrentWorkspaceId } from "@/lib/auth";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import { getConversationMessages, MetaApiError } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
-import { extractMessageMedia, type MessageMedia } from "@/lib/meta/message-media";
+import {
+  extractMessageMedia,
+  extractWebhookMedia,
+  type MessageMedia,
+} from "@/lib/meta/message-media";
+import { prisma } from "@/lib/db/client";
 
 export interface ThreadMessage {
   id: string;
@@ -58,6 +63,27 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
         media: extractMessageMedia(m),
       }))
       .reverse();
+
+    // The Conversations API leaves some media out (voice notes came back empty
+    // in testing), but the webhook for the same message carries it. Fill those
+    // gaps from the stored webhook event, matched by message id.
+    const blanks = messages.filter((m) => !m.text && (m.media?.length ?? 0) === 0 && !m.fromMe);
+    await Promise.all(
+      blanks.map(async (m) => {
+        const containment = JSON.stringify({ entry: [{ messaging: [{ message: { mid: m.id } }] }] });
+        const rows = await prisma.$queryRaw<{ message: unknown }[]>`
+          SELECT msg->'message' AS message
+          FROM "WebhookEvent" e,
+               jsonb_array_elements(e.payload->'entry') en,
+               jsonb_array_elements(en->'messaging') msg
+          WHERE e."workspaceId" = ${workspaceId}
+            AND e.payload @> ${containment}::jsonb
+            AND msg->'message'->>'mid' = ${m.id}
+          LIMIT 1`;
+        const media = rows[0] ? extractWebhookMedia(rows[0].message) : [];
+        if (media.length > 0) m.media = media;
+      })
+    ).catch((err) => console.warn("[Conversation Messages] Webhook media lookup failed:", err));
 
     const data: ThreadResponse = { messages };
     return NextResponse.json({ success: true, data });

@@ -38,22 +38,46 @@ function typeFromMime(mime: string | undefined): MessageMediaType {
   return "file";
 }
 
+type RawAttachment = NonNullable<NonNullable<RawMessageMediaFields["attachments"]>["data"]>[number];
+
+function asMediaType(value: string | undefined): MessageMediaType | null {
+  return value === "image" || value === "video" || value === "audio" ? value : null;
+}
+
+/**
+ * One attachment, in whichever shape Meta used: Graph API `*_data` objects,
+ * `file_url` + mime type, or the webhook `{type, payload: {url}}`. Unknown
+ * `<kind>_data.url` keys are accepted too, since the shape differs by media type.
+ */
+function fromAttachment(a: RawAttachment): MessageMedia | null {
+  if (a.image_data?.url) return { type: "image", url: a.image_data.url, previewUrl: a.image_data.preview_url };
+  if (a.video_data?.url) return { type: "video", url: a.video_data.url, previewUrl: a.video_data.preview_url };
+  if (a.audio_data?.url) return { type: "audio", url: a.audio_data.url };
+  if (a.payload?.url) return { type: asMediaType(a.type) ?? "file", url: a.payload.url };
+  if (a.file_url) return { type: asMediaType(a.type) ?? typeFromMime(a.mime_type), url: a.file_url };
+
+  for (const [key, value] of Object.entries(a as Record<string, unknown>)) {
+    const url = (value as { url?: unknown } | null)?.url;
+    if (key.endsWith("_data") && typeof url === "string") {
+      return { type: asMediaType(key.replace(/_data$/, "")) ?? "file", url };
+    }
+  }
+  return null;
+}
+
+/** Attachments from a stored webhook `message` object (always the `{type, payload}` shape). */
+export function extractWebhookMedia(webhookMessage: unknown): MessageMedia[] {
+  const attachments = (webhookMessage as { attachments?: RawAttachment[] } | null)?.attachments;
+  if (!Array.isArray(attachments)) return [];
+  return attachments.map(fromAttachment).filter((m): m is MessageMedia => m !== null);
+}
+
 export function extractMessageMedia(message: RawMessageMediaFields): MessageMedia[] {
   const media: MessageMedia[] = [];
 
   for (const a of message.attachments?.data ?? []) {
-    if (a.image_data?.url) {
-      media.push({ type: "image", url: a.image_data.url, previewUrl: a.image_data.preview_url });
-    } else if (a.video_data?.url) {
-      media.push({ type: "video", url: a.video_data.url, previewUrl: a.video_data.preview_url });
-    } else if (a.audio_data?.url) {
-      media.push({ type: "audio", url: a.audio_data.url });
-    } else if (a.file_url) {
-      media.push({ type: typeFromMime(a.mime_type), url: a.file_url });
-    } else if (a.payload?.url) {
-      const t = a.type === "image" || a.type === "video" || a.type === "audio" ? a.type : "file";
-      media.push({ type: t, url: a.payload.url });
-    }
+    const item = fromAttachment(a);
+    if (item) media.push(item);
   }
 
   for (const s of message.shares?.data ?? []) {
