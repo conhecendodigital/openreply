@@ -123,8 +123,12 @@ vi.mock("bullmq", () => {
       close: vi.fn(),
     };
   }
+  class UnrecoverableError extends Error {
+    name = "UnrecoverableError";
+  }
   return {
     Worker: MockWorker,
+    UnrecoverableError,
   };
 });
 
@@ -901,6 +905,31 @@ describe("DM Worker — one private reply per comment", () => {
         }),
       })
     );
+  });
+
+  it("should neither resend as text nor retry when Meta answers 'unknown error' (it may have delivered)", async () => {
+    // 2026-10-02: Meta returned code 1 for a button DM it had delivered; the text
+    // fallback plus 3 retries sent the same DM 6 times to one person.
+    mockPrisma.automation.findMany.mockResolvedValue([
+      {
+        ...mockAutomation,
+        trackedLinks: [
+          { slug: "abc123", label: null, destinationUrl: "https://example.com" },
+        ],
+      },
+    ]);
+    const { MetaApiError } = await import("@/lib/meta/client");
+    mockSendPrivateReplyWithLinkButton.mockRejectedValue(
+      new MetaApiError(1, undefined, "trace", "An unknown error has occurred.")
+    );
+
+    const processor = getProcessor();
+    const error = await processor(createMockJob()).catch((e: unknown) => e);
+
+    expect(mockSendPrivateReply).not.toHaveBeenCalled();
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).name).toBe("UnrecoverableError");
+    expect((error as Error).message).toContain("Not retried");
   });
 
   it("should still fall back to plain text when the button template itself is rejected", async () => {

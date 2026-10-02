@@ -1,4 +1,4 @@
-import { Worker, type Job } from "bullmq";
+import { UnrecoverableError, Worker, type Job } from "bullmq";
 import {
   getDMQueue,
   getRedisConnection,
@@ -62,10 +62,22 @@ const NON_TEMPLATE_REJECTIONS = [
   /requested user cannot be found/i,
 ];
 
+/**
+ * Meta's generic "An unknown error has occurred" (code 1) / "unexpected error"
+ * (code 2): seen in production for button DMs that were actually delivered.
+ * Treat as "maybe delivered": no text fallback, no retry.
+ */
+export function isAmbiguousDeliveryError(error: unknown): boolean {
+  if (error instanceof MetaApiError && (error.code === 1 || error.code === 2)) return true;
+  const message = error instanceof Error ? error.message : "";
+  return /an unknown error has occurred|an unexpected error has occurred/i.test(message);
+}
+
 function isTemplateRejection(error: unknown): boolean {
   if (error instanceof TokenExpiredError || error instanceof RateLimitError) {
     return false;
   }
+  if (isAmbiguousDeliveryError(error)) return false;
   const message = error instanceof Error ? error.message : "";
   return !NON_TEMPLATE_REJECTIONS.some((pattern) => pattern.test(message));
 }
@@ -1186,7 +1198,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
   }
 }
 
-async function processJob(job: Job<DmQueueJob>): Promise<void> {
+async function runJob(job: Job<DmQueueJob>): Promise<void> {
   if (job.name === POSTBACK_JOB_NAME) {
     return processPostback(job as Job<ProcessPostbackJob>);
   }
@@ -1197,6 +1209,22 @@ async function processJob(job: Job<DmQueueJob>): Promise<void> {
     return processMessage(job as Job<ProcessMessageJob>);
   }
   return processComment(job as Job<ProcessCommentJob>);
+}
+
+async function processJob(job: Job<DmQueueJob>): Promise<void> {
+  try {
+    await runJob(job);
+  } catch (error) {
+    // Meta's "unknown error" often comes back for a message it DID deliver.
+    // Retrying re-sends it: on 2026-10-02 one person got the same DM 6 times
+    // (3 attempts x button + text fallback). Better to miss one DM than spam.
+    if (isAmbiguousDeliveryError(error)) {
+      throw new UnrecoverableError(
+        `Not retried (Meta may have delivered it): ${formatError(error)}`
+      );
+    }
+    throw error;
+  }
 }
 
 async function recordWorkerFailure(
