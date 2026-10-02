@@ -75,16 +75,26 @@ export default function SettingsPage() {
   }
 
   async function disconnectInstagram(instagramAccountId: string) {
-    if (!confirm("Disconnect Instagram? Campaigns for this account will stop sending DMs.")) {
+    if (
+      !confirm(
+        "Disconnect Instagram? This DELETES every campaign, link and DM log of this account. To fix an expired token, use Connect instead."
+      )
+    ) {
       return;
     }
 
     setBusy(`disconnect:${instagramAccountId}`);
-    await fetch("/api/instagram/disconnect", {
+    const res = await fetch("/api/instagram/disconnect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ instagramAccountId }),
     });
+    if (res.status === 409) {
+      const payload = await res.json().catch(() => null);
+      setBusy(null);
+      alert(payload?.error ?? "This account still has campaigns.");
+      return;
+    }
     window.location.reload();
   }
 
