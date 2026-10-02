@@ -272,6 +272,44 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "analisar_posts",
+    description:
+      "Posts do perfil com métricas (views, alcance, curtidas, comentários, salvamentos, compartilhamentos) e totais. Legenda cortada em 120 caracteres; use listar_posts pra legenda inteira.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        quantidade: {
+          description: 'Últimos N posts (padrão 50) ou "all" pra todos (até 500)',
+          oneOf: [{ type: "integer" }, { type: "string", enum: ["all"] }],
+        },
+      },
+    },
+    async run(args, call) {
+      const q = args.quantidade === "all" ? "all" : String(Number(args.quantidade) || 50);
+      const res = await api(call, "GET", `/api/instagram/overview?count=${q}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "listar_posts",
+    description:
+      "Posts do perfil com legenda inteira, link, tipo, data e link da imagem/capa (pra ler e ver o conteúdo).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        todos: { ...bool, description: "true = biblioteca inteira (até 300); senão os mais recentes" },
+        limite: { type: "integer", description: "Quantos recentes (1 a 50, padrão 25)" },
+      },
+    },
+    async run(args, call) {
+      const query = args.todos === true ? "all=true" : `limit=${Number(args.limite) || 25}`;
+      const res = await api(call, "GET", `/api/instagram/posts?${query}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
     name: "listar_conversas",
     description: "Lista as conversas da DM com a última mensagem de cada uma.",
     inputSchema: { type: "object", properties: {} },

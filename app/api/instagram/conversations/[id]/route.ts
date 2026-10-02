@@ -76,9 +76,11 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
           FROM "WebhookEvent" e,
                jsonb_array_elements(e.payload->'entry') en,
                jsonb_array_elements(en->'messaging') msg
-          WHERE e."workspaceId" = ${workspaceId}
-            AND e.payload @> ${containment}::jsonb
+          WHERE e.payload @> ${containment}::jsonb
             AND msg->'message'->>'mid' = ${m.id}
+            -- Webhook events are stored without a workspace, so scope by the
+            -- receiving Instagram account instead.
+            AND msg->'recipient'->>'id' = ${account.instagramId}
           LIMIT 1`;
         const media = rows[0] ? extractWebhookMedia(rows[0].message) : [];
         if (media.length > 0) m.media = media;

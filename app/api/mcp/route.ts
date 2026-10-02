@@ -9,6 +9,8 @@ import * as automationsRoute from "@/app/api/automations/route";
 import * as logsRoute from "@/app/api/logs/route";
 import * as conversationsRoute from "@/app/api/instagram/conversations/route";
 import * as conversationRoute from "@/app/api/instagram/conversations/[id]/route";
+import * as overviewRoute from "@/app/api/instagram/overview/route";
+import * as postsRoute from "@/app/api/instagram/posts/route";
 
 // MCP over Streamable HTTP, stateless: every POST carries one JSON-RPC message
 // (or a batch) and gets a JSON answer. Auth is the same bearer token that the
@@ -32,6 +34,8 @@ function resolveHandler(method: string, pathname: string): { handler: Handler; i
     [/^\/api\/automations$/, automationsRoute],
     [/^\/api\/logs$/, logsRoute],
     [/^\/api\/instagram\/conversations$/, conversationsRoute],
+    [/^\/api\/instagram\/overview$/, overviewRoute],
+    [/^\/api\/instagram\/posts$/, postsRoute],
     [/^\/api\/instagram\/conversations\/([^/]+)$/, conversationRoute],
   ];
   for (const [pattern, mod] of routes) {
