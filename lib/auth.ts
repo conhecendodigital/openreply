@@ -2,6 +2,8 @@ import NextAuth, { type NextAuthConfig } from "next-auth";
 import Nodemailer from "next-auth/providers/nodemailer";
 import Resend from "next-auth/providers/resend";
 import { PrismaAdapter } from "@auth/prisma-adapter";
+import { headers } from "next/headers";
+import { bearerMatches } from "@/lib/api-token";
 import { prisma } from "@/lib/db/client";
 import { ensureWorkspaceForUser, getPrimaryWorkspace } from "@/lib/workspace";
 import { isEmailAllowedToSignIn } from "@/lib/env";
@@ -63,7 +65,44 @@ export const authConfig = {
 
 export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
 
+/**
+ * User an `Authorization: Bearer $OPENREPLY_API_TOKEN` request acts as: the
+ * account with OPENREPLY_API_USER_EMAIL, or else the oldest workspace owner.
+ * Lets the MCP endpoint and scripts reuse every session-guarded route.
+ */
+async function getApiTokenUserId(): Promise<string | null> {
+  let authorization: string | null = null;
+  try {
+    authorization = (await headers()).get("authorization");
+  } catch {
+    // Outside a request (worker, cron script) there is no header to read.
+    return null;
+  }
+  if (!bearerMatches(authorization, process.env.OPENREPLY_API_TOKEN)) {
+    return null;
+  }
+
+  const email = process.env.OPENREPLY_API_USER_EMAIL;
+  if (email) {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    return user?.id ?? null;
+  }
+
+  const owner = await prisma.workspaceMember.findFirst({
+    where: { role: "OWNER" },
+    orderBy: { createdAt: "asc" },
+    select: { userId: true },
+  });
+  return owner?.userId ?? null;
+}
+
 export async function getCurrentUserId(): Promise<string | null> {
+  const apiUserId = await getApiTokenUserId();
+  if (apiUserId) return apiUserId;
+
   const session = await auth();
   return session?.user?.id ?? null;
 }
