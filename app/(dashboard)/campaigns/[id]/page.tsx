@@ -11,12 +11,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import CampaignPreview, { type PreviewTab } from "@/components/campaign-preview";
+import CampaignPreview, { type PreviewTab, type PreviewTrigger } from "@/components/campaign-preview";
+import { triggerText } from "@/components/trigger-ui";
 
 import { useT } from "@/components/lang-provider";
 interface Campaign {
   id: string;
   name: string;
+  trigger?: PreviewTrigger | null;
+  storyId?: string | null;
+  storyUrl?: string | null;
   postId: string | null;
   postUrl: string | null;
   pendingNextReel: boolean;
@@ -153,14 +157,13 @@ export default function CampaignDetailPage() {
   const hasLink = Boolean(campaign.trackedLinks?.[0]?.destinationUrl);
   const hasSecondLink = Boolean(campaign.trackedLinks?.[1]?.destinationUrl);
 
-  const trigger = campaign.matchAnyPost
-    ? "Any post or reel"
-    : campaign.pendingNextReel
-      ? "Your next reel"
-      : "A specific post or reel";
+  const kind: PreviewTrigger = campaign.trigger ?? "COMMENT";
+  const trigger = triggerText(t, campaign);
   const matchText = campaign.matchAnyWord
-    ? "Any comment"
-    : campaign.keywords.join(", ") || "No keywords";
+    ? kind === "COMMENT" || kind === "LIVE_COMMENT"
+      ? t("Any comment")
+      : t("Any message")
+    : campaign.keywords.join(", ") || t("No keywords");
 
   const metrics = [
     { label: "Sends", value: campaign.analytics.sent },
@@ -194,6 +197,16 @@ export default function CampaignDetailPage() {
           </span>
         </div>
 
+        {kind !== "COMMENT" ? (
+          <Summary title={t("What starts the campaign")}>
+            <p className="text-sm text-foreground">{trigger}</p>
+            {kind === "STORY_REPLY" && campaign.storyUrl && (
+              <a href={campaign.storyUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-accent">
+                {t("View story")}
+              </a>
+            )}
+          </Summary>
+        ) : (
         <Summary title={t("When someone comments on")}>
           <div className="flex items-center gap-3">
             {postThumb ? (
@@ -211,8 +224,14 @@ export default function CampaignDetailPage() {
             <span className="text-sm text-foreground">{trigger}</span>
           </div>
         </Summary>
+        )}
 
-        <Summary title={t("And this comment has")}>
+        {kind !== "STORY_MENTION" && (
+        <Summary
+          title={
+            kind === "DM" ? t("And the message has") : kind === "STORY_REPLY" ? t("And the reply has") : t("And this comment has")
+          }
+        >
           <FieldBox>{matchText}</FieldBox>
           {campaign.dmTriggerEnabled && (
             <p className="text-xs text-muted">
@@ -229,6 +248,7 @@ export default function CampaignDetailPage() {
             </div>
           )}
         </Summary>
+        )}
 
         {campaign.openingDmEnabled && (
           <Summary title={t("They will get an opening DM")}>
@@ -343,11 +363,12 @@ export default function CampaignDetailPage() {
           <CampaignPreview
             tab={previewTab}
             onTabChange={setPreviewTab}
+            trigger={kind}
             username={campaign.instagramAccount.username}
             avatarUrl={avatarUrl}
             postThumb={postThumb}
             caption=""
-            sampleComment={campaign.matchAnyWord ? "nice!" : campaign.keywords[0] ?? "LINK"}
+            sampleComment={kind === "STORY_MENTION" ? "" : campaign.matchAnyWord ? "nice!" : campaign.keywords[0] ?? "LINK"}
             dmTriggerEnabled={campaign.dmTriggerEnabled}
             publicReplyEnabled={campaign.publicReplyEnabled}
             publicReplyMessage={publicReplies[0] ?? ""}

@@ -42,8 +42,32 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
+  // The commenter's contact (name / photo / @ filled later by the profile
+  // lookup), for the "unknown user" fallback. No relation in the schema:
+  // joined by (account, IGSID). Never breaks the log.
+  let contacts = new Map<string, { id: string; username: string | null; name: string | null; profilePicUrl: string | null }>();
+  try {
+    const found = rows.length
+      ? await prisma.contact.findMany({
+          where: {
+            workspaceId,
+            OR: rows.map((r) => ({ instagramAccountId: r.instagramAccountId, igUserId: r.commenterIgId })),
+          },
+          select: { id: true, instagramAccountId: true, igUserId: true, username: true, name: true, profilePicUrl: true },
+        })
+      : [];
+    contacts = new Map(
+      found.map((c) => [
+        `${c.instagramAccountId}:${c.igUserId}`,
+        { id: c.id, username: c.username, name: c.name, profilePicUrl: c.profilePicUrl },
+      ])
+    );
+  } catch (error) {
+    console.warn("[Moderation log] Could not join contacts:", error instanceof Error ? error.message : error);
+  }
+
   return ok({
-    logs: rows,
+    logs: rows.map((r) => ({ ...r, contact: contacts.get(`${r.instagramAccountId}:${r.commenterIgId}`) ?? null })),
     counts: Object.fromEntries(byAction.map((r) => [r.action, r._count._all])),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });

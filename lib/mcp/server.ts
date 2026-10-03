@@ -4,6 +4,8 @@
  * validation, workspace scoping and Meta error handling stay in one place.
  */
 
+import { AUTOMATION_TRIGGERS, triggerLabel, type AutomationTriggerValue } from "@/lib/automations/trigger";
+
 export type InternalCall = (
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
@@ -44,6 +46,16 @@ const strList = { type: "array", items: { type: "string" } };
 const campaignFields: Record<string, unknown> = {
   name: { ...str, description: "Nome interno da automação" },
   goal: { ...str, description: "Objetivo, em uma frase" },
+  trigger: {
+    type: "string",
+    enum: [...AUTOMATION_TRIGGERS],
+    description:
+      "O que dispara: COMMENT = comentário em post (padrão); DM = mensagem no Direct com a palavra; " +
+      "STORY_REPLY = resposta de story com a palavra; STORY_MENTION = quando te marcam no story (sem palavra); " +
+      "LIVE_COMMENT = comentário com a palavra em qualquer live (só DM, sem resposta pública)",
+  },
+  storyId: { ...str, description: "Só STORY_REPLY: ID do story (vazio = qualquer story)" },
+  storyUrl: { ...str, description: "Só STORY_REPLY: link do story escolhido" },
   postId: { ...str, description: "ID do post (quando é um post específico)" },
   postUrl: { ...str, description: "Link do post (quando é um post específico)" },
   matchAnyPost: { ...bool, description: "Dispara em qualquer post" },
@@ -124,6 +136,8 @@ type CampaignRow = {
   matchAnyWord: boolean;
   dmTriggerEnabled: boolean;
   postUrl: string | null;
+  trigger?: AutomationTriggerValue;
+  storyId?: string | null;
   analytics?: unknown;
   trackedLinks?: { trackedUrl?: string; destinationUrl: string; _count?: { clicks: number } }[];
 };
@@ -143,9 +157,16 @@ export const TOOLS: Tool[] = [
         id: a.id,
         nome: a.name,
         ligada: a.isActive,
-        gatilho: a.matchAnyPost ? "qualquer post" : a.postUrl ?? "próximo reel",
-        palavras: a.matchAnyWord ? "qualquer comentário" : a.keywords,
-        tambemPorDm: a.dmTriggerEnabled,
+        gatilho: triggerLabel(a),
+        palavras:
+          a.trigger === "STORY_MENTION"
+            ? "sem palavra (menção)"
+            : a.matchAnyWord
+              ? a.trigger === "DM" || a.trigger === "STORY_REPLY"
+                ? "qualquer mensagem"
+                : "qualquer comentário"
+              : a.keywords,
+        tambemPorDm: (a.trigger ?? "COMMENT") === "COMMENT" ? a.dmTriggerEnabled : a.trigger === "DM",
         numeros: a.analytics,
         links: (a.trackedLinks ?? []).map((l) => ({
           destino: l.destinationUrl,

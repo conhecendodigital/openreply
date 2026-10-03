@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "@/components/lang-provider";
-import { useDateTime, useTimeAgo } from "@/components/contact-ui";
+import { contactDisplayName, useDateTime, useTimeAgo } from "@/components/contact-ui";
 
 export type DraftStatus = "PENDING" | "APPROVED" | "SENT" | "REJECTED" | "EXPIRED" | "FAILED";
 
@@ -32,6 +32,7 @@ export interface DraftContact {
   igUserId: string;
   username: string | null;
   name: string | null;
+  profilePicUrl?: string | null;
   tags: string[];
   window: MessagingWindow;
   takeover: TakeoverState;
@@ -317,7 +318,7 @@ export function DraftCard({
           {draft.origin === "vendedor" ? t("Draft from the AI") : t("Draft")}
         </span>
         {showContact && (
-          <span className="font-semibold text-foreground">@{draft.contact.username ?? t("unknown")}</span>
+          <span className="font-semibold text-foreground">{contactDisplayName(t, draft.contact)}</span>
         )}
         <span className="text-muted">{timeAgo(draft.createdAt)}</span>
         <span className="ml-auto">

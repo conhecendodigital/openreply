@@ -21,6 +21,7 @@ import { readCache, writeCache } from "@/lib/client-cache";
 import type { ConversationListItem } from "@/app/api/instagram/conversations/route";
 import type { ThreadMessage } from "@/app/api/instagram/conversations/[id]/route";
 
+import { ContactName } from "@/components/contact-ui";
 import { useT } from "@/components/lang-provider";
 import {
   DraftCard,
@@ -568,7 +569,7 @@ export default function InboxPage() {
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate text-sm font-medium text-foreground">
-                          @{c.contact.username ?? t("unknown")}
+                          <ContactName username={c.contact.username} igUserId={c.contact.id} />
                         </span>
                         {hasDraft && (
                           <span
@@ -618,7 +619,7 @@ export default function InboxPage() {
                 </button>
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate">
-                    @{active.contact.username ?? t("unknown")}
+                    <ContactName username={active.contact.username} igUserId={active.contact.id} />
                   </span>
                   {headerContact?.window && (
                     <span className="mt-0.5 font-normal">

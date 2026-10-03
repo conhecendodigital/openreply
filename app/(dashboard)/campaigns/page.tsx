@@ -13,10 +13,16 @@ import AccountSelect, { type AccountOption } from "@/components/account-select";
 import { readCache, writeCache } from "@/lib/client-cache";
 
 import { useT } from "@/components/lang-provider";
+import { TriggerChip } from "@/components/trigger-ui";
+import type { PreviewTrigger } from "@/components/campaign-preview";
 interface Campaign {
   id: string;
   name: string;
   goal: string | null;
+  trigger?: PreviewTrigger | null;
+  storyId?: string | null;
+  storyUrl?: string | null;
+  dmTriggerEnabled?: boolean;
   postId: string | null;
   postUrl: string | null;
   pendingNextReel: boolean;
@@ -249,6 +255,10 @@ export default function CampaignsPage() {
         body: JSON.stringify({
           name: `${auto.name} copy`,
           instagramAccountId: auto.instagramAccountId,
+          trigger: auto.trigger ?? "COMMENT",
+          storyId: auto.storyId ?? null,
+          storyUrl: auto.storyUrl ?? null,
+          dmTriggerEnabled: auto.dmTriggerEnabled ?? false,
           postId: specific ? auto.postId : null,
           postUrl: specific ? auto.postUrl : null,
           matchAnyPost: auto.matchAnyPost,
@@ -448,6 +458,7 @@ export default function CampaignsPage() {
                   <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted">
                     @{auto.instagramAccount.username}
                   </span>
+                  <TriggerChip t={t} campaign={auto} />
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                       auto.isActive

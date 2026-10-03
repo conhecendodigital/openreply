@@ -147,6 +147,7 @@ vi.mock("@/lib/queue/client", () => ({
   CRM_DM_JOB_NAME: "crm-dm",
   REFERRAL_JOB_NAME: "process-referral",
   SEQUENCE_STEP_JOB_NAME: "sequence-step",
+  PROFILE_JOB_NAME: "fetch-profile",
   safeJobKey: (v: string) => Buffer.from(v).toString("base64url"),
 }));
 
@@ -352,6 +353,8 @@ describe("DM Worker — Full Pipeline", () => {
 
     expect(mockPrisma.automation.findMany).toHaveBeenCalledWith({
       where: {
+        // 2026-10-06: a post comment only fires post-comment campaigns.
+        trigger: "COMMENT",
         OR: [{ postId: "media_101" }, { matchAnyPost: true }],
         isActive: true,
         instagramAccount: { instagramId: "ig_456", status: "ACTIVE" },

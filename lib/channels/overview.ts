@@ -5,6 +5,7 @@
 import type { InstagramAccountStatus, ModerationMode } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { TOKEN_EXPIRY_WARNING_DAYS, WEBHOOK_STALE_HOURS } from "@/lib/channels/status";
+import { missingWebhookFields } from "@/lib/meta/webhook-fields";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -43,6 +44,8 @@ export type InstagramChannelCard = {
   tokenExpiresInDays: number | null;
   webhookSubscribed: boolean;
   webhookFields: string[];
+  /** Fields we expect (lib/meta/webhook-fields.ts) but are not subscribed. */
+  missingWebhookFields: string[];
   /** Last webhook Meta delivered for this account. */
   lastWebhookAt: string | null;
   webhooksStale: boolean;
@@ -275,6 +278,9 @@ export async function getChannelsOverview(workspaceId: string, now = new Date())
         tokenExpiresInDays: connected ? daysLeft(account.tokenExpiresAt, now) : null,
         webhookSubscribed: account.webhookSubscribed,
         webhookFields: account.webhookFields,
+        // Subscribed before a field was added (e.g. live_comments): the page
+        // points at what is missing; reconnecting subscribes again.
+        missingWebhookFields: account.webhookSubscribed ? missingWebhookFields(account.webhookFields) : [],
         lastWebhookAt: lastWebhookAt?.toISOString() ?? null,
         webhooksStale: isWebhookStale(forAlerts, now),
         lastError: account.lastError,

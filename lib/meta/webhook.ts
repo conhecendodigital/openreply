@@ -45,6 +45,8 @@ export interface WebhookCommentEvent {
    * matching has to consider it as well as mediaId.
    */
   originalMediaId?: string;
+  /** "live" for the live_comments field; absent (post) for comments. */
+  surface?: "post" | "live";
 }
 
 interface WebhookEntry {
@@ -74,6 +76,7 @@ interface WebhookEntry {
   messaging?: Array<{
     sender?: { id?: string };
     recipient?: { id?: string };
+    timestamp?: number;
     postback?: { mid?: string; title?: string; payload?: string };
     read?: { watermark?: number; seq?: number };
     message?: {
@@ -82,7 +85,8 @@ interface WebhookEntry {
       is_echo?: boolean;
       is_deleted?: boolean;
       is_unsupported?: boolean;
-      attachments?: Array<{ type?: string }>;
+      attachments?: Array<{ type?: string; payload?: { url?: string } }>;
+      reply_to?: { story?: { id?: string; url?: string }; mid?: string };
     };
   }>;
 }
@@ -90,8 +94,17 @@ interface WebhookEntry {
 export interface WebhookMessageEvent {
   instagramAccountId: string;
   messageId: string;
+  /** "" for a story mention (it has no text). */
   messageText: string;
   senderId: string;
+  /** reply = answered one of our stories; mention = mentioned us in theirs. */
+  storyKind?: "reply" | "mention";
+  /** Our story's id (reply only; a mention carries none). */
+  storyId?: string;
+  /** CDN link of the story (expires). */
+  storyUrl?: string;
+  /** Event time in ms, when Meta sent it. */
+  timestamp?: number;
 }
 
 export interface WebhookPostbackEvent {
@@ -113,15 +126,31 @@ interface WebhookPayload {
 }
 
 export function parseCommentEvents(payload: WebhookPayload): WebhookCommentEvent[] {
+  return parseCommentChanges(payload, "comments");
+}
+
+/**
+ * Comments made during one of our lives (webhook field "live_comments", same
+ * shape as "comments", media_product_type LIVE). They only fire LIVE_COMMENT
+ * campaigns, never a post campaign.
+ */
+export function parseLiveCommentEvents(payload: WebhookPayload): WebhookCommentEvent[] {
+  return parseCommentChanges(payload, "live_comments");
+}
+
+function parseCommentChanges(
+  payload: WebhookPayload,
+  field: "comments" | "live_comments"
+): WebhookCommentEvent[] {
   const events: WebhookCommentEvent[] = [];
 
-  if (payload.object !== "instagram") {
+  if (payload?.object !== "instagram") {
     return events;
   }
 
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
-      if (change.field !== "comments") continue;
+      if (change.field !== field) continue;
 
       const value = change.value;
       const commentId = value?.id ?? value?.comment_id;
@@ -154,6 +183,7 @@ export function parseCommentEvents(payload: WebhookPayload): WebhookCommentEvent
         commenterName: value.from?.username,
         mediaId,
         originalMediaId,
+        ...(field === "live_comments" ? { surface: "live" as const } : {}),
       });
     }
   }
@@ -219,20 +249,37 @@ export function parseMessageEvents(
         continue;
       }
 
-      const text = message.text?.trim();
+      const text = message.text?.trim() ?? "";
       const messageId = message.mid;
       const senderId = messaging.sender?.id;
       const accountId = entry.id ?? messaging.recipient?.id;
 
-      if (!text || !messageId || !senderId || !accountId) continue;
+      // 2026-10-06: a reply to one of our stories carries reply_to.story; a
+      // mention of us in someone's story is a text-less story_mention
+      // attachment. The mention is kept even without text (its own trigger).
+      const story = message.reply_to?.story;
+      const mention = (message.attachments ?? []).find((a) => a?.type === "story_mention");
+      const storyKind: WebhookMessageEvent["storyKind"] = story
+        ? "reply"
+        : mention
+          ? "mention"
+          : undefined;
+
+      if (!messageId || !senderId || !accountId) continue;
+      if (!text && storyKind !== "mention") continue;
       // Ignore anything the connected account sent to itself.
       if (senderId === accountId) continue;
 
+      const storyUrl = story?.url ?? mention?.payload?.url;
       events.push({
         instagramAccountId: accountId,
         messageId,
         messageText: text,
         senderId,
+        ...(storyKind ? { storyKind } : {}),
+        ...(storyKind === "reply" && story?.id ? { storyId: String(story.id) } : {}),
+        ...(storyKind && storyUrl ? { storyUrl } : {}),
+        ...(typeof messaging.timestamp === "number" ? { timestamp: messaging.timestamp } : {}),
       });
     }
   }

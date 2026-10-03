@@ -10,6 +10,7 @@ import {
   type MessageMedia,
 } from "@/lib/meta/message-media";
 import { prisma } from "@/lib/db/client";
+import { saveKnownUsernames } from "@/lib/contacts/profile";
 
 export interface ThreadTemplate {
   title: string;
@@ -80,6 +81,13 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
       createdTime: m.created_time ?? null,
       media: extractMessageMedia(m),
     }));
+    // from.username of the other person: fill the contact if it has no @.
+    await saveKnownUsernames(
+      account.id,
+      raw
+        .filter((m) => m.from?.id && m.from.id !== account.instagramId)
+        .map((m) => ({ igUserId: m.from?.id, username: m.from?.username }))
+    );
     if (!contactId) {
       const other = raw.find((m) => m.from?.id && m.from.id !== account.instagramId);
       contactId = other?.from?.id ?? raw[0]?.to?.data?.find((p) => p.id !== account.instagramId)?.id ?? "";

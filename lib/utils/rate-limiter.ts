@@ -199,6 +199,30 @@ export async function incrementDMCounter(
   return result.currentCount;
 }
 
+// ─── Profile lookups (User Profile API) ─────────────────────────────────────
+
+/**
+ * Hourly budget for GET /<IGSID>?fields=username,name,profile_pic per account.
+ * A bucket of its own (rate:profile:<acct>): a burst of unknown contacts must
+ * never eat the private-reply budget above.
+ */
+export const PROFILE_LOOKUPS_PER_HOUR = 120;
+
+export async function reserveProfileSlot(
+  instagramAccountId: string,
+  max: number = PROFILE_LOOKUPS_PER_HOUR
+): Promise<{ allowed: boolean; count: number; retryInMs: number }> {
+  const client = getRedis();
+  const key = `rate:profile:${instagramAccountId}`;
+  const result = await client.eval(RESERVE_DM_SLOT_SCRIPT, 1, key, max, RATE_LIMIT_WINDOW);
+  const values = Array.isArray(result) ? result : [];
+  const allowed = toScriptNumber(values[0]) === 1;
+  const count = toScriptNumber(values[1]);
+  if (allowed) return { allowed, count, retryInMs: 0 };
+  const ttl = await client.pttl(key).catch(() => -1);
+  return { allowed, count, retryInMs: ttl > 0 ? ttl + 1_000 : 15 * 60_000 };
+}
+
 /**
  * Get the current DM count for an Instagram account.
  */

@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
-import { Switch, useDateTime, useTimeAgo } from "@/components/contact-ui";
+import { ContactAvatar, contactDisplayName, Switch, useDateTime, useTimeAgo } from "@/components/contact-ui";
 import { useT } from "@/components/lang-provider";
 
 type Mode = "OFF" | "OBSERVE" | "HIDE";
@@ -47,6 +47,8 @@ interface LogRow {
   error: string | null;
   createdAt: string;
   instagramAccount: { username: string };
+  /** The commenter's contact (name/photo filled by the profile lookup), or null. */
+  contact?: { id: string; username: string | null; name: string | null; profilePicUrl: string | null } | null;
 }
 
 interface TestResult {
@@ -555,10 +557,21 @@ export default function ModerationPage() {
               return (
                 <li key={row.id} className="space-y-2 px-4 py-3 sm:px-5">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 text-sm">
+                    <div className="flex min-w-0 gap-3 text-sm">
+                      <ContactAvatar
+                        username={row.commenterUsername ?? row.contact?.username ?? null}
+                        name={row.contact?.name}
+                        src={row.contact?.profilePicUrl}
+                        size={32}
+                      />
+                      <div className="min-w-0">
                       <p className="break-words">
                         <span className="font-semibold">
-                          {row.commenterUsername ? `@${row.commenterUsername}` : t("Unknown user")}
+                          {contactDisplayName(t, {
+                            username: row.commenterUsername ?? row.contact?.username,
+                            name: row.contact?.name,
+                            igUserId: row.commenterIgId,
+                          })}
                         </span>{" "}
                         {row.commentText}
                       </p>
@@ -569,6 +582,7 @@ export default function ModerationPage() {
                           ` · ${t("protected: {why}", { why: t(PROTECTED[row.protectedReason] ?? row.protectedReason) })}`}
                       </p>
                       {row.error && <p className="mt-0.5 text-xs text-error">{row.error}</p>}
+                      </div>
                     </div>
                     <div className="shrink-0 text-right">
                       <p className={`text-xs font-semibold ${action?.tone ?? "text-muted"}`}>
@@ -601,7 +615,11 @@ export default function ModerationPage() {
                         </button>
                       )}
                       <Link
-                        href={`/contacts?q=${encodeURIComponent(row.commenterUsername ?? row.commenterIgId)}`}
+                        href={
+                          row.contact
+                            ? `/contacts/${row.contact.id}`
+                            : `/contacts?q=${encodeURIComponent(row.commenterUsername ?? row.commenterIgId)}`
+                        }
                         className="text-xs font-semibold text-accent"
                       >
                         {t("View contact")}

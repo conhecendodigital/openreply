@@ -45,6 +45,7 @@ export async function handleCrmDm(
       text: data.text,
       sentAt,
       storyReply: data.storyReply,
+      storyKind: data.storyKind ?? null,
     },
     { throwOnError: true }
   );

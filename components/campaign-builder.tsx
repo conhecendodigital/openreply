@@ -10,13 +10,19 @@
  * next post), match mode (specific words / any word), the opening + reveal DM
  * text, public reply, and the tracked link. Button-driven delivery and the
  * follow / email / follow-up steps arrive in later turns.
+ *
+ * 2026-10-06: the campaign starts with "what fires it" (Automation.trigger):
+ * comment on a post, message in the Direct, reply to a story (one story or
+ * any), mention in someone's story, or comment during a live. Each trigger
+ * only shows the steps that apply to it (same rules as
+ * lib/automations/trigger.ts, which the API enforces anyway).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import PostPicker from "@/components/post-picker";
-import CampaignPreview, { type PreviewTab } from "@/components/campaign-preview";
+import CampaignPreview, { previewTabsFor, type PreviewTab, type PreviewTrigger } from "@/components/campaign-preview";
 import { readCache, writeCache } from "@/lib/client-cache";
 import {
   IMPORT_QUEUE_KEY,
@@ -27,10 +33,37 @@ import {
 import { useT } from "@/components/lang-provider";
 type TriggerScope = "specific" | "any" | "next";
 type MatchMode = "specific" | "any";
+type Trigger = PreviewTrigger;
+
+interface StoryItem {
+  id: string;
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  timestamp?: string;
+}
+
+/** The five triggers, in the order the owner reads them. */
+const TRIGGERS: { value: Trigger; label: string; hint: string }[] = [
+  { value: "COMMENT", label: "Comment on a post", hint: "Someone comments a word on a post or reel." },
+  { value: "DM", label: "Message in the Direct", hint: "Someone sends you a DM with the word." },
+  { value: "STORY_REPLY", label: "Story reply", hint: "Someone replies to your story with the word." },
+  { value: "STORY_MENTION", label: "Story mention", hint: "Someone mentions you in their story." },
+  { value: "LIVE_COMMENT", label: "Comment on a live", hint: "Someone comments the word during any of your lives." },
+];
+
+const usesPost = (t: Trigger) => t === "COMMENT";
+const usesKeywords = (t: Trigger) => t !== "STORY_MENTION";
+const allowsPublicReply = (t: Trigger) => t === "COMMENT";
+const allowsOpeningDm = (t: Trigger) => t === "COMMENT" || t === "LIVE_COMMENT";
 
 interface LoadedCampaign {
   id: string;
   name: string;
+  trigger?: Trigger | null;
+  storyId?: string | null;
+  storyUrl?: string | null;
   postId: string | null;
   postUrl: string | null;
   pendingNextReel: boolean;
@@ -146,6 +179,11 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(true);
 
+  const [trigger, setTrigger] = useState<Trigger>("COMMENT");
+  const [storyId, setStoryId] = useState<string | null>(null);
+  const [storyUrl, setStoryUrl] = useState<string | null>(null);
+  const [stories, setStories] = useState<StoryItem[] | null>(null);
+  const [storiesError, setStoriesError] = useState(false);
   const [triggerScope, setTriggerScope] = useState<TriggerScope>("specific");
   const [postId, setPostId] = useState<string | null>(null);
   const [postUrl, setPostUrl] = useState<string | null>(null);
@@ -158,6 +196,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [usedPosts, setUsedPosts] = useState<Record<string, string>>({});
 
   const [matchMode, setMatchMode] = useState<MatchMode>("specific");
+  const matchModeBeforeMention = useRef<MatchMode>("specific");
   const [keywordText, setKeywordText] = useState("");
   const [dmTriggerEnabled, setDmTriggerEnabled] = useState(false);
 
@@ -253,6 +292,11 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         if (!c) return setNotFound(true);
         setName(c.name);
         setSelectedAccountId(c.instagramAccountId);
+        const loadedTrigger: Trigger = c.trigger ?? "COMMENT";
+        setTrigger(loadedTrigger);
+        setStoryId(c.storyId ?? null);
+        setStoryUrl(c.storyUrl ?? null);
+        setPreviewTab(previewTabsFor(loadedTrigger, c.dmTriggerEnabled ?? false)[0]);
         setTriggerScope(
           c.matchAnyPost ? "any" : c.pendingNextReel ? "next" : "specific"
         );
@@ -308,6 +352,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         const map: Record<string, string> = {};
         for (const a of payload.data as LoadedCampaign[]) {
           if (!a.postId) continue;
+          if ((a.trigger ?? "COMMENT") !== "COMMENT") continue;
           if (a.instagramAccountId !== selectedAccountId) continue;
           if (mode === "edit" && a.id === campaignId) continue;
           map[a.postId] = a.name;
@@ -320,10 +365,56 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
     };
   }, [selectedAccountId, mode, campaignId]);
 
+  // Stories that are still up (24 h), for the "one story" picker. Loaded only
+  // when the story-reply trigger is picked.
+  useEffect(() => {
+    if (trigger !== "STORY_REPLY" || !selectedAccountId) return;
+    let cancelled = false;
+    const params = new URLSearchParams({ instagramAccountId: selectedAccountId });
+    fetch(`/api/instagram/stories?${params}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((payload) => {
+        if (cancelled) return;
+        if (payload.success) {
+          setStories(payload.data as StoryItem[]);
+          setStoriesError(false);
+        } else {
+          setStories([]);
+          setStoriesError(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStories([]);
+          setStoriesError(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trigger, selectedAccountId]);
+
+  function chooseTrigger(next: Trigger) {
+    setTrigger(next);
+    setError(null);
+    setPreviewTab(previewTabsFor(next, dmTriggerEnabled)[0]);
+    // A story mention has no word; the other triggers keep what was typed.
+    // Leaving it restores the match mode the owner had before.
+    if (!usesKeywords(next)) {
+      if (usesKeywords(trigger)) matchModeBeforeMention.current = matchMode;
+      setMatchMode("any");
+    } else if (!usesKeywords(trigger)) {
+      setMatchMode(matchModeBeforeMention.current);
+    }
+  }
+
   // Prefill the editable fields from one queued import row. The reel is left
   // unset so the user picks it per row.
   function prefillFromRow(row: ImportRow) {
     setName(row.name ?? "");
+    setTrigger("COMMENT");
+    setStoryId(null);
+    setStoryUrl(null);
     setTriggerScope("specific");
     setPostId(null);
     setPostUrl(null);
@@ -389,12 +480,16 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
     setError(null);
 
     if (!selectedAccountId) return setError("Connect an Instagram account first.");
-    if (triggerScope === "specific" && !postId)
+    if (usesPost(trigger) && triggerScope === "specific" && !postId)
       return setError("Pick a post or reel to trigger the campaign.");
-    if (matchMode === "specific" && keywords.length === 0)
+    if (usesKeywords(trigger) && matchMode === "specific" && keywords.length === 0)
       return setError("Add at least one keyword, or switch to any word.");
+    if (trigger === "STORY_REPLY" && storyId === "")
+      return setError("Pick a story, or choose any of your stories.");
     if (!dmMessage.trim()) return setError("Add the DM with the link.");
-    if (openingDmEnabled && (!openingDmMessage.trim() || !openingDmButtonLabel.trim()))
+    const withOpeningDm = allowsOpeningDm(trigger) && openingDmEnabled;
+    const withPublicReply = allowsPublicReply(trigger) && publicReplyEnabled;
+    if (withOpeningDm && (!openingDmMessage.trim() || !openingDmButtonLabel.trim()))
       return setError("Your opening DM needs a message and a button label.");
 
     setSaving(true);
@@ -402,19 +497,22 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
     const payload = {
       name: name.trim() || `Campaign for @${username}`,
       instagramAccountId: selectedAccountId,
-      postId: triggerScope === "specific" ? postId : null,
-      postUrl: triggerScope === "specific" ? postUrl : null,
-      matchAnyPost: triggerScope === "any",
-      pendingNextReel: triggerScope === "next",
-      matchAnyWord: matchMode === "any",
-      keywords: matchMode === "any" ? [] : keywords,
-      dmTriggerEnabled,
+      trigger,
+      storyId: trigger === "STORY_REPLY" ? storyId : null,
+      storyUrl: trigger === "STORY_REPLY" && storyId ? storyUrl : null,
+      postId: usesPost(trigger) && triggerScope === "specific" ? postId : null,
+      postUrl: usesPost(trigger) && triggerScope === "specific" ? postUrl : null,
+      matchAnyPost: usesPost(trigger) && triggerScope === "any",
+      pendingNextReel: usesPost(trigger) && triggerScope === "next",
+      matchAnyWord: !usesKeywords(trigger) || matchMode === "any",
+      keywords: !usesKeywords(trigger) || matchMode === "any" ? [] : keywords,
+      dmTriggerEnabled: trigger === "DM" ? true : trigger === "COMMENT" ? dmTriggerEnabled : false,
       dmMessage,
-      openingDmEnabled,
-      openingDmMessage: openingDmEnabled ? openingDmMessage : null,
-      openingDmButtonLabel: openingDmEnabled ? openingDmButtonLabel : null,
-      publicReplyEnabled,
-      publicReplyMessages: publicReplyEnabled
+      openingDmEnabled: withOpeningDm,
+      openingDmMessage: withOpeningDm ? openingDmMessage : null,
+      openingDmButtonLabel: withOpeningDm ? openingDmButtonLabel : null,
+      publicReplyEnabled: withPublicReply,
+      publicReplyMessages: withPublicReply
         ? publicReplyMessages.map((m) => m.trim()).filter(Boolean)
         : [],
       trackedDestinationUrl: trackedDestinationUrl.trim() || "",
@@ -451,7 +549,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         // the picker flags it on the next imported row — the fetch that builds
         // this map doesn't re-run while the builder stays mounted through the
         // import queue.
-        if (triggerScope === "specific" && postId) {
+        if (usesPost(trigger) && triggerScope === "specific" && postId) {
           const assignedPostId = postId;
           setUsedPosts((prev) => ({ ...prev, [assignedPostId]: payload.name }));
         }
@@ -634,7 +732,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       <div className="space-y-8 min-w-0">
         {error && (
           <div className="rounded border border-error/20 bg-error/10 p-3 text-sm text-error">
-            {error}
+            {t(error)}
           </div>
         )}
 
@@ -668,6 +766,97 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
           )}
         </div>
 
+        <Section title={t("What starts the campaign")}>
+          <div className="grid gap-2" role="radiogroup" aria-label={t("What starts the campaign")}>
+            {TRIGGERS.map((opt) => (
+              <Radio key={opt.value} checked={trigger === opt.value} onSelect={() => chooseTrigger(opt.value)}>
+                <span className="block font-medium">{t(opt.label)}</span>
+                <span className="block text-xs text-muted">{t(opt.hint)}</span>
+              </Radio>
+            ))}
+          </div>
+        </Section>
+
+        {trigger === "STORY_REPLY" && (
+          <Section title={t("When someone replies to")}>
+            <Radio
+              checked={storyId === null}
+              onSelect={() => {
+                setStoryId(null);
+                setStoryUrl(null);
+              }}
+            >
+              {t("any of your stories")}
+            </Radio>
+            <Radio
+              checked={storyId !== null}
+              onSelect={() => {
+                // "" = specific story, not picked yet.
+                if (storyId === null) setStoryId("");
+              }}
+            >
+              {t("a specific story")}
+            </Radio>
+            {storyId !== null && (
+              <div className="rounded-lg border border-border p-2">
+                {stories === null ? (
+                  <p className="px-1 py-3 text-xs text-muted">{t("Loading...")}</p>
+                ) : storiesError ? (
+                  <p className="px-1 py-3 text-xs text-error">{t("Could not load your stories. Try again in a moment.")}</p>
+                ) : stories.length === 0 ? (
+                  <p className="px-1 py-3 text-xs text-muted">
+                    {t("No story up right now. Post one, or pick any of your stories.")}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {stories.map((st) => {
+                      const thumb = st.thumbnail_url || st.media_url || null;
+                      const picked = st.id === storyId;
+                      return (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => {
+                            setStoryId(st.id);
+                            setStoryUrl(st.permalink ?? null);
+                          }}
+                          aria-pressed={picked}
+                          className={`relative aspect-[9/16] overflow-hidden rounded-md bg-surface-hover ring-offset-1 ${
+                            picked ? "ring-2 ring-accent" : "hover:opacity-80"
+                          }`}
+                        >
+                          {thumb && (
+                            // eslint-disable-next-line @next/next/no-img-element -- Meta CDN story thumbnail
+                            <img src={thumb} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {storyId && stories && !stories.some((st) => st.id === storyId) && (
+                  <p className="mt-2 px-1 text-xs text-muted">
+                    {t("The chosen story is no longer up (stories last 24 h), so this campaign will not fire again. Pick another or any story.")}
+                  </p>
+                )}
+              </div>
+            )}
+          </Section>
+        )}
+
+        {trigger === "STORY_MENTION" && (
+          <p className="rounded-lg border border-border bg-surface px-3 py-2.5 text-xs text-muted">
+            {t("Every time someone mentions you in their story, they get the message below, once per person. No word needed.")}
+          </p>
+        )}
+
+        {trigger === "LIVE_COMMENT" && (
+          <p className="rounded-lg border border-border bg-surface px-3 py-2.5 text-xs text-muted">
+            {t("Works on any live you start. Instagram only sends comments while the live is on, and there is no public reply: the message goes straight to their Direct.")}
+          </p>
+        )}
+
+        {trigger === "COMMENT" && (
         <Section title={t("When someone comments on")}>
           <Radio
             checked={triggerScope === "specific"}
@@ -698,8 +887,18 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
             {t("next post or reel")}
           </Radio>
         </Section>
+        )}
 
-        <Section title={t("And this comment has")}>
+        {usesKeywords(trigger) && (
+        <Section
+          title={
+            trigger === "DM"
+              ? t("And the message has")
+              : trigger === "STORY_REPLY"
+                ? t("And the reply has")
+                : t("And this comment has")
+          }
+        >
           <Radio
             checked={matchMode === "specific"}
             onSelect={() => setMatchMode("specific")}
@@ -723,6 +922,11 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
           >
             {t("any word")}
           </Radio>
+          {trigger === "DM" && matchMode === "any" && (
+            <p className="text-xs text-muted">{t("Every DM to this account gets the reply below — use with care.")}</p>
+          )}
+          {trigger === "COMMENT" && (
+          <>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
             <span className="text-sm text-foreground">
               {t("also reply when someone DMs")}{" "}
@@ -796,10 +1000,14 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
               </p>
             </div>
           )}
+          </>
+          )}
         </Section>
+        )}
 
         <Section title={t("They will get")}>
-          <div className="rounded-lg border border-border p-3">
+          {allowsOpeningDm(trigger) && (
+          <div className="mb-3 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-foreground">{t("an opening DM")}</span>
               <Toggle
@@ -827,7 +1035,8 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
               </div>
             )}
           </div>
-          <div className="mt-3 rounded-lg border border-border p-3">
+          )}
+          <div className="rounded-lg border border-border p-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-foreground">
                 {t("a follow requirement first")}
@@ -985,15 +1194,20 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
           <CampaignPreview
             tab={previewTab}
             onTabChange={setPreviewTab}
+            trigger={trigger}
+            storyThumb={(() => {
+              const st = stories?.find((x) => x.id === storyId);
+              return st ? st.thumbnail_url || st.media_url || null : null;
+            })()}
             username={username}
             avatarUrl={avatarUrl}
             postThumb={postThumb}
             caption={postCaption}
-            sampleComment={keywords[0] ?? ""}
-            dmTriggerEnabled={dmTriggerEnabled}
-            publicReplyEnabled={publicReplyEnabled}
+            sampleComment={usesKeywords(trigger) ? keywords[0] ?? "" : ""}
+            dmTriggerEnabled={trigger === "COMMENT" && dmTriggerEnabled}
+            publicReplyEnabled={allowsPublicReply(trigger) && publicReplyEnabled}
             publicReplyMessage={publicReplyMessages.find((m) => m.trim()) ?? ""}
-            openingDmEnabled={openingDmEnabled}
+            openingDmEnabled={allowsOpeningDm(trigger) && openingDmEnabled}
             openingDmMessage={openingDmMessage}
             openingDmButtonLabel={openingDmButtonLabel}
             revealMessage={dmMessage}

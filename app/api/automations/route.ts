@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getCurrentWorkspaceId } from "@/lib/auth";
+import { getCurrentWorkspaceId, isApiTokenRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
 import { calculateCtr, normalizeTopKeywords } from "@/lib/tracking/analytics";
 import { buildTrackedUrl } from "@/lib/tracking/message";
@@ -10,6 +10,12 @@ import {
   canManageWorkspace,
   getCurrentWorkspaceContext,
 } from "@/lib/workspace-access";
+import {
+  applyTriggerRules,
+  triggerSchema,
+  triggerUsesKeywords,
+  triggerUsesPost,
+} from "@/lib/automations/trigger";
 
 // This list is read-your-writes (created/imported campaigns must show up
 // immediately), so never cache it at the route or CDN layer.
@@ -19,6 +25,11 @@ const createAutomationSchema = z
   .object({
     name: z.string().min(1).max(100),
     goal: z.string().min(1).max(120).optional().nullable(),
+    // What fires it (lib/automations/trigger.ts). Default: post comment.
+    trigger: triggerSchema.optional().default("COMMENT"),
+    // STORY_REPLY: one story (id from GET /api/instagram/stories); empty = any.
+    storyId: z.string().min(1).max(100).optional().nullable(),
+    storyUrl: z.string().url().optional().nullable(),
     instagramAccountId: z.string().min(1).optional().nullable(),
     postId: z.string().min(1).optional().nullable(),
     postUrl: z.string().url().optional().nullable(),
@@ -61,13 +72,15 @@ const createAutomationSchema = z
     isActive: z.boolean().optional().default(true),
     wholeWordMatch: z.boolean().optional().default(true),
   })
-  // A campaign must target a specific post, any post, or the next reel.
+  // A post-comment campaign must target a specific post, any post, or the
+  // next reel. Other triggers have no post.
   .refine(
-    (d) => d.matchAnyPost || d.pendingNextReel || Boolean(d.postId),
+    (d) => !triggerUsesPost(d.trigger) || d.matchAnyPost || d.pendingNextReel || Boolean(d.postId),
     { message: "Choose which post(s) trigger the campaign", path: ["postId"] }
   )
-  // And it must match either specific words or any word.
-  .refine((d) => d.matchAnyWord || d.keywords.length >= 1, {
+  // And it must match either specific words or any word (a story mention has
+  // no words).
+  .refine((d) => !triggerUsesKeywords(d.trigger) || d.matchAnyWord || d.keywords.length >= 1, {
     message: "Add at least one keyword, or match any word",
     path: ["keywords"],
   })
@@ -83,6 +96,9 @@ const createAutomationSchema = z
 const updateAutomationSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   goal: z.string().min(1).max(120).optional().nullable(),
+  trigger: triggerSchema.optional(),
+  storyId: z.string().min(1).max(100).optional().nullable(),
+  storyUrl: z.string().url().optional().nullable(),
   postId: z.string().min(1).optional().nullable(),
   postUrl: z.string().url().optional().nullable(),
   pendingNextReel: z.boolean().optional(),
@@ -369,6 +385,9 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // Fields that do not apply to the trigger are forced off (no post on a
+  // story/live/DM campaign, no public reply outside a post...).
+  applyTriggerRules(parsed.data, parsed.data.trigger);
   const { pendingNextReel, matchAnyPost, matchAnyWord, openingDmEnabled } =
     parsed.data;
   // A post is only stored for the "specific post" trigger.
@@ -387,6 +406,9 @@ export async function POST(request: NextRequest) {
     data: {
       name: parsed.data.name,
       goal: parsed.data.goal,
+      trigger: parsed.data.trigger,
+      storyId: parsed.data.storyId || null,
+      storyUrl: parsed.data.storyId ? parsed.data.storyUrl || null : null,
       // A next-reel campaign has no post yet; the cron binds it once a reel is posted.
       postId: isSpecificPost ? parsed.data.postId : null,
       postUrl: isSpecificPost ? parsed.data.postUrl : null,
@@ -502,6 +524,62 @@ export async function PATCH(request: NextRequest) {
     secondaryButtonLabel,
     ...automationData
   } = parsed.data;
+
+  // The trigger decides which fields apply (switching it, or editing a
+  // story/live/DM campaign). A switch to a post comment needs a post.
+  const trigger = automationData.trigger ?? existing.trigger ?? "COMMENT";
+  // An API key (MCP) cannot swap what fires a campaign that is ON: that would
+  // start answering new people (e.g. every story mention) without the owner
+  // seeing it. Turn it off first, edit, then the owner turns it back on.
+  // Same for who it answers: keywords, "any word", "any post", Direct trigger.
+  const widens = (["keywords", "matchAnyWord", "matchAnyPost", "dmTriggerEnabled"] as const).some(
+    (field) =>
+      automationData[field] !== undefined &&
+      JSON.stringify(automationData[field]) !==
+        JSON.stringify((existing as Record<string, unknown>)[field])
+  );
+  if (
+    existing.isActive &&
+    ((automationData.trigger !== undefined &&
+      automationData.trigger !== existing.trigger) ||
+      widens) &&
+    (await isApiTokenRequest())
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Turn the campaign off before changing its trigger",
+      },
+      { status: 409 }
+    );
+  }
+  if (
+    automationData.trigger &&
+    automationData.trigger !== existing.trigger &&
+    triggerUsesPost(trigger)
+  ) {
+    const hasPost =
+      (automationData.matchAnyPost ?? existing.matchAnyPost) ||
+      (automationData.pendingNextReel ?? existing.pendingNextReel) ||
+      Boolean(automationData.postId ?? existing.postId);
+    if (!hasPost) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid input",
+          details: { fieldErrors: { postId: ["Choose which post(s) trigger the campaign"] } },
+        },
+        { status: 400 }
+      );
+    }
+  }
+  if (trigger !== "COMMENT" || automationData.trigger !== undefined) {
+    applyTriggerRules(automationData, trigger);
+  }
+  if (automationData.storyId === null || automationData.storyId === "") {
+    automationData.storyId = null;
+    automationData.storyUrl = null;
+  }
 
   // Keep dependent fields consistent: any-word clears keywords; a disabled
   // opening DM clears its message and button.

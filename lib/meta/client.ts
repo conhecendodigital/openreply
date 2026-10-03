@@ -1,5 +1,6 @@
 import { getMetaGraphApiVersion, requireEnv } from "@/lib/env";
 import type { RawMessageMediaFields } from "@/lib/meta/message-media";
+import { WEBHOOK_SUBSCRIBED_FIELDS } from "@/lib/meta/webhook-fields";
 
 function instagramGraphBase() {
   return `https://graph.instagram.com/${getMetaGraphApiVersion()}`;
@@ -312,6 +313,65 @@ export async function getUserFollowStatus(
   } catch {
     return null;
   }
+}
+
+export interface InstagramUserProfile {
+  username: string | null;
+  name: string | null;
+  profilePic: string | null;
+}
+
+/**
+ * Profile of someone who messaged the account (User Profile API:
+ * GET /<IGSID>?fields=username,name,profile_pic with the account's token).
+ * Meta only answers for people who sent a DM / consented; anyone else comes
+ * back as a PermissionError (code 100/10/200) or code 230. Throws the usual
+ * TokenExpiredError / RateLimitError / PermissionError / MetaApiError.
+ */
+export async function getUserProfile(
+  accessToken: string,
+  igsid: string
+): Promise<InstagramUserProfile> {
+  const url = new URL(`${instagramGraphBase()}/${encodeURIComponent(igsid)}`);
+  url.searchParams.set("fields", "username,name,profile_pic");
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await handleResponse<{ username?: string; name?: string; profile_pic?: string }>(response);
+  const clean = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return {
+    username: clean(data?.username),
+    name: clean(data?.name),
+    profilePic: clean(data?.profile_pic),
+  };
+}
+
+export interface InstagramStory {
+  id: string;
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  timestamp?: string;
+}
+
+/**
+ * The account's live stories (GET /<IG_ID>/stories). Meta only returns the
+ * ones still up (last 24 hours). Used by the campaign builder to pick the
+ * story a "Resposta de story" campaign answers.
+ */
+export async function getStories(
+  accessToken: string,
+  instagramAccountId: string
+): Promise<InstagramStory[]> {
+  const url = new URL(`${instagramGraphBase()}/${encodeURIComponent(instagramAccountId)}/stories`);
+  url.searchParams.set("fields", "id,media_type,media_url,thumbnail_url,permalink,timestamp");
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await handleResponse<{ data?: InstagramStory[] }>(response);
+  return data.data ?? [];
 }
 
 /**
@@ -787,22 +847,8 @@ export async function refreshLongLivedToken(
   };
 }
 
-/**
- * Fields each connected account subscribes to (POST /<IG_ID>/subscribed_apps).
- * messaging_referral: ig.me?ref= into an existing thread; messaging_postbacks:
- * button and Ice Breaker taps (they carry the ref of a new thread);
- * messaging_seen: the read fallback. Echoes of what the account sends arrive on
- * "messages" (is_echo), so no separate field is needed. Same set ChatbotX uses
- * in production, minus optins and live comments. Accounts connected before
- * 2026-10-04 must be subscribed again (reconnect, or the one-off script).
- */
-export const WEBHOOK_SUBSCRIBED_FIELDS = [
-  "comments",
-  "messages",
-  "messaging_postbacks",
-  "messaging_referral",
-  "messaging_seen",
-];
+// The list lives in lib/meta/webhook-fields.ts (2026-10-06: + live_comments).
+export { WEBHOOK_SUBSCRIBED_FIELDS };
 
 export async function subscribeInstagramAccountToWebhooks(
   instagramAccountId: string,

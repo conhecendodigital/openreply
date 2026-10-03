@@ -32,6 +32,10 @@ export interface ParsedDirectMessage {
   template: ParsedTemplate | null;
   /** The person replied to (or mentioned us in) a story. */
   storyReply: boolean;
+  /** Which story event: reply (to our story) or mention (of us in theirs). */
+  storyKind: "reply" | "mention" | null;
+  /** Our story's id (reply only). */
+  storyId: string | null;
   deleted: boolean;
   /** Echo only: the custom string we sent as message.metadata ("le:..."). */
   metadata: string | null;
@@ -122,6 +126,12 @@ export function parseDirectMessages(payload: unknown): ParsedDirectMessage[] {
       }
       const storyUrl = msg.reply_to?.story?.url;
       if (storyUrl) media.push({ type: "story", url: storyUrl, download: true });
+      const storyKind: ParsedDirectMessage["storyKind"] = msg.reply_to?.story
+        ? "reply"
+        : (msg.attachments ?? []).some((a) => a.type === "story_mention")
+          ? "mention"
+          : null;
+      const storyId = storyKind === "reply" && msg.reply_to?.story?.id ? String(msg.reply_to.story.id) : null;
 
       out.push({
         accountId,
@@ -133,6 +143,8 @@ export function parseDirectMessages(payload: unknown): ParsedDirectMessage[] {
         media,
         template: tpl,
         storyReply: Boolean(storyUrl) || media.some((x) => x.type === "story"),
+        storyKind,
+        storyId,
         deleted: Boolean(msg.is_deleted),
         metadata: typeof msg.metadata === "string" && msg.metadata ? msg.metadata : null,
         appId: msg.app_id !== undefined && msg.app_id !== null ? String(msg.app_id) : null,

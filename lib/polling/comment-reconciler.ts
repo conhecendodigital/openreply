@@ -65,7 +65,9 @@ function errMessage(error: unknown): string {
 export async function reconcileComments(): Promise<void> {
   const automations = await prisma.automation.findMany({
     // A channel that is off (disconnected / needs reconnect) is not swept.
-    where: { isActive: true, instagramAccount: { status: "ACTIVE" } },
+    // Only post-comment campaigns: story, live and DM triggers have no post
+    // to sweep (and a live comment is not in the feed).
+    where: { isActive: true, trigger: "COMMENT", instagramAccount: { status: "ACTIVE" } },
     select: {
       id: true,
       name: true,

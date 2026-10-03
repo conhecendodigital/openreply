@@ -54,6 +54,8 @@ export async function storeParsedDirectMessages(
         text: m.text,
         template: m.template ? (m.template as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         storyReply: m.storyReply,
+        storyKind: m.storyKind ?? null,
+        storyId: m.storyId ?? null,
         deleted: m.deleted,
         sentAt: m.sentAt,
       },

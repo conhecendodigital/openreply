@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ContactAvatar, TagChip, useDateTime, useTimeAgo } from "@/components/contact-ui";
+import { ContactAvatar, contactDisplayName, TagChip, useDateTime, useTimeAgo } from "@/components/contact-ui";
 import { useT } from "@/components/lang-provider";
 import {
   DRAFT_STATUS_COLORS,
@@ -34,6 +34,9 @@ interface Contact {
   igUserId: string;
   username: string | null;
   name: string | null;
+  profilePicUrl?: string | null;
+  /** Profile lookup on Meta: "ok" | "denied" | "error"; null = not tried yet. */
+  profileStatus?: string | null;
   firstSeenAt: string;
   lastSeenAt: string;
   lastInboundAt: string | null;
@@ -344,15 +347,15 @@ export default function ContactPage() {
       {/* Profile header */}
       <section className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-10">
         <div className="sm:hidden">
-          <ContactAvatar username={contact.username} name={contact.name} size={84} />
+          <ContactAvatar username={contact.username} name={contact.name} src={contact.profilePicUrl} size={84} />
         </div>
         <div className="hidden sm:block">
-          <ContactAvatar username={contact.username} name={contact.name} size={144} />
+          <ContactAvatar username={contact.username} name={contact.name} src={contact.profilePicUrl} size={144} />
         </div>
         <div className="min-w-0 flex-1 space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="truncate text-xl font-normal">
-              {contact.username ? contact.username : t("Unknown user")}
+              {contact.username ? contact.username : contactDisplayName(t, contact)}
             </h2>
             <Link
               href={links.inbox}
@@ -381,7 +384,14 @@ export default function ContactPage() {
           </ul>
 
           <div className="space-y-0.5 text-sm">
-            {contact.name && <p className="font-semibold">{contact.name}</p>}
+            {contact.name && contact.username && <p className="font-semibold">{contact.name}</p>}
+            {!contact.username && (
+              <p className="text-muted">
+                {contact.profileStatus === "denied"
+                  ? t("Instagram did not share this person's @. Open the conversation to see who it is.")
+                  : t("Came in through the Direct. The @ shows up here as soon as Instagram sends it.")}
+              </p>
+            )}
             <p className="text-muted">
               {t("First seen {date}", { date: dateTime(contact.firstSeenAt) })} ·{" "}
               {t("Last interaction {time}", { time: timeAgo(contact.lastSeenAt) })}

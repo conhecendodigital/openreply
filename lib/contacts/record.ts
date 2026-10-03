@@ -13,6 +13,7 @@
  */
 import { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
+import { needsProfileLookup, queueProfileLookup } from "@/lib/contacts/profile-queue";
 
 export const CONTACT_EVENT_TYPES = [
   "COMMENT",
@@ -92,7 +93,16 @@ export async function upsertContact(input: {
   username?: string | null;
   name?: string | null;
   at: Date;
-}): Promise<ContactRef & { firstSeenAt: Date; lastSeenAt: Date }> {
+}): Promise<
+  ContactRef & {
+    firstSeenAt: Date;
+    lastSeenAt: Date;
+    username: string | null;
+    profileStatus: string | null;
+    profileFetchedAt: Date | null;
+    profileAttempts: number;
+  }
+> {
   const username = input.username?.trim() || undefined;
   const contact = await prisma.contact.upsert({
     where: {
@@ -115,7 +125,16 @@ export async function upsertContact(input: {
       ...(username ? { username } : {}),
       ...(input.name ? { name: input.name } : {}),
     },
-    select: { id: true, workspaceId: true, firstSeenAt: true, lastSeenAt: true },
+    select: {
+      id: true,
+      workspaceId: true,
+      firstSeenAt: true,
+      lastSeenAt: true,
+      username: true,
+      profileStatus: true,
+      profileFetchedAt: true,
+      profileAttempts: true,
+    },
   });
 
   // The backfill feeds old events, so first/last seen move both ways.
@@ -264,8 +283,12 @@ export type TrackInput = {
   account: AccountRow | { instagramId: string };
   igUserId: string;
   username?: string | null;
+  /** Display name, when the source has one. */
+  name?: string | null;
   event: ContactEventInput;
   tags?: string[];
+  /** Don't queue a profile lookup (the username backfill does its own). */
+  skipProfile?: boolean;
 };
 
 export type TrackResult = { contact: ContactRef; inserted: boolean } | null;
@@ -292,9 +315,23 @@ export async function trackInteraction(
       instagramAccountId: account.id,
       igUserId: input.igUserId,
       username: input.username,
+      name: input.name,
       at: input.event.occurredAt,
     });
     const ref = { id: contact.id, workspaceId: contact.workspaceId };
+    // No username yet (DM, ig.me link, button tap carry only the IGSID): look
+    // the profile up in the worker. Never blocks nor throws.
+    if (
+      !input.skipProfile &&
+      !input.username?.trim() &&
+      needsProfileLookup(contact, input.event)
+    ) {
+      await queueProfileLookup({
+        instagramId: account.instagramId,
+        contactId: contact.id,
+        attempts: contact.profileAttempts,
+      });
+    }
     const inserted = await recordEvent(ref, input.event);
     for (const tag of input.tags ?? []) {
       await addTag(ref, tag, "auto", input.event.occurredAt);
@@ -372,6 +409,7 @@ export async function onDirectMessage(input: {
   text?: string | null;
   sentAt: Date;
   storyReply?: boolean;
+  storyKind?: "reply" | "mention" | null;
 }, options: { throwOnError?: boolean } = {}): Promise<TrackResult> {
   const result = await trackInteraction({
     account: input.account,
@@ -381,7 +419,9 @@ export async function onDirectMessage(input: {
       refId: input.mid,
       occurredAt: input.sentAt,
       text: input.text ?? null,
-      meta: input.storyReply ? { storyReply: true } : null,
+      meta: input.storyReply
+        ? { storyReply: true, ...(input.storyKind ? { storyKind: input.storyKind } : {}) }
+        : null,
     },
   }, options);
   if (!result || input.fromMe || !result.inserted) return result;

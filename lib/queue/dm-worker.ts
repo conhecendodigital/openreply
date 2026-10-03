@@ -9,7 +9,9 @@ import {
   CRM_DM_JOB_NAME,
   REFERRAL_JOB_NAME,
   SEQUENCE_STEP_JOB_NAME,
+  PROFILE_JOB_NAME,
   type DmQueueJob,
+  type ProfileJob,
   type SaveMediaJob,
   type ProcessCommentJob,
   type ProcessMessageJob,
@@ -63,6 +65,7 @@ import {
   trackInteraction,
 } from "@/lib/contacts/record";
 import { moderateComment } from "@/lib/moderation/moderate";
+import { lookupContactProfile } from "@/lib/contacts/profile";
 
 const BACKOFF_DELAYS = [5 * 60 * 1000, 15 * 60 * 1000, 45 * 60 * 1000];
 
@@ -271,18 +274,30 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     originalMediaId,
   } = job.data;
   const requeueAttempt = job.data.requeueAttempt ?? 0;
+  // 2026-10-06: a comment during a live (webhook field live_comments) only
+  // fires LIVE_COMMENT campaigns ("any live": a live has no post beforehand),
+  // and a post comment only fires COMMENT ones. Without the trigger filter an
+  // "any post" campaign would answer lives, and a story/live campaign with an
+  // old matchAnyPost would answer posts.
+  const isLive = job.data.surface === "live";
 
   const automations = await prisma.automation.findMany({
     where: {
-      // Match campaigns bound to this specific post, plus any-post campaigns.
-      // A comment left on an ad carries the ad's own media id, while the
-      // campaign is bound to the post the ad was created from, so both ids
-      // have to be considered or the comment is dropped without a trace.
-      OR: [
-        { postId: mediaId },
-        ...(originalMediaId ? [{ postId: originalMediaId }] : []),
-        { matchAnyPost: true },
-      ],
+      ...(isLive
+        ? { trigger: "LIVE_COMMENT" as const }
+        : {
+            trigger: "COMMENT" as const,
+            // Match campaigns bound to this specific post, plus any-post
+            // campaigns. A comment left on an ad carries the ad's own media
+            // id, while the campaign is bound to the post the ad was created
+            // from, so both ids have to be considered or the comment is
+            // dropped without a trace.
+            OR: [
+              { postId: mediaId },
+              ...(originalMediaId ? [{ postId: originalMediaId }] : []),
+              { matchAnyPost: true },
+            ],
+          }),
       isActive: true,
       // A channel that is off (disconnected / needs reconnect) runs nothing.
       instagramAccount: {
@@ -316,21 +331,25 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
       occurredAt: new Date(),
       text: commentText,
       mediaId,
+      ...(isLive ? { meta: { surface: "live" } } : {}),
     },
   });
 
   // Moderation runs here (not in the webhook) so the polling sweep is covered
   // too. A comment matching a campaign keyword is protected inside, so the
-  // campaign below still answers it. Never throws.
-  const moderation = await moderateComment(job.data, {
-    campaigns: automations.map((a) => ({
-      keywords: a.keywords,
-      wholeWordMatch: a.wholeWordMatch,
-      matchAnyWord: a.matchAnyWord,
-    })),
-  });
-  // A hidden comment is spam: don't let an "any word" campaign DM it.
-  if (moderation?.action === "HIDDEN") return;
+  // campaign below still answers it. Never throws. Live comments are not
+  // moderated (they scroll away and cannot be hidden like a post comment).
+  if (!isLive) {
+    const moderation = await moderateComment(job.data, {
+      campaigns: automations.map((a) => ({
+        keywords: a.keywords,
+        wholeWordMatch: a.wholeWordMatch,
+        matchAnyWord: a.matchAnyWord,
+      })),
+    });
+    // A hidden comment is spam: don't let an "any word" campaign DM it.
+    if (moderation?.action === "HIDDEN") return;
+  }
 
   for (const automation of automations) {
     // "Any word" campaigns fire on every comment; otherwise require a keyword hit.
@@ -345,6 +364,9 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     if (!matchResult.matched) {
       continue;
     }
+
+    // No public reply on a live: only the private reply (DM) goes out.
+    const publicReplyEnabled = !isLive && automation.publicReplyEnabled;
 
     await addTagSafe(
       tracked?.contact,
@@ -368,7 +390,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     // already sent but whose public reply never posted (e.g. it hit a rate
     // limit) must still come back so the public reply can be retried.
     if (existingLog?.status === "SKIPPED_PLAN_LIMIT") continue;
-    if (alreadyDmd && (alreadyPublicReplied || !automation.publicReplyEnabled)) {
+    if (alreadyDmd && (alreadyPublicReplied || !publicReplyEnabled)) {
       continue;
     }
 
@@ -473,7 +495,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           ? [automation.publicReplyMessage]
           : [];
     if (
-      automation.publicReplyEnabled &&
+      publicReplyEnabled &&
       replyPool.length > 0 &&
       !existingLog?.publicReplySentAt
     ) {
@@ -611,7 +633,9 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         usage.periodStart
       );
 
-      if (rateLimit.shouldSkip) {
+      // A live is over long before a 30-minute requeue, and Meta only takes
+      // a private reply to a live comment during the broadcast: skip.
+      if (rateLimit.shouldSkip || isLive) {
         await prisma.dmLog.update({
           where: {
             automationId_commentId: {
@@ -1189,9 +1213,16 @@ const CAMPAIGN_INCLUDE = {
 type CampaignAutomation = Prisma.AutomationGetPayload<{ include: typeof CAMPAIGN_INCLUDE }>;
 
 /**
+ * "answered": this campaign's DM (link or follow prompt) went out for this
+ * trigger, now or on an earlier run. Anything else: it did not.
+ */
+type DeliverOutcome = "answered" | "not_answered";
+
+/**
  * Deliver a campaign to someone who is already talking to us (DM keyword,
- * ig.me link). Dedup per trigger id (DmLog @@unique automationId+commentId).
- * Respects takeover and the window, and enrolls the sequence afterwards.
+ * ig.me link, story reply / mention). Dedup per trigger id (DmLog @@unique
+ * automationId+commentId). Respects takeover and the window, and enrolls the
+ * sequence afterwards.
  */
 async function deliverCampaignToDm(input: {
   automation: CampaignAutomation;
@@ -1203,7 +1234,7 @@ async function deliverCampaignToDm(input: {
   /** The person's DM / tap / link that opened the window. */
   inboundAt: Date;
   context: string;
-}): Promise<void> {
+}): Promise<DeliverOutcome> {
   const { automation, senderId, dedupeId } = input;
 
   const existingLog = await prisma.dmLog.findUnique({
@@ -1217,12 +1248,12 @@ async function deliverCampaignToDm(input: {
 
   // Already replied to this message (or deliberately skipped it) — a retry
   // of the job must not send a second DM.
+  if (existingLog?.status === "SENT") return "answered";
   if (
-    existingLog?.status === "SENT" ||
     existingLog?.status === "SKIPPED_PLAN_LIMIT" ||
     existingLog?.status === "SKIPPED_TAKEOVER"
   ) {
-    return;
+    return "not_answered";
   }
 
   const logBase = {
@@ -1253,7 +1284,7 @@ async function deliverCampaignToDm(input: {
     } else {
       console.log(`[DM Worker] ${input.context}: not answered (${gate.reason})`);
     }
-    return;
+    return "not_answered";
   }
 
   if (!automation.instagramAccount.accessToken) {
@@ -1269,7 +1300,7 @@ async function deliverCampaignToDm(input: {
         errorMessage: "No Instagram access token available",
       },
     });
-    return;
+    return "not_answered";
   }
 
   let accessToken: string;
@@ -1288,16 +1319,17 @@ async function deliverCampaignToDm(input: {
         errorMessage: "Failed to decrypt Instagram access token",
       },
     });
-    return;
+    return "not_answered";
   }
 
   // Reuse a name captured on an earlier interaction so {username} still
-  // renders — the messages webhook carries only the sender's IGSID.
+  // renders — the messages webhook carries only the sender's IGSID. Then the
+  // contact's own @ (filled by the profile lookup), 2026-10-06.
   const priorLog = await prisma.dmLog.findFirst({
     where: { automationId: automation.id, commenterId: senderId },
     select: { commenterName: true },
   });
-  const commenterName = priorLog?.commenterName ?? null;
+  const commenterName = priorLog?.commenterName ?? gate.contact?.username ?? null;
 
   // Follow gate: anyone not confirmed as a follower gets the prompt instead of
   // the link, with the same `followcheck:` button that re-verifies on tap.
@@ -1326,7 +1358,7 @@ async function deliverCampaignToDm(input: {
         errorMessage: `Monthly DM limit reached (${usage.limit})`,
       },
     });
-    return;
+    return "not_answered";
   }
 
   const ledger = ledgerFor(automation, senderId, "automation", dedupeId);
@@ -1404,6 +1436,7 @@ async function deliverCampaignToDm(input: {
         inboundAt: input.inboundAt,
       });
     }
+    return "answered";
   } catch (error) {
     await releaseWorkspaceDMReservation(
       automation.workspaceId,
@@ -1435,22 +1468,111 @@ async function deliverCampaignToDm(input: {
  * skips the opening DM (which exists to work around private-reply limits from
  * comments) and delivers the reveal directly, honouring the follow gate.
  * Dedup is per inbound message id, so each message triggers at most one reply.
+ *
+ * 2026-10-06, stories:
+ *  - a story MENTION fires STORY_MENTION campaigns (no keyword), at most once
+ *    per person per campaign;
+ *  - a story REPLY fires STORY_REPLY campaigns (that story or any story) whose
+ *    words match, the one bound to that story first. Only the first that
+ *    answers sends (one mention / one reply = one DM, even with 2 campaigns
+ *    on), and then the DM-keyword campaigns skip this message too;
+ *  - otherwise (and for a story reply nobody answered) the DM-keyword
+ *    campaigns run as before: COMMENT campaigns with dmTriggerEnabled, and
+ *    the DM-only trigger.
  */
 async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
-  const { instagramAccountId, messageId, messageText, senderId } = job.data;
-  const receivedAt = new Date(job.timestamp || Date.now());
+  const { instagramAccountId, messageId, messageText, senderId, storyKind, storyId } = job.data;
+  const receivedAt = new Date(job.data.timestamp || job.timestamp || Date.now());
+  const channel = { instagramId: instagramAccountId, status: "ACTIVE" as const };
+
+  if (storyKind === "mention") {
+    const mentionCampaigns = await prisma.automation.findMany({
+      where: { trigger: "STORY_MENTION", isActive: true, instagramAccount: channel },
+      include: CAMPAIGN_INCLUDE,
+      orderBy: { createdAt: "asc" },
+    });
+    for (const automation of mentionCampaigns) {
+      // Someone who mentions us in every story gets the campaign once.
+      const already = await prisma.dmLog.findFirst({
+        where: {
+          automationId: automation.id,
+          commenterId: senderId,
+          status: "SENT",
+          commentId: { startsWith: "mention:" },
+        },
+        select: { commentId: true },
+      });
+      if (already && already.commentId !== `mention:${messageId}`) continue;
+      const outcome = await deliverCampaignToDm({
+        automation,
+        senderId,
+        dedupeId: `mention:${messageId}`,
+        triggerText: messageText || "(menção no story)",
+        matchedKeyword: null,
+        attemptsMade: job.attemptsMade,
+        inboundAt: receivedAt,
+        context: "story mention",
+      });
+      // One mention, one DM: with two mention campaigns on, only the first
+      // (oldest) answers. Same order on a retry, so the dedupe still holds.
+      if (outcome === "answered") break;
+    }
+    return;
+  }
+
+  const dedupeId = `dm:${messageId}`;
+  if (!messageText.trim()) return;
+
+  if (storyKind === "reply") {
+    const storyCampaigns = await prisma.automation.findMany({
+      where: {
+        trigger: "STORY_REPLY",
+        isActive: true,
+        instagramAccount: channel,
+        OR: [{ storyId: null }, ...(storyId ? [{ storyId }] : [])],
+      },
+      include: CAMPAIGN_INCLUDE,
+      orderBy: { createdAt: "asc" },
+    });
+    // A campaign for THIS story wins over an "any story" one: both matching
+    // the same words would otherwise send 2 DMs for one reply. Stable sort,
+    // so a retry picks the same campaign and its dedupe holds.
+    storyCampaigns.sort((a, b) => Number(a.storyId === null) - Number(b.storyId === null));
+    let answered = false;
+    for (const automation of storyCampaigns) {
+      const matchResult = automation.matchAnyWord
+        ? { matched: true, matchedKeyword: null }
+        : matchKeywords(messageText, automation.keywords, automation.wholeWordMatch);
+      if (!matchResult.matched) continue;
+      const outcome = await deliverCampaignToDm({
+        automation,
+        senderId,
+        dedupeId,
+        triggerText: messageText,
+        matchedKeyword: matchResult.matchedKeyword,
+        attemptsMade: job.attemptsMade,
+        inboundAt: receivedAt,
+        context: "story reply",
+      });
+      if (outcome === "answered") {
+        answered = true;
+        break;
+      }
+    }
+    // One reply per story answer: the DM-keyword campaigns stay quiet.
+    if (answered) return;
+  }
 
   const automations = await prisma.automation.findMany({
     where: {
       dmTriggerEnabled: true,
+      trigger: { in: ["COMMENT", "DM"] },
       isActive: true,
-      instagramAccount: { instagramId: instagramAccountId, status: "ACTIVE" },
+      instagramAccount: channel,
     },
     include: CAMPAIGN_INCLUDE,
     orderBy: { createdAt: "asc" },
   });
-
-  const dedupeId = `dm:${messageId}`;
 
   for (const automation of automations) {
     const matchResult = automation.matchAnyWord
@@ -1473,6 +1595,33 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
       inboundAt: receivedAt,
       context: "message trigger",
     });
+  }
+}
+
+/**
+ * Look a contact's profile up (username, name, photo), out of the webhook.
+ * Never throws (no BullMQ retry): out of budget or rate limited by Meta, it
+ * comes back later as a new delayed job, at most MAX_PROFILE_REQUEUES times.
+ */
+const MAX_PROFILE_REQUEUES = 6;
+
+async function processProfile(job: Job<ProfileJob>): Promise<void> {
+  const result = await lookupContactProfile(job.data.contactId);
+  if (result.outcome !== "no_budget" && result.outcome !== "rate_limited") return;
+  const requeue = (job.data.requeue ?? 0) + 1;
+  if (requeue > MAX_PROFILE_REQUEUES) return;
+  try {
+    await getDMQueue().add(
+      PROFILE_JOB_NAME,
+      { ...job.data, requeue },
+      {
+        delay: Math.max(60_000, result.retryInMs ?? 15 * 60_000),
+        jobId: `profile_${job.data.contactId}_rq${requeue}_${Math.floor(Date.now() / 60_000)}`,
+        attempts: 1,
+      }
+    );
+  } catch (error) {
+    console.warn("[DM Worker] Could not requeue profile lookup:", formatError(error));
   }
 }
 
@@ -1589,6 +1738,16 @@ async function runJob(job: Job<DmQueueJob>): Promise<void> {
   }
   if (job.name === SEQUENCE_STEP_JOB_NAME) {
     return processSequenceStep(job as Job<SequenceStepJob>);
+  }
+  if (job.name === PROFILE_JOB_NAME) {
+    return processProfile(job as Job<ProfileJob>);
+  }
+  // Only comment jobs may reach processComment: a job of a name this worker
+  // does not know (a newer web deploy than the worker) must not be treated as
+  // a comment and answered by a campaign.
+  if (job.name !== "process-comment" && !("commentId" in job.data)) {
+    console.warn(`[DM Worker] Job ${job.id}: unknown job "${job.name}", skipped`);
+    return;
   }
   return processComment(job as Job<ProcessCommentJob>);
 }

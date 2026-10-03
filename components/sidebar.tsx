@@ -63,20 +63,44 @@ const icones: Record<string, Icone> = {
   ),
 };
 
-const navItems = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Overview", href: "/overview" },
-  { label: "Inbox", href: "/inbox" },
-  { label: "Approvals", href: "/approvals" },
-  { label: "Campaigns", href: "/campaigns" },
-  { label: "Sequences", href: "/sequences" },
-  { label: "Conversation links", href: "/conversation-links" },
-  { label: "Contacts", href: "/contacts" },
-  { label: "Moderation", href: "/moderation" },
-  { label: "DM Logs", href: "/logs" },
-  { label: "Channels", href: "/channels" },
-  { label: "Settings", href: "/settings" },
-  { label: "Diagnostics", href: "/diagnostics" },
+/**
+ * 2026-10-06: menu por seções (título pequeno em cinza, como no ManyChat).
+ * Cada rota aparece uma vez só; a ordem segue o caminho do dono no dia a dia.
+ */
+const navSections: { title: string; items: { label: string; href: string }[] }[] = [
+  {
+    title: "Home",
+    items: [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "Overview", href: "/overview" },
+    ],
+  },
+  {
+    title: "Conversations",
+    items: [
+      { label: "Inbox", href: "/inbox" },
+      { label: "Approvals", href: "/approvals" },
+      { label: "Contacts", href: "/contacts" },
+    ],
+  },
+  {
+    title: "Automations",
+    items: [
+      { label: "Campaigns", href: "/campaigns" },
+      { label: "Sequences", href: "/sequences" },
+      { label: "Conversation links", href: "/conversation-links" },
+      { label: "Moderation", href: "/moderation" },
+      { label: "DM Logs", href: "/logs" },
+    ],
+  },
+  {
+    title: "Channels and account",
+    items: [
+      { label: "Channels", href: "/channels" },
+      { label: "Settings", href: "/settings" },
+      { label: "Diagnostics", href: "/diagnostics" },
+    ],
+  },
 ];
 
 interface SidebarProps {
@@ -138,42 +162,52 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
         `}
       >
         {/* The drawer is full height, so the wordmark would otherwise land under the status bar. */}
-        <div className="px-6 pt-8 pb-6" style={{ paddingTop: "calc(2rem + env(safe-area-inset-top))" }}>
+        <div className="px-6 pt-8 pb-5" style={{ paddingTop: "calc(2rem + env(safe-area-inset-top))" }}>
           <Link href="/dashboard" aria-label="Lead Engine">
             <LeadEngineLogo />
           </Link>
         </div>
 
-        <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-            const Icon = icones[item.href];
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                aria-current={isActive ? "page" : undefined}
-                className={`flex items-center gap-4 rounded-lg px-3 py-3 text-[15px] transition-colors hover:bg-surface-hover ${
-                  isActive ? "font-bold text-foreground" : "text-foreground"
-                }`}
-              >
-                {Icon && <Icon ativo={isActive} />}
-                <span className="flex-1">{t(item.label)}</span>
-                {item.href === "/approvals" && pendingDrafts > 0 && (
-                  <span
-                    className="grid h-5 min-w-5 place-items-center rounded-full bg-error px-1.5 text-[11px] font-semibold text-white"
-                    aria-label={t("{n} waiting", { n: pendingDrafts })}
-                  >
-                    {pendingDrafts > 99 ? "99+" : pendingDrafts}
-                  </span>
-                )}
-                {item.href === "/channels" && channelsNeedAttention && (
-                  <span className="h-2.5 w-2.5 rounded-full bg-error" aria-label={t("Needs attention")} />
-                )}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label={t("Menu")}>
+          {navSections.map((section, i) => (
+            <div key={section.title} className={i > 0 ? "mt-5" : ""}>
+              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                {t(section.title)}
+              </p>
+              <ul className="space-y-0.5">
+                {section.items.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                  const Icon = icones[item.href];
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={onClose}
+                        aria-current={isActive ? "page" : undefined}
+                        className={`flex items-center gap-4 rounded-lg px-3 py-2.5 text-[15px] text-foreground transition-colors hover:bg-surface-hover ${
+                          isActive ? "font-bold" : ""
+                        }`}
+                      >
+                        {Icon && <Icon ativo={isActive} />}
+                        <span className="flex-1">{t(item.label)}</span>
+                        {item.href === "/approvals" && pendingDrafts > 0 && (
+                          <span
+                            className="grid h-5 min-w-5 place-items-center rounded-full bg-error px-1.5 text-[11px] font-semibold text-white"
+                            aria-label={t("{n} waiting", { n: pendingDrafts })}
+                          >
+                            {pendingDrafts > 99 ? "99+" : pendingDrafts}
+                          </span>
+                        )}
+                        {item.href === "/channels" && channelsNeedAttention && (
+                          <span className="h-2.5 w-2.5 rounded-full bg-error" aria-label={t("Needs attention")} />
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
 
         <div className="space-y-3 px-5 py-4 border-t border-border">

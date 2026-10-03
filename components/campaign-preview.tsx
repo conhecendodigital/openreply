@@ -10,12 +10,48 @@ import { useT } from "@/components/lang-provider";
  * Fixed-size iPhone 17 Pro mockup that simulates how a campaign appears on
  * Instagram across three screens (Post, Comments, DM). Every screen renders in
  * the identical frame so switching tabs never resizes the phone.
+ *
+ * 2026-10-06: the preview follows the campaign trigger. Story replies and
+ * mentions get a Story screen, live comments a Live screen, and the DM thread
+ * starts the way the conversation really starts (reply to the story, mention
+ * card, or the person's own message).
  */
 
-export type PreviewTab = "post" | "comments" | "dm" | "dmTrigger";
+export type PreviewTab = "post" | "comments" | "dm" | "dmTrigger" | "story" | "live";
+
+/** Same values as Automation.trigger (lib/automations/trigger.ts). */
+export type PreviewTrigger = "COMMENT" | "DM" | "STORY_REPLY" | "STORY_MENTION" | "LIVE_COMMENT";
+
+/** Tabs shown for each trigger, in order. The first one is the default. */
+export function previewTabsFor(trigger: PreviewTrigger, dmTriggerEnabled = false): PreviewTab[] {
+  switch (trigger) {
+    case "DM":
+      return ["dmTrigger"];
+    case "STORY_REPLY":
+    case "STORY_MENTION":
+      return ["story", "dm"];
+    case "LIVE_COMMENT":
+      return ["live", "dm"];
+    default:
+      return ["post", "comments", "dm", ...(dmTriggerEnabled ? (["dmTrigger"] as const) : [])];
+  }
+}
+
+const TAB_LABELS: Record<PreviewTab, string> = {
+  post: "Post",
+  comments: "Comments",
+  dm: "DM",
+  dmTrigger: "DM trigger",
+  story: "Story",
+  live: "Live",
+};
 
 interface CampaignPreviewProps {
   tab: PreviewTab;
+  /** What starts the campaign. Defaults to a post comment. */
+  trigger?: PreviewTrigger;
+  /** Thumbnail of the chosen story (story reply on one story). */
+  storyThumb?: string | null;
   onTabChange: (tab: PreviewTab) => void;
   username: string;
   avatarUrl: string | null;
@@ -327,6 +363,8 @@ function DmScreen({
   followUpDelayMinutes = 0,
   linkUrl,
   inboundMessage,
+  inboundKind = "text",
+  storyThumb = null,
 }: {
   username: string;
   avatarUrl: string | null;
@@ -347,6 +385,9 @@ function DmScreen({
   followUpDelayMinutes?: number;
   // Present on the keyword-trigger thread: the DM the user sends to start it.
   inboundMessage?: string;
+  /** How the conversation started: a plain DM, a reply to our story or a mention in theirs. */
+  inboundKind?: "text" | "storyReply" | "storyMention";
+  storyThumb?: string | null;
 }) {
   const tr = useT();
   return (
@@ -363,7 +404,22 @@ function DmScreen({
       </div>
 
       <div className="flex-1 space-y-3 px-3 py-4">
-        {inboundMessage !== undefined && (
+        {inboundKind === "storyReply" && (
+          <div className="flex flex-col items-end gap-1">
+            <p className="text-[10px] text-zinc-500">{tr("Replied to your story")}</p>
+            <StoryChip thumb={storyThumb} />
+            <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm">
+              {inboundMessage || tr("their message")}
+            </div>
+          </div>
+        )}
+        {inboundKind === "storyMention" && (
+          <div className="flex flex-col items-end gap-1">
+            <p className="text-[10px] text-zinc-500">{tr("Mentioned you in their story")}</p>
+            <StoryChip thumb={null} mention={username} />
+          </div>
+        )}
+        {inboundKind === "text" && inboundMessage !== undefined && (
           <div className="flex justify-end">
             <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm">
               {inboundMessage || tr("their message")}
@@ -476,23 +532,148 @@ function DmScreen({
   );
 }
 
+/** Small story card shown inside the DM thread (like Instagram does). */
+function StoryChip({ thumb, mention }: { thumb: string | null; mention?: string }) {
+  return (
+    <div className="relative h-24 w-16 overflow-hidden rounded-xl bg-gradient-to-br from-fuchsia-600 via-rose-500 to-amber-400">
+      {thumb && <img src={thumb} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
+      {mention && (
+        <span className="absolute inset-x-1 top-1/2 -translate-y-1/2 truncate rounded bg-white px-1 py-0.5 text-center text-[8px] font-semibold text-zinc-900">
+          @{mention}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StoryScreen({
+  username,
+  avatarUrl,
+  storyThumb,
+  mention,
+  sampleReply,
+}: {
+  username: string;
+  avatarUrl: string | null;
+  storyThumb: string | null;
+  /** True: it is the person's story with our @ (story mention). */
+  mention: boolean;
+  sampleReply: string;
+}) {
+  const tr = useT();
+  const owner = mention ? SAMPLE_USER : username;
+  return (
+    <div className="relative flex h-full flex-col text-white">
+      <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-700 via-rose-600 to-amber-500">
+        {!mention && storyThumb && (
+          <img src={storyThumb} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+        )}
+      </div>
+      <div className="relative z-10 flex h-full flex-col">
+        <StatusBar />
+        <div className="px-3 pt-2">
+          <div className="h-0.5 w-full overflow-hidden rounded-full bg-white/35">
+            <div className="h-full w-2/5 bg-white" />
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <Avatar url={mention ? null : avatarUrl} size={28} />
+            <span className="text-sm font-semibold drop-shadow">{owner}</span>
+            <span className="text-xs text-white/70">{tr("2h")}</span>
+            <span className="ml-auto tracking-widest">···</span>
+          </div>
+        </div>
+        <div className="flex flex-1 items-center justify-center px-6">
+          {mention ? (
+            <span className="rounded-md bg-white px-3 py-1.5 text-base font-semibold text-zinc-900 shadow-lg">
+              @{username}
+            </span>
+          ) : (
+            !storyThumb && <p className="text-center text-sm text-white/80">{tr("Your story")}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 px-3 pb-4">
+          {mention ? (
+            <p className="w-full text-center text-xs text-white/80">
+              {tr("Instagram tells you about the mention and the DM goes out")}
+            </p>
+          ) : (
+            <>
+              <div className="flex-1 rounded-full border border-white/70 px-3 py-2 text-xs">
+                {sampleReply || tr("Send message")}
+              </div>
+              {Ico.heart("h-6 w-6")}
+              {Ico.share("h-6 w-6")}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LiveScreen({
+  username,
+  avatarUrl,
+  sampleComment,
+}: {
+  username: string;
+  avatarUrl: string | null;
+  sampleComment: string;
+}) {
+  const tr = useT();
+  return (
+    <div className="relative flex h-full flex-col text-white">
+      <div className="absolute inset-0 bg-gradient-to-b from-zinc-700 via-zinc-800 to-black" />
+      <div className="relative z-10 flex h-full flex-col">
+        <StatusBar />
+        <div className="flex items-center gap-2 px-3 pt-2">
+          <Avatar url={avatarUrl} size={28} />
+          <span className="text-sm font-semibold">{username}</span>
+          <span className="rounded bg-gradient-to-r from-fuchsia-600 to-rose-500 px-1.5 py-0.5 text-[10px] font-bold uppercase">
+            {tr("Live")}
+          </span>
+          <span className="rounded bg-black/50 px-1.5 py-0.5 text-[10px]">👁 128</span>
+        </div>
+        <div className="flex-1" />
+        <div className="space-y-2 px-3 pb-2">
+          <p className="text-xs">
+            <span className="font-semibold">maria.silva</span> <span className="text-white/85">{tr("hi from Recife!")}</span>
+          </p>
+          <div className="flex items-start gap-2">
+            <Avatar url={null} size={24} />
+            <p className="text-xs">
+              <span className="font-semibold">{SAMPLE_USER}</span>{" "}
+              <span className="text-white/90">{sampleComment || tr("yc")}</span>
+            </p>
+          </div>
+          <p className="text-[10px] text-white/60">{tr("Nobody sees a reply here: the link goes to their Direct.")}</p>
+        </div>
+        <div className="flex items-center gap-2 px-3 pb-4">
+          <div className="flex-1 rounded-full border border-white/50 px-3 py-2 text-xs text-white/70">{tr("Comment")}</div>
+          {Ico.heart("h-6 w-6")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ----------------------------- root ----------------------------- */
 
 export default function CampaignPreview(props: CampaignPreviewProps) {
+  const tr = useT();
   const { tab, onTabChange } = props;
-  const tabs: { key: PreviewTab; label: string }[] = [
-    { key: "post", label: "Post" },
-    { key: "comments", label: "Comments" },
-    { key: "dm", label: "DM" },
-    ...(props.dmTriggerEnabled
-      ? [{ key: "dmTrigger" as const, label: "DM trigger" }]
-      : []),
-  ];
+  const trigger = props.trigger ?? "COMMENT";
+  const keys = previewTabsFor(trigger, props.dmTriggerEnabled);
+  const tabs = keys.map((key) => ({
+    key,
+    // A DM campaign has a single thread: call it just "DM".
+    label: trigger === "DM" && key === "dmTrigger" ? "DM" : TAB_LABELS[key],
+  }));
 
-  // The DM-trigger tab disappears when the trigger is switched off; fall back
-  // to the comment thread rather than rendering an empty phone.
-  const activeTab: PreviewTab =
-    tab === "dmTrigger" && !props.dmTriggerEnabled ? "dm" : tab;
+  // A tab that does not exist for this trigger (switched trigger, DM toggle
+  // off) falls back to the DM thread, or the first tab, never an empty phone.
+  const activeTab: PreviewTab = keys.includes(tab) ? tab : keys.includes("dm") ? "dm" : keys[0];
+  const storyThumb = props.storyThumb ?? null;
 
   return (
     <div className="flex flex-col items-center gap-5">
@@ -514,11 +695,23 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
             publicReplyMessage={props.publicReplyMessage}
           />
         )}
+        {activeTab === "story" && (
+          <StoryScreen
+            username={props.username}
+            avatarUrl={props.avatarUrl}
+            storyThumb={storyThumb}
+            mention={trigger === "STORY_MENTION"}
+            sampleReply={props.sampleComment}
+          />
+        )}
+        {activeTab === "live" && (
+          <LiveScreen username={props.username} avatarUrl={props.avatarUrl} sampleComment={props.sampleComment} />
+        )}
         {activeTab === "dm" && (
           <DmScreen
             username={props.username}
             avatarUrl={props.avatarUrl}
-            openingDmEnabled={props.openingDmEnabled}
+            openingDmEnabled={props.openingDmEnabled && trigger !== "STORY_REPLY" && trigger !== "STORY_MENTION"}
             openingDmMessage={props.openingDmMessage}
             openingDmButtonLabel={props.openingDmButtonLabel}
             revealMessage={props.revealMessage}
@@ -533,6 +726,13 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
             followUpMessage={props.followUpMessage}
             followUpDelayMinutes={props.followUpDelayMinutes}
             linkUrl={props.linkUrl}
+            // Story campaigns start from the story itself: the person's reply
+            // or the mention card, and no opening DM (the chat is already open).
+            {...(trigger === "STORY_REPLY"
+              ? { inboundKind: "storyReply" as const, inboundMessage: props.sampleComment, storyThumb }
+              : trigger === "STORY_MENTION"
+                ? { inboundKind: "storyMention" as const }
+                : {})}
           />
         )}
         {activeTab === "dmTrigger" && (
@@ -572,7 +772,7 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
                 : "text-muted hover:text-foreground"
             }`}
           >
-            {t.label}
+            {tr(t.label)}
           </button>
         ))}
       </div>

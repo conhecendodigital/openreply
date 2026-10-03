@@ -6,33 +6,82 @@
  * "5 min ago" formatter in the current language.
  */
 
-import { useCallback } from "react";
-import { useLang } from "@/components/lang-provider";
+import { useCallback, useState } from "react";
+import { useLang, useT } from "@/components/lang-provider";
+import type { TFunction } from "@/lib/i18n";
 
 export function ContactAvatar({
   username,
   name,
+  src,
   size = 44,
 }: {
   username: string | null;
   name?: string | null;
+  /** Profile photo from the Meta User Profile API (2026-10-06). Meta CDN links expire: falls back to the initial. */
+  src?: string | null;
   size?: number;
 }) {
+  const [broken, setBroken] = useState<string | null>(null);
   const letter = (username || name || "?").replace(/^@/, "").charAt(0).toUpperCase() || "?";
+  const showPhoto = Boolean(src) && broken !== src;
   return (
     <span
       className="ig-gradient inline-grid shrink-0 place-items-center rounded-full p-[2px]"
       style={{ width: size, height: size }}
       aria-hidden
     >
-      <span
-        className="grid h-full w-full place-items-center rounded-full border-2 border-background bg-surface-hover font-semibold text-foreground"
-        style={{ fontSize: Math.round(size * 0.4) }}
-      >
-        {letter}
-      </span>
+      {showPhoto ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Meta CDN profile photo, not optimizable
+        <img
+          src={src as string}
+          alt=""
+          referrerPolicy="no-referrer"
+          onError={() => setBroken(src ?? null)}
+          className="h-full w-full rounded-full border-2 border-background bg-surface-hover object-cover"
+        />
+      ) : (
+        <span
+          className="grid h-full w-full place-items-center rounded-full border-2 border-background bg-surface-hover font-semibold text-foreground"
+          style={{ fontSize: Math.round(size * 0.4) }}
+        >
+          {letter}
+        </span>
+      )}
     </span>
   );
+}
+
+/**
+ * How a contact is called on screen (2026-10-06). Contacts that came in by DM,
+ * ig.me link or button only bring the IGSID; until the profile lookup fills the
+ * @, show the name, or "Direct person ···1234" (end of the ID) instead of
+ * "Unknown user".
+ */
+export function contactDisplayName(
+  t: TFunction,
+  c: { username?: string | null; name?: string | null; igUserId?: string | null }
+): string {
+  if (c.username) return `@${c.username.replace(/^@/, "")}`;
+  if (c.name?.trim()) return c.name.trim();
+  const tail = (c.igUserId ?? "").slice(-4);
+  return tail ? t("Direct person ···{id}", { id: tail }) : t("Direct person");
+}
+
+/** Same label as contactDisplayName, as a component (keeps `t` out of the caller's render). */
+export function ContactName(props: { username?: string | null; name?: string | null; igUserId?: string | null }) {
+  const t = useT();
+  return <>{contactDisplayName(t, props)}</>;
+}
+
+/** True when the contact has no @ yet (the label above is a fallback). */
+export function isUnnamedContact(c: { username?: string | null }): boolean {
+  return !c.username;
+}
+
+/** Deep link to the conversation in the Direct screen. */
+export function inboxHref(instagramAccountId: string, igUserId: string): string {
+  return `/inbox?account=${encodeURIComponent(instagramAccountId)}&contact=${encodeURIComponent(igUserId)}`;
 }
 
 export function TagChip({

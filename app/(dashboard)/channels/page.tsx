@@ -36,6 +36,8 @@ interface InstagramCard {
   tokenExpiresInDays: number | null;
   webhookSubscribed: boolean;
   webhookFields: string[];
+  /** Expected fields (lib/meta/webhook-fields.ts) this account is not subscribed to. */
+  missingWebhookFields?: string[];
   lastWebhookAt: string | null;
   webhooksStale: boolean;
   lastError: string | null;
@@ -371,6 +373,26 @@ function InstagramChannelCard({
                 ? t("Subscribed (fields not read yet; use Test connection)")
                 : t("None")}
             </p>
+          )}
+          {(card.missingWebhookFields?.length ?? 0) > 0 && (
+            <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3">
+              <p className="text-xs font-semibold text-foreground">{t("Not subscribed yet")}</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {card.missingWebhookFields!.map((field) => (
+                  <span
+                    key={field}
+                    className="rounded-md border border-dashed border-warning px-2 py-0.5 font-mono text-xs text-foreground"
+                  >
+                    {field}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-muted">
+                {card.missingWebhookFields!.includes("live_comments")
+                  ? t("live_comments brings comments made during your lives (Comment on a live campaigns). Tick it in the Meta app (Webhooks > Instagram) and reconnect the channel to subscribe again.")
+                  : t("Reconnect the channel to subscribe again.")}
+              </p>
+            </div>
           )}
         </div>
 

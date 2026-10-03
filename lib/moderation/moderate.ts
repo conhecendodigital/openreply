@@ -169,6 +169,8 @@ async function loadCampaigns(job: ModerationJob): Promise<CampaignMatcher[]> {
   return prisma.automation.findMany({
     where: {
       isActive: true,
+      // Only post-comment campaigns protect a post comment.
+      trigger: "COMMENT",
       instagramAccount: { instagramId: job.instagramAccountId },
       OR: [
         { postId: job.mediaId },

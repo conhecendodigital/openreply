@@ -36,6 +36,9 @@ export interface ProcessCommentJob {
   // Which path enqueued this comment. Recorded in the shared ProcessedComment
   // dedup store so the reconciler can tell webhook- from polling-caught comments.
   source?: CommentSource;
+  // "live" = a comment during one of our lives (webhook field live_comments):
+  // only LIVE_COMMENT campaigns answer it. Absent = a post comment.
+  surface?: "post" | "live";
 }
 
 // Delivered when a user taps an opening DM's button — carries the reveal target.
@@ -64,6 +67,13 @@ export interface ProcessMessageJob {
   messageId: string;
   messageText: string;
   senderId: string;
+  // 2026-10-06: a reply to one of our stories (STORY_REPLY campaigns) or a
+  // mention of us in someone's story (STORY_MENTION, no text).
+  storyKind?: "reply" | "mention";
+  storyId?: string;
+  storyUrl?: string;
+  /** Event time in ms (opens the 24 h window). */
+  timestamp?: number;
 }
 
 // Download a DM photo/video/audio as soon as it arrives (Meta links expire).
@@ -85,6 +95,7 @@ export interface CrmDmJob {
   /** ISO string. */
   sentAt: string;
   storyReply: boolean;
+  storyKind?: "reply" | "mention" | null;
   metadata: string | null;
   appId: string | null;
   hasTemplate: boolean;
@@ -110,6 +121,16 @@ export interface SequenceStepJob {
   order: number;
 }
 
+// Look up a contact's username / name / photo (User Profile API), out of the
+// webhook. jobId profile_<contactId>_<attempts> (lib/contacts/profile.ts).
+export interface ProfileJob {
+  /** Our account's instagramId, like every other job (noteMetaError). */
+  instagramAccountId: string;
+  contactId: string;
+  /** How many times the budget pushed it back. */
+  requeue?: number;
+}
+
 export type DmQueueJob =
   | ProcessCommentJob
   | ProcessPostbackJob
@@ -118,7 +139,8 @@ export type DmQueueJob =
   | SaveMediaJob
   | CrmDmJob
   | ReferralJob
-  | SequenceStepJob;
+  | SequenceStepJob
+  | ProfileJob;
 
 export const SAVE_MEDIA_JOB_NAME = "save-media";
 export const POSTBACK_JOB_NAME = "process-postback";
@@ -127,6 +149,7 @@ export const MESSAGE_JOB_NAME = "process-message";
 export const CRM_DM_JOB_NAME = "crm-dm";
 export const REFERRAL_JOB_NAME = "process-referral";
 export const SEQUENCE_STEP_JOB_NAME = "sequence-step";
+export const PROFILE_JOB_NAME = "fetch-profile";
 
 /** BullMQ job ids cannot contain ":"; base64url keeps them injective. */
 export function safeJobKey(value: string): string {

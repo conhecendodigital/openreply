@@ -12,6 +12,8 @@ export type ContextContact = {
   igUserId: string;
   username: string | null;
   name: string | null;
+  profilePicUrl?: string | null;
+  instagramAccountId?: string;
   lastInboundAt: Date | null;
   lastOutboundAt: Date | null;
   humanTakeover: boolean;
@@ -27,6 +29,8 @@ export const CONTEXT_CONTACT_SELECT = {
   igUserId: true,
   username: true,
   name: true,
+  profilePicUrl: true,
+  instagramAccountId: true,
   lastInboundAt: true,
   lastOutboundAt: true,
   humanTakeover: true,
@@ -79,6 +83,10 @@ export async function presentContact(contact: ContextContact, options: { message
     igUserId: contact.igUserId,
     username: contact.username,
     name: contact.name,
+    // Photo (Meta link, expires) and the account, for the "open conversation"
+    // link when there is no @ yet.
+    profilePicUrl: contact.profilePicUrl ?? null,
+    instagramAccountId: contact.instagramAccountId ?? null,
     tags: contact.tags.map((t) => t.name),
     notes: contact.notes ?? null,
     lastInboundAt: contact.lastInboundAt,

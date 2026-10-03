@@ -17,6 +17,8 @@ export type GuardContact = {
   lastInboundAt: Date | null;
   humanTakeover: boolean;
   humanTakeoverUntil: Date | null;
+  /** The person's @, so a campaign DM can render {username}. */
+  username?: string | null;
 };
 
 export type GuardResult =
@@ -46,6 +48,7 @@ const GUARD_SELECT = {
   lastInboundAt: true,
   humanTakeover: true,
   humanTakeoverUntil: true,
+  username: true,
 } as const;
 
 /** Contact of one person on our account (by the account's instagramId). */

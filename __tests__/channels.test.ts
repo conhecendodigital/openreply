@@ -365,6 +365,12 @@ describe("Channels page data", () => {
       contacts: 10,
       pendingDrafts: 1,
     });
+    // Subscribed before a field existed: the card says what is missing
+    // (2026-10-06: live_comments for the live trigger).
+    expect(json.data.instagram[0].missingWebhookFields).toEqual(
+      expect.arrayContaining(["live_comments", "messages"])
+    );
+    expect(json.data.instagram[0].missingWebhookFields).not.toContain("comments");
     expect(json.data.comingSoon.map((c: { platform: string }) => c.platform)).toEqual([
       "telegram",
       "whatsapp",

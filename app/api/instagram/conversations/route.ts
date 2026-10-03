@@ -4,6 +4,7 @@ import { getCurrentWorkspaceContext } from "@/lib/workspace-access";
 import { sendTracked } from "@/lib/meta/send";
 import { startTakeover } from "@/lib/messaging/takeover";
 import { upsertContact } from "@/lib/contacts/record";
+import { saveKnownUsernames } from "@/lib/contacts/profile";
 import { requireActiveInstagramAccount } from "@/lib/instagram-accounts";
 import { isChannelOffError, noteMetaError } from "@/lib/channels/status";
 import {
@@ -76,6 +77,13 @@ export async function GET(request: NextRequest) {
           : null,
       };
     });
+
+    // The participants already carry the @: save it on contacts that have
+    // none (people who came by DM), no extra Meta call. Never throws.
+    await saveKnownUsernames(
+      account.id,
+      conversations.map((c) => ({ igUserId: c.contact.id, username: c.contact.username }))
+    );
 
     const data: ConversationsResponse = {
       conversations,

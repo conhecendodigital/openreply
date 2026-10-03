@@ -13,7 +13,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
-import { ContactAvatar, TagChip, useTimeAgo } from "@/components/contact-ui";
+import { ContactAvatar, contactDisplayName, inboxHref, isUnnamedContact, TagChip, useTimeAgo } from "@/components/contact-ui";
 import { useT } from "@/components/lang-provider";
 
 interface ContactRow {
@@ -21,6 +21,8 @@ interface ContactRow {
   igUserId: string;
   username: string | null;
   name: string | null;
+  profilePicUrl?: string | null;
+  instagramAccountId: string;
   lastSeenAt: string;
   commentsCount: number;
   dmsInCount: number;
@@ -242,18 +244,16 @@ function ContactsList() {
             {contacts.map((c) => {
               const extra = c.tags.length - VISIBLE_TAGS;
               return (
-                <li key={c.id}>
+                <li key={c.id} className="relative flex items-center transition-colors hover:bg-surface-hover">
                   <Link
                     href={`/contacts/${c.id}`}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover"
+                    className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3"
                   >
-                    <ContactAvatar username={c.username} name={c.name} />
+                    <ContactAvatar username={c.username} name={c.name} src={c.profilePicUrl} />
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-baseline gap-2">
-                        <p className="truncate text-sm font-semibold">
-                          {c.username ? `@${c.username}` : t("Unknown user")}
-                        </p>
-                        {c.name && <p className="hidden truncate text-sm text-muted sm:block">{c.name}</p>}
+                        <p className="truncate text-sm font-semibold">{contactDisplayName(t, c)}</p>
+                        {c.username && c.name && <p className="hidden truncate text-sm text-muted sm:block">{c.name}</p>}
                       </div>
                       <p className="truncate text-xs text-muted">
                         {t("Last interaction {time}", { time: timeAgo(c.lastSeenAt) })}
@@ -272,6 +272,14 @@ function ContactsList() {
                       <path d="m9 6 6 6-6 6" />
                     </svg>
                   </Link>
+                  {isUnnamedContact(c) && (
+                    <Link
+                      href={inboxHref(c.instagramAccountId, c.igUserId)}
+                      className="mr-3 shrink-0 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:border-border-hover"
+                    >
+                      {t("Open conversation")}
+                    </Link>
+                  )}
                 </li>
               );
             })}

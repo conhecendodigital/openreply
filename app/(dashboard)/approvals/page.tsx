@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ContactAvatar, TagChip, useDateTime, useTimeAgo } from "@/components/contact-ui";
+import { ContactAvatar, contactDisplayName, inboxHref, TagChip, useDateTime, useTimeAgo } from "@/components/contact-ui";
 import { useT } from "@/components/lang-provider";
 import {
   DRAFT_STATUS_COLORS,
@@ -157,16 +157,16 @@ export default function ApprovalsPage() {
           {drafts.map((d) => (
             <li key={d.id} className="panel space-y-3 rounded-2xl p-4">
               <div className="flex items-center gap-3">
-                <ContactAvatar username={d.contact.username} name={d.contact.name} size={40} />
+                <ContactAvatar username={d.contact.username} name={d.contact.name} src={d.contact.profilePicUrl} size={40} />
                 <div className="min-w-0 flex-1">
                   <Link href={`/contacts/${d.contact.id}`} className="block truncate text-sm font-semibold hover:underline">
-                    {d.contact.username ?? t("Unknown user")}
+                    {contactDisplayName(t, d.contact)}
                   </Link>
-                  {d.contact.name && <p className="truncate text-xs text-muted">{d.contact.name}</p>}
+                  {d.contact.username && d.contact.name && <p className="truncate text-xs text-muted">{d.contact.name}</p>}
                 </div>
                 <TakeoverChip takeover={d.contact.takeover} />
                 <Link
-                  href={`/inbox?account=${encodeURIComponent(d.instagramAccountId)}&contact=${encodeURIComponent(d.contact.igUserId)}`}
+                  href={inboxHref(d.instagramAccountId, d.contact.igUserId)}
                   className="shrink-0 rounded-lg bg-surface-hover px-3 py-1 text-xs font-semibold hover:bg-border"
                 >
                   {t("Open in Direct")}
@@ -191,11 +191,11 @@ export default function ApprovalsPage() {
         <ul className="panel divide-y divide-border overflow-hidden rounded-2xl">
           {drafts.map((d) => (
             <li key={d.id} className="flex gap-3 px-4 py-3">
-              <ContactAvatar username={d.contact.username} name={d.contact.name} size={36} />
+              <ContactAvatar username={d.contact.username} name={d.contact.name} src={d.contact.profilePicUrl} size={36} />
               <div className="min-w-0 flex-1 space-y-0.5">
                 <div className="flex items-baseline justify-between gap-3">
                   <Link href={`/contacts/${d.contact.id}`} className="truncate text-sm font-semibold hover:underline">
-                    {d.contact.username ?? t("Unknown user")}
+                    {contactDisplayName(t, d.contact)}
                   </Link>
                   <span className={`shrink-0 text-xs font-semibold ${DRAFT_STATUS_COLORS[d.status]}`}>
                     {t(DRAFT_STATUS_LABELS[d.status])}

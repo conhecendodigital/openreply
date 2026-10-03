@@ -12,6 +12,10 @@
  * Also needed in the Meta app panel: Webhooks > Instagram > tick
  * messaging_referral and messaging_postbacks; and Ice Breakers set on the
  * account to receive the ref of a NEW conversation.
+ *
+ * 2026-10-06: the list (lib/meta/webhook-fields.ts) now has live_comments too
+ * (campaign trigger "Comentário em live"). Run it again with --apply and tick
+ * live_comments in the same panel.
  */
 import { prisma } from "@/lib/db/client";
 import { getMetaGraphApiVersion } from "@/lib/env";

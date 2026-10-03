@@ -798,4 +798,68 @@ export const pt: Record<string, string> = {
   "Account already connected": "Conta já conectada",
   "That Instagram account belongs to another workspace (even if it is disconnected there). Delete it for real there first, or connect a different account.":
     "Essa conta do Instagram pertence a outro espaço (mesmo desconectada lá). Exclua de verdade por lá primeiro, ou conecte outra conta.",
+
+  // 2026-10-06: menu por seções
+  Home: "Painel",
+  Automations: "Automações",
+  "Channels and account": "Canais e conta",
+  // 2026-10-06: contato sem @ (entrou pelo Direct, só com o ID)
+  "Direct person ···{id}": "Pessoa do Direct ···{id}",
+  "Direct person": "Pessoa do Direct",
+  "Open conversation": "Abrir conversa",
+  "Instagram did not share this person's @. Open the conversation to see who it is.":
+    "O Instagram não passou o @ dessa pessoa. Abra a conversa pra ver quem é.",
+  "Came in through the Direct. The @ shows up here as soon as Instagram sends it.":
+    "Chegou pelo Direct. O @ aparece aqui assim que o Instagram mandar.",
+  // 2026-10-06: gatilhos de campanha (post, Direct, story, live)
+  "What starts the campaign": "O que dispara a campanha",
+  "Comment on a post": "Comentário em post",
+  "Someone comments a word on a post or reel.": "Alguém comenta uma palavra num post ou reel.",
+  "Message in the Direct": "Mensagem no Direct",
+  "Someone sends you a DM with the word.": "Alguém te manda uma DM com a palavra.",
+  "Story reply": "Resposta de story",
+  "Someone replies to your story with the word.": "Alguém responde seu story com a palavra.",
+  "Story mention": "Menção no story",
+  "Someone mentions you in their story.": "Alguém te marca no story dela.",
+  "Comment on a live": "Comentário em live",
+  "Someone comments the word during any of your lives.": "Alguém comenta a palavra durante qualquer live sua.",
+  "When someone replies to": "Quando alguém responder",
+  "any of your stories": "qualquer story seu",
+  "a specific story": "um story específico",
+  "Could not load your stories. Try again in a moment.": "Não deu pra carregar seus stories. Tente de novo daqui a pouco.",
+  "No story up right now. Post one, or pick any of your stories.":
+    "Nenhum story no ar agora. Poste um, ou escolha qualquer story seu.",
+  "The chosen story is no longer up (stories last 24 h), so this campaign will not fire again. Pick another or any story.":
+    "O story escolhido já saiu do ar (story dura 24 h), então essa campanha não dispara mais. Escolha outro ou qualquer story.",
+  "Pick a story, or choose any of your stories.": "Escolha um story, ou marque qualquer story seu.",
+  "Every time someone mentions you in their story, they get the message below, once per person. No word needed.":
+    "Toda vez que alguém te marcar no story, a pessoa recebe a mensagem abaixo, uma vez só por pessoa. Não precisa de palavra.",
+  "Works on any live you start. Instagram only sends comments while the live is on, and there is no public reply: the message goes straight to their Direct.":
+    "Vale pra qualquer live que você abrir. O Instagram só manda os comentários enquanto a live está no ar, e não tem resposta pública: a mensagem vai direto pro Direct da pessoa.",
+  "And the message has": "E a mensagem tem",
+  "And the reply has": "E a resposta tem",
+  "Any comment": "Qualquer comentário",
+  "Any message": "Qualquer mensagem",
+  "No keywords": "Sem palavras-chave",
+  "View story": "Ver story",
+  "Reply to one story": "Resposta de um story",
+  "Reply to any story": "Resposta de qualquer story",
+  "Comment on any live": "Comentário em qualquer live",
+  "Comment on any post": "Comentário em qualquer post",
+  "Comment on the next reel": "Comentário no próximo reel",
+  DM: "DM",
+  "DM trigger": "Gatilho de DM",
+  Live: "Live",
+  "Mentioned you in their story": "Te marcou no story",
+  "2h": "2 h",
+  "Your story": "Seu story",
+  "Instagram tells you about the mention and the DM goes out": "O Instagram avisa da menção e a DM sai",
+  "Send message": "Enviar mensagem",
+  "hi from Recife!": "oi, de Recife!",
+  "Nobody sees a reply here: the link goes to their Direct.": "Ninguém vê resposta aqui: o link vai pro Direct da pessoa.",
+  // 2026-10-06: Canais, campo live_comments
+  "Not subscribed yet": "Ainda não assinado",
+  "live_comments brings comments made during your lives (Comment on a live campaigns). Tick it in the Meta app (Webhooks > Instagram) and reconnect the channel to subscribe again.":
+    "live_comments traz os comentários feitos durante suas lives (campanhas de Comentário em live). Marque no app da Meta (Webhooks > Instagram) e reconecte o canal pra assinar de novo.",
+  "Reconnect the channel to subscribe again.": "Reconecte o canal pra assinar de novo.",
 };

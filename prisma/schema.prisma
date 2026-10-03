@@ -111,6 +111,10 @@ model DirectMessage {
   /// Campaign/button DM: {title, subtitle, buttons:[{title,url}]}.
   template    Json?
   storyReply  Boolean  @default(false)
+  /// "reply" (answered one of our stories) | "mention" (mentioned us in theirs).
+  storyKind   String?
+  /// Our story's id when the person replied to it (a mention carries none).
+  storyId     String?
   deleted     Boolean  @default(false)
   sentAt      DateTime
   createdAt   DateTime @default(now())
@@ -273,6 +277,19 @@ model FollowerSnapshot {
   @@index([instagramAccountId, date])
 }
 
+/// What fires a campaign. COMMENT = comment on a post (the original kind; its
+/// dmTriggerEnabled flag also answers the same words by DM). DM = only a DM.
+/// STORY_REPLY = a reply to one of our stories (storyId, or any story).
+/// STORY_MENTION = someone mentions us in their story (no keyword).
+/// LIVE_COMMENT = a comment during any of our lives (private reply only).
+enum AutomationTrigger {
+  COMMENT
+  DM
+  STORY_REPLY
+  STORY_MENTION
+  LIVE_COMMENT
+}
+
 model Automation {
   id                 String @id @default(cuid())
   workspaceId        String
@@ -280,6 +297,10 @@ model Automation {
 
   name                    String
   goal                    String?
+  trigger                 AutomationTrigger @default(COMMENT)
+  /// STORY_REPLY only: the story it answers; null = any story.
+  storyId                 String?
+  storyUrl                String?
   postId                  String?
   postUrl                 String?
   pendingNextReel         Boolean  @default(false)
@@ -325,6 +346,7 @@ model Automation {
   @@index([workspaceId])
   @@index([instagramAccountId])
   @@index([postId])
+  @@index([instagramAccountId, trigger, isActive])
 }
 
 model DmLog {
@@ -556,6 +578,14 @@ model Contact {
   igUserId            String
   username            String?
   name                String?
+  /// Meta CDN link from the User Profile API. It expires: screens fall back
+  /// to the initial.
+  profilePicUrl       String?
+  /// Last profile lookup (local sources or the User Profile API).
+  profileFetchedAt    DateTime?
+  /// ok | denied (no consent / not allowed) | error. null = never tried.
+  profileStatus       String?
+  profileAttempts     Int       @default(0)
   firstSeenAt         DateTime
   lastSeenAt          DateTime
   /// Last DM from the person (Instagram's 24-hour window starts here). Also

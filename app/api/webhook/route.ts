@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { getDMQueue } from "@/lib/queue/client";
 import {
   parseCommentEvents,
+  parseLiveCommentEvents,
   parseMessageEvents,
   parsePostbackEvents,
   parseReadEvents,
@@ -159,6 +160,7 @@ export async function POST(request: NextRequest) {
       text: m.text,
       sentAt: m.sentAt.toISOString(),
       storyReply: m.storyReply,
+      ...(m.storyKind ? { storyKind: m.storyKind } : {}),
       metadata: m.metadata,
       appId: m.appId,
       hasTemplate: Boolean(m.template),
@@ -215,6 +217,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Comments during a live (field live_comments) → LIVE_COMMENT campaigns.
+    // Same job as a post comment, marked surface "live"; its own job id so a
+    // live comment never collides with a post comment's dedupe.
+    for (const event of parseLiveCommentEvents(
+      payload as Parameters<typeof parseLiveCommentEvents>[0]
+    )) {
+      await queue.add(
+        "process-comment",
+        {
+          instagramAccountId: event.instagramAccountId,
+          commentId: event.commentId,
+          commentText: event.commentText,
+          commenterId: event.commenterId,
+          commenterName: event.commenterName,
+          mediaId: event.mediaId,
+          source: "WEBHOOK",
+          surface: "live",
+        },
+        { jobId: `live_${event.instagramAccountId}_${event.commentId}` }
+      );
+    }
+
     // Button taps from opening DMs → deliver the reveal message.
     const postbackEvents = parsePostbackEvents(
       payload as Parameters<typeof parsePostbackEvents>[0]
@@ -257,6 +281,11 @@ export async function POST(request: NextRequest) {
           messageId: event.messageId,
           messageText: event.messageText,
           senderId: event.senderId,
+          // Story reply / story mention (their own campaign triggers).
+          ...(event.storyKind ? { storyKind: event.storyKind } : {}),
+          ...(event.storyId ? { storyId: event.storyId } : {}),
+          ...(event.storyUrl ? { storyUrl: event.storyUrl } : {}),
+          ...(event.timestamp ? { timestamp: event.timestamp } : {}),
         },
         {
           // Message ids can contain characters BullMQ rejects in a job id (":"
