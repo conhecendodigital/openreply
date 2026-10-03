@@ -669,6 +669,31 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           errorMessage: null,
         },
       });
+
+      // 2026-10-03: the follow-up was only scheduled on the button-tap and DM
+      // keyword paths, so campaigns that reply straight from a comment never
+      // sent it. Schedule it here too. Meta may refuse it if the person never
+      // replied (private-reply limit); processFollowUp just logs that.
+      if (automation.followUpEnabled && automation.followUpMessage?.trim()) {
+        try {
+          await getDMQueue().add(
+            FOLLOWUP_JOB_NAME,
+            {
+              instagramAccountId: automation.instagramAccount.instagramId,
+              userId: commenterId,
+              automationId: automation.id,
+              commenterName,
+            },
+            {
+              delay: Math.max(0, automation.followUpDelayMinutes ?? 0) * 60_000,
+              jobId: `followup_${automation.id}_${commenterId}`,
+            }
+          );
+        } catch (err) {
+          // The DM already went out; a missed follow-up must not fail the job.
+          console.warn("[DM Worker] Could not schedule follow-up:", formatError(err));
+        }
+      }
     } catch (error) {
       await releaseWorkspaceDMReservation(
         automation.workspaceId,

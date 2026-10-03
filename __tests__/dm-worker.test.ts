@@ -907,6 +907,30 @@ describe("DM Worker — one private reply per comment", () => {
     );
   });
 
+  it("schedules the follow-up after a comment-path DM (it was only scheduled on taps/DMs)", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([
+      {
+        ...mockAutomation,
+        followUpEnabled: true,
+        followUpMessage: "Conseguiu abrir?",
+        followUpDelayMinutes: 30,
+        trackedLinks: [
+          { slug: "abc123", label: null, destinationUrl: "https://example.com" },
+        ],
+      },
+    ]);
+    mockSendPrivateReplyWithLinkButton.mockResolvedValue({ message_id: "m1" });
+
+    const processor = getProcessor();
+    await processor(createMockJob());
+
+    expect(mockQueueAdd).toHaveBeenCalledWith(
+      "process-followup",
+      expect.objectContaining({ userId: "commenter_999", automationId: "auto_789" }),
+      expect.objectContaining({ delay: 30 * 60_000, jobId: "followup_auto_789_commenter_999" })
+    );
+  });
+
   it("should neither resend as text nor retry when Meta answers 'unknown error' (it may have delivered)", async () => {
     // 2026-10-02: Meta returned code 1 for a button DM it had delivered; the text
     // fallback plus 3 retries sent the same DM 6 times to one person.

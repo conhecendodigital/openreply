@@ -21,13 +21,22 @@ if [ -z "$SECRET" ]; then
   exit 1
 fi
 
+# The Nixpacks image ships curl but not wget (every call failed with
+# "wget: not found" from 2026-09-03 to 2026-10-03, so refresh-tokens never ran).
+# Prefer curl, keep wget for images that only have that.
+fetch() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS --max-time 180 -H "Authorization: Bearer $SECRET" "$1"
+  else
+    wget -q -O- --timeout=180 --header="Authorization: Bearer $SECRET" "$1"
+  fi
+}
+
 call() {
   route="$1"
   stamp=$(date -u '+%Y-%m-%d %H:%M:%S')
 
-  if body=$(wget -q -O- --timeout=180 \
-      --header="Authorization: Bearer $SECRET" \
-      "$BASE_URL/api/cron/$route" 2>&1); then
+  if body=$(fetch "$BASE_URL/api/cron/$route" 2>&1); then
     echo "[cron] $stamp $route ok $body"
   else
     # A failure is worth shouting about: these jobs have no user watching them.
