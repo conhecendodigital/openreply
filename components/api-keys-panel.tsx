@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useT } from "@/components/lang-provider";
 interface ApiKey {
   id: string;
   name: string;
@@ -25,6 +26,7 @@ function formatDate(value: string | null) {
  * A new key is shown once, right after it is created; only its hash is kept.
  */
 export function ApiKeysPanel() {
+  const t = useT();
   const [data, setData] = useState<ApiKeysData | null>(null);
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -83,17 +85,16 @@ export function ApiKeysPanel() {
 
   return (
     <section className="panel rounded p-4 sm:p-6">
-      <h2 className="text-base font-semibold mb-2">API &amp; MCP</h2>
+      <h2 className="text-base font-semibold mb-2">{t("API & MCP")}</h2>
       <p className="mb-6 text-sm text-muted">
-        Keys for scripts and AI agents (MCP). Send them as{" "}
-        <code className="text-foreground">Authorization: Bearer &lt;key&gt;</code>. A key can do
-        everything an owner can, except manage keys.
+        {t("Keys for scripts and AI agents (MCP). Send them as")}{" "}
+        <code className="text-foreground">{t("Authorization: Bearer <key>")}</code>{t(". A key can do everything an owner can, except manage keys.")}
       </p>
 
       {data && (
         <div className="mb-6 flex flex-col gap-2 rounded border border-border bg-surface/70 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="text-xs text-muted">MCP endpoint</p>
+            <p className="text-xs text-muted">{t("MCP endpoint")}</p>
             <p className="truncate text-sm font-medium text-foreground">{data.mcpUrl}</p>
           </div>
           <button
@@ -101,7 +102,7 @@ export function ApiKeysPanel() {
             onClick={() => void navigator.clipboard?.writeText(data.mcpUrl)}
             className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-border-hover hover:text-foreground"
           >
-            Copy
+            {t("Copy")}
           </button>
         </div>
       )}
@@ -109,7 +110,7 @@ export function ApiKeysPanel() {
       {newKey && (
         <div className="mb-6 rounded border border-accent/40 bg-accent/10 p-3">
           <p className="mb-2 text-sm font-medium text-foreground">
-            Copy your new key now. It will not be shown again.
+            {t("Copy your new key now. It will not be shown again.")}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <code className="min-w-0 flex-1 truncate rounded border border-border bg-surface px-3 py-2 text-xs text-foreground">
@@ -120,14 +121,14 @@ export function ApiKeysPanel() {
               onClick={() => void navigator.clipboard?.writeText(newKey)}
               className="rounded bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
             >
-              Copy key
+              {t("Copy key")}
             </button>
             <button
               type="button"
               onClick={() => setNewKey(null)}
               className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted transition-colors hover:text-foreground"
             >
-              Done
+              {t("Done")}
             </button>
           </div>
         </div>
@@ -142,7 +143,7 @@ export function ApiKeysPanel() {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-foreground">{key.name}</p>
               <p className="truncate text-xs text-muted">
-                {key.prefix}… · created {formatDate(key.createdAt)} · last used{" "}
+                {key.prefix}{t("… · created")} {formatDate(key.createdAt)} {t("· last used")}{" "}
                 {formatDate(key.lastUsedAt)}
               </p>
             </div>
@@ -152,17 +153,16 @@ export function ApiKeysPanel() {
               disabled={busy === `revoke:${key.id}`}
               className="rounded-lg border border-error/20 px-3 py-1.5 text-xs font-medium text-error transition-colors hover:bg-error/10 disabled:opacity-50"
             >
-              Revoke
+              {t("Revoke")}
             </button>
           </div>
         ))}
         {data && data.tokens.length === 0 && (
-          <p className="text-sm text-muted">No keys created here yet.</p>
+          <p className="text-sm text-muted">{t("No keys created here yet.")}</p>
         )}
         {data?.envTokenConfigured && (
           <p className="text-xs text-muted">
-            A key is also set on the server (OPENREPLY_API_TOKEN). It keeps working until it is
-            removed from the server environment.
+            {t("A key is also set on the server (OPENREPLY_API_TOKEN). It keeps working until it is removed from the server environment.")}
           </p>
         )}
       </div>
@@ -175,7 +175,7 @@ export function ApiKeysPanel() {
           type="text"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Key name, e.g. Claude on my Mac"
+          placeholder={t("Key name, e.g. Claude on my Mac")}
           maxLength={60}
           className="rounded border border-border bg-surface px-4 py-2 text-sm text-foreground outline-none transition-colors focus:border-accent/40"
           required
@@ -185,7 +185,7 @@ export function ApiKeysPanel() {
           disabled={busy === "create"}
           className="rounded bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
         >
-          {busy === "create" ? "Creating..." : "Create key"}
+          {busy === "create" ? t("Creating...") : t("Create key")}
         </button>
         {error && <p className="sm:col-span-2 text-sm text-error">{error}</p>}
       </form>

@@ -16,6 +16,7 @@ import { readCache, writeCache } from "@/lib/client-cache";
 import type { ConversationListItem } from "@/app/api/instagram/conversations/route";
 import type { ThreadMessage } from "@/app/api/instagram/conversations/[id]/route";
 
+import { useT } from "@/components/lang-provider";
 const POLL_MS = 12_000;
 // Cached list/threads are shown instantly on revisit, then revalidated in the
 // background. The Instagram Conversations API is slow (often several seconds),
@@ -33,6 +34,7 @@ function MessageMediaList({
   media: NonNullable<ThreadMessage["media"]>;
   fromMe: boolean;
 }) {
+  const t = useT();
   const linkClass = `underline ${fromMe ? "text-white" : "text-accent"}`;
   return (
     <div className={`flex flex-col gap-1.5 ${fromMe ? "items-end" : "items-start"}`}>
@@ -44,7 +46,7 @@ function MessageMediaList({
               {/* eslint-disable-next-line @next/next/no-img-element -- saved DM media / Meta CDN, not optimizable */}
               <img
                 src={item.url}
-                alt="Foto enviada na conversa"
+                alt={t("Photo sent in the conversation")}
                 className="max-h-80 w-auto max-w-[260px] rounded-2xl border border-border object-cover"
                 loading="lazy"
               />
@@ -74,7 +76,7 @@ function MessageMediaList({
         if (item.type === "story") {
           return <StoryMedia key={key} url={item.url} />;
         }
-        const label = item.type === "share" ? "Post compartilhado" : "Arquivo";
+        const label = item.type === "share" ? t("Shared post") : t("File");
         return (
           <a key={key} href={item.url} target="_blank" rel="noreferrer" className={linkClass}>
             {label} ↗
@@ -88,11 +90,12 @@ function MessageMediaList({
 // A story can be a photo or a video and the payload does not say which: try
 // as an image, fall back to video, then to a plain link (expired story).
 function StoryMedia({ url }: { url: string }) {
+  const t = useT();
   const [modo, setModo] = useState<"img" | "video" | "link">("img");
   if (modo === "link") {
     return (
       <a href={url} target="_blank" rel="noreferrer" className="text-xs text-accent underline">
-        Story (pode ter expirado) ↗
+        {t("Story (may have expired) ↗")}
       </a>
     );
   }
@@ -112,7 +115,7 @@ function StoryMedia({ url }: { url: string }) {
     // eslint-disable-next-line @next/next/no-img-element -- saved DM media / Meta CDN, not optimizable
     <img
       src={url}
-      alt="Story"
+      alt={t("Story")}
       onError={() => setModo("video")}
       className="max-h-80 w-[180px] rounded-2xl border border-border object-cover"
       loading="lazy"
@@ -132,6 +135,7 @@ function formatTime(iso: string | null): string {
 }
 
 export default function InboxPage() {
+  const t = useT();
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   // Seed from the last-used account so a revisit can paint the cached
   // conversation list immediately, before the account list even loads.
@@ -360,7 +364,7 @@ export default function InboxPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-4">
-        <h1 className="text-lg font-semibold text-foreground">Inbox</h1>
+        <h1 className="text-lg font-semibold text-foreground">{t("Inbox")}</h1>
         {accounts.length > 1 && (
           <AccountSelect
             accounts={accounts}
@@ -380,15 +384,15 @@ export default function InboxPage() {
           }`}
         >
           <div className="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-foreground">
-            Conversations
+            {t("Conversations")}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {convLoading ? (
-              <p className="px-4 py-6 text-sm text-muted">Loading…</p>
+              <p className="px-4 py-6 text-sm text-muted">{t("Loading…")}</p>
             ) : convError ? (
               <p className="px-4 py-6 text-sm text-error">{convError}</p>
             ) : conversations.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-muted">No conversations yet.</p>
+              <p className="px-4 py-6 text-sm text-muted">{t("No conversations yet.")}</p>
             ) : (
               conversations.map((c) => {
                 const isActive = c.id === activeId;
@@ -403,7 +407,7 @@ export default function InboxPage() {
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-sm font-medium text-foreground">
-                        @{c.contact.username ?? "unknown"}
+                        @{c.contact.username ?? t("unknown")}
                       </span>
                       <span className="shrink-0 text-[11px] text-zinc-500">
                         {formatTime(c.updatedTime)}
@@ -411,8 +415,8 @@ export default function InboxPage() {
                     </div>
                     {c.lastMessage && (
                       <p className="mt-0.5 truncate text-xs text-muted">
-                        {c.lastMessage.fromMe ? "You: " : ""}
-                        {c.lastMessage.text || "(no text)"}
+                        {c.lastMessage.fromMe ? t("You:") : ""}
+                        {c.lastMessage.text || t("(no text)")}
                       </p>
                     )}
                   </button>
@@ -429,7 +433,7 @@ export default function InboxPage() {
         >
           {!active ? (
             <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted">
-              Select a conversation to read and reply.
+              {t("Select a conversation to read and reply.")}
             </div>
           ) : (
             <>
@@ -438,20 +442,20 @@ export default function InboxPage() {
                   type="button"
                   onClick={() => setActiveId(null)}
                   className="-ml-1 rounded px-2 py-1 text-muted hover:text-foreground sm:hidden"
-                  aria-label="Back to conversations"
+                  aria-label={t("Back to conversations")}
                 >
-                  Back
+                  {t("Back")}
                 </button>
                 <span className="truncate">
-                  @{active.contact.username ?? "unknown"}
+                  @{active.contact.username ?? t("unknown")}
                 </span>
               </div>
 
               <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
                 {threadLoading && messages.length === 0 ? (
-                  <p className="text-sm text-muted">Loading…</p>
+                  <p className="text-sm text-muted">{t("Loading…")}</p>
                 ) : messages.length === 0 ? (
-                  <p className="text-sm text-muted">No messages.</p>
+                  <p className="text-sm text-muted">{t("No messages.")}</p>
                 ) : (
                   messages.map((m) => {
                     const midias = (m.media ?? []).filter((x) => x.type !== "share");
@@ -464,7 +468,7 @@ export default function InboxPage() {
                       >
                         {m.storyReply && (
                           <p className="px-1 text-[11px] text-zinc-500">
-                            {m.fromMe ? "Você respondeu ao story" : "Respondeu ao seu story"}
+                            {m.fromMe ? t("You replied to their story") : t("Replied to your story")}
                           </p>
                         )}
                         {/* Like the Instagram app: photos/videos/audio sit outside the bubble */}
@@ -503,11 +507,11 @@ export default function InboxPage() {
                             }`}
                           >
                             {m.deleted ? (
-                              <p className="italic opacity-70">Mensagem apagada</p>
+                              <p className="italic opacity-70">{t("Message deleted")}</p>
                             ) : m.text ? (
                               <p className="whitespace-pre-wrap break-words">{m.text}</p>
                             ) : vazia ? (
-                              <p className="italic opacity-70">Mensagem sem texto (sticker, reação ou formato que a Meta não entrega)</p>
+                              <p className="italic opacity-70">{t("Message without text (sticker, reaction or a format Meta doesn't deliver)")}</p>
                             ) : null}
                             {links.length > 0 && <MessageMediaList media={links} fromMe={m.fromMe} />}
                           </div>
@@ -529,7 +533,7 @@ export default function InboxPage() {
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={handleKeyDown}
                     rows={1}
-                    placeholder="Write a reply…  (Enter to send, Shift+Enter for a new line)"
+                    placeholder={t("Write a reply… (Enter to send, Shift+Enter for a new line)")}
                     className="max-h-32 min-h-[40px] flex-1 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
                   />
                   <button
@@ -538,7 +542,7 @@ export default function InboxPage() {
                     disabled={sending || !draft.trim()}
                     className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
                   >
-                    {sending ? "Sending…" : "Send"}
+                    {sending ? t("Sending…") : t("Send")}
                   </button>
                 </div>
               </div>

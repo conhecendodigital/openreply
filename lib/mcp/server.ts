@@ -394,7 +394,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "OpenReply do @omatheus.ai pela API oficial do Instagram. Automações nascem desligadas; ligar e enviar DM só com o ok do dono da conta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. Automações nascem desligadas; ligar e enviar DM só com o ok do dono da conta.",
       });
     }
     case "ping":

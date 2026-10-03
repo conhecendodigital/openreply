@@ -14,11 +14,13 @@ import AccountSelect, { type AccountOption } from "@/components/account-select";
 import { parseCsv } from "@/lib/utils/csv";
 import { IMPORT_QUEUE_KEY, IMPORT_ACCOUNT_KEY } from "@/lib/import-queue";
 
+import { useT } from "@/components/lang-provider";
 const SAMPLE = `keywords,dm_message,public_reply,tracked_url,opening_dm,opening_dm_button
 "yc","here it is: {link}","sent. check dms","https://events.ycombinator.com/startup-school-2026","hey! click below for the referral","send link"
 "LINK,SHOP","grab it here: {link}","dmed u",,,`;
 
 export default function ImportCampaignsPage() {
+  const t = useT();
   const router = useRouter();
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
@@ -85,21 +87,17 @@ export default function ImportCampaignsPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-lg font-semibold">Import campaigns</h1>
+        <h1 className="text-lg font-semibold">{t("Import campaigns")}</h1>
         <p className="text-sm text-muted mt-1">
-          Paste a CSV with one row per campaign. Each row opens in the builder
-          prefilled and editable, so you can review it and pick the reel before
-          saving. Required columns are{" "}
-          <code className="text-accent">keywords</code> and{" "}
-          <code className="text-accent">dm_message</code>. Optional:{" "}
-          <code className="text-accent">name</code>,{" "}
-          <code className="text-accent">public_reply</code>,{" "}
-          <code className="text-accent">tracked_url</code>,{" "}
-          <code className="text-accent">opening_dm</code>,{" "}
-          <code className="text-accent">opening_dm_button</code>. Keywords go in
-          one cell, separated by commas. Use{" "}
-          <code className="text-accent">{"{link}"}</code> in the message to
-          insert the tracked link.
+          {t("Paste a CSV with one row per campaign. Each row opens in the builder prefilled and editable, so you can review it and pick the reel before saving. Required columns are")}{" "}
+          <code className="text-accent">{t("keywords")}</code> {t("and")}{" "}
+          <code className="text-accent">{t("dm_message")}</code>{t(". Optional:")}{" "}
+          <code className="text-accent">{t("name")}</code>,{" "}
+          <code className="text-accent">{t("public_reply")}</code>,{" "}
+          <code className="text-accent">{t("tracked_url")}</code>,{" "}
+          <code className="text-accent">{t("opening_dm")}</code>,{" "}
+          <code className="text-accent">{t("opening_dm_button")}</code>{t(". Keywords go in one cell, separated by commas. Use")}{" "}
+          <code className="text-accent">{t("{link}")}</code> {t("in the message to insert the tracked link.")}
         </p>
       </div>
 
@@ -112,7 +110,7 @@ export default function ImportCampaignsPage() {
       {accounts.length > 1 && (
         <div className="space-y-2">
           <label className="block text-sm font-medium text-foreground">
-            Instagram account
+            {t("Instagram account")}
           </label>
           <AccountSelect
             accounts={accounts}
@@ -125,7 +123,7 @@ export default function ImportCampaignsPage() {
       )}
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-foreground">CSV</label>
+        <label className="block text-sm font-medium text-foreground">{t("CSV")}</label>
         <textarea
           value={csv}
           onChange={(e) => setCsv(e.target.value)}
@@ -138,7 +136,7 @@ export default function ImportCampaignsPage() {
           onClick={() => setCsv(SAMPLE)}
           className="text-xs text-muted hover:text-foreground"
         >
-          Fill with a sample
+          {t("Fill with a sample")}
         </button>
       </div>
 
@@ -147,13 +145,13 @@ export default function ImportCampaignsPage() {
           onClick={startImport}
           className="px-5 py-2 rounded bg-accent text-sm font-medium text-white hover:bg-accent-hover"
         >
-          Review and import
+          {t("Review and import")}
         </button>
         <button
           onClick={() => router.push("/campaigns")}
           className="px-5 py-2 rounded text-sm text-muted hover:text-foreground border border-border"
         >
-          Cancel
+          {t("Cancel")}
         </button>
       </div>
     </div>

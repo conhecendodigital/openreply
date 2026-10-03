@@ -23,6 +23,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { useT } from "@/components/lang-provider";
 export interface FollowerChartPoint {
   date: string;
   followers: number;
@@ -60,6 +61,7 @@ function ChartTooltip({
   active?: boolean;
   payload?: Array<{ payload: FollowerChartPoint }>;
 }) {
+  const t = useT();
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
 
@@ -67,11 +69,11 @@ function ChartTooltip({
     <div className="rounded border border-border bg-surface px-3 py-2 text-xs shadow-lg">
       <p className="text-muted">{formatDay(point.date)}</p>
       <p className="mt-1 font-semibold text-foreground">
-        {point.followers.toLocaleString()} followers
+        {point.followers.toLocaleString()} {t("followers")}
       </p>
       {point.delta !== null && point.delta !== 0 && (
         <p className={point.delta > 0 ? "text-success" : "text-error"}>
-          {formatSigned(point.delta)} that day
+          {formatSigned(point.delta)} {t("that day")}
         </p>
       )}
     </div>
@@ -85,6 +87,7 @@ export default function FollowerChart({
   data: FollowerChartPoint[];
   followers: number | null;
 }) {
+  const t = useT();
   const [showTable, setShowTable] = useState(false);
 
   const current = followers ?? data.at(-1)?.followers ?? null;
@@ -99,11 +102,11 @@ export default function FollowerChart({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-foreground">
-            Followers over time
+            {t("Followers over time")}
           </h2>
           <p className="mt-1 text-sm text-muted">
             {current === null
-              ? "Follower count unavailable"
+              ? t("Follower count unavailable")
               : `${current.toLocaleString()} now`}
             {net !== null && (
               <>
@@ -111,7 +114,7 @@ export default function FollowerChart({
                 <span className={net >= 0 ? "text-success" : "text-error"}>
                   {formatSigned(net)}
                 </span>{" "}
-                over {data.length} days
+                {t("over")} {data.length} {t("days")}
               </>
             )}
           </p>
@@ -122,20 +125,19 @@ export default function FollowerChart({
             onClick={() => setShowTable((v) => !v)}
             className="rounded border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-border-hover hover:text-foreground"
           >
-            {showTable ? "Show chart" : "Show table"}
+            {showTable ? t("Show chart") : t("Show table")}
           </button>
         )}
       </div>
 
       {data.length < 2 ? (
         <div className="mt-6 rounded border border-border bg-surface/60 p-6 text-center">
-          <p className="text-sm text-foreground">Collecting follower history</p>
+          <p className="text-sm text-foreground">{t("Collecting follower history")}</p>
           <p className="mt-1 text-sm text-muted">
             {data.length === 0
-              ? "No snapshots recorded yet."
-              : "One day recorded so far."}{" "}
-            A point is added daily — the chart appears once there are at least
-            two.
+              ? t("No snapshots recorded yet.")
+              : t("One day recorded so far.")}{" "}
+            {t("A point is added daily — the chart appears once there are at least two.")}
           </p>
         </div>
       ) : showTable ? (
@@ -143,9 +145,9 @@ export default function FollowerChart({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-zinc-500">
-                <th className="py-2 pr-4 font-medium">Date</th>
-                <th className="py-2 px-3 font-medium text-right">Followers</th>
-                <th className="py-2 pl-3 font-medium text-right">Change</th>
+                <th className="py-2 pr-4 font-medium">{t("Date")}</th>
+                <th className="py-2 px-3 font-medium text-right">{t("Followers")}</th>
+                <th className="py-2 pl-3 font-medium text-right">{t("Change")}</th>
               </tr>
             </thead>
             <tbody>

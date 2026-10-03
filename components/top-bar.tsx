@@ -7,6 +7,7 @@
  */
 
 import { usePathname } from "next/navigation";
+import { useT } from "@/components/lang-provider";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -15,6 +16,8 @@ const pageTitles: Record<string, string> = {
   "/automations": "Campaigns",
   "/automations/new": "New Campaign",
   "/logs": "DM Logs",
+  "/inbox": "Inbox",
+  "/overview": "Overview",
   "/settings": "Settings",
   "/diagnostics": "Diagnostics",
 };
@@ -31,11 +34,12 @@ export default function TopBar({
   instagramAccountCount,
 }: TopBarProps) {
   const pathname = usePathname();
-  const title = pageTitles[pathname] ?? "Dashboard";
+  const t = useT();
+  const title = t(pageTitles[pathname] ?? (pathname.startsWith("/campaigns/") ? "Campaign" : "Dashboard"));
 
   return (
     <header
-      className="sticky top-0 z-30 flex items-center justify-between gap-3 px-4 lg:px-8 border-b border-border bg-background"
+      className="sticky top-0 z-30 flex items-center justify-between gap-3 px-4 lg:px-8 border-b border-border bg-background/95 backdrop-blur"
       // Installed to the home screen the app starts at the very top of the
       // display, so without this the title sits under the clock and battery.
       // The inset is 0 in a browser tab and on desktop.
@@ -50,7 +54,7 @@ export default function TopBar({
           className="lg:hidden shrink-0 px-2.5 py-1.5 rounded border border-border text-sm text-muted hover:text-foreground"
           aria-label="Toggle sidebar"
         >
-          Menu
+          {t("Menu")}
         </button>
         <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
       </div>
@@ -58,17 +62,17 @@ export default function TopBar({
       {instagramAccountCount > 0 ? (
         <p className="shrink-0 truncate text-sm text-muted">
           {instagramAccountCount > 1
-            ? `${instagramAccountCount} accounts`
+            ? t("{n} accounts", { n: instagramAccountCount })
             : `@${instagramUsername}`}
         </p>
       ) : (
         <a
           href="/api/instagram/connect"
-          className="shrink-0 whitespace-nowrap text-sm font-medium px-3 py-1.5 rounded bg-accent text-white hover:bg-accent-hover"
+          className="shrink-0 whitespace-nowrap text-sm font-semibold px-4 py-1.5 rounded-lg bg-accent text-white hover:bg-accent-hover"
         >
           {/* Full label needs more room than a 360px header has to spare. */}
-          <span className="sm:hidden">Connect</span>
-          <span className="hidden sm:inline">Connect Instagram</span>
+          <span className="sm:hidden">{t("Connect")}</span>
+          <span className="hidden sm:inline">{t("Connect Instagram")}</span>
         </a>
       )}
     </header>
