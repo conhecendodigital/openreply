@@ -3,6 +3,8 @@ import { getCampaignTemplate } from "@/lib/templates/campaign-templates";
 import { DemoNotice } from "@/components/demo-notice";
 
 import { getT } from "@/lib/i18n/server";
+import { LeadEngineLogo } from "@/components/sidebar";
+import { LangSwitch } from "@/components/lang-provider";
 export const metadata = {
   title: "Login - Lead Engine",
   description: "Sign in to manage Instagram comment-to-DM campaigns.",
@@ -35,15 +37,16 @@ export default async function LoginPage({
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6">
+    <div className="relative min-h-screen flex items-center justify-center px-6">
+      <LangSwitch className="absolute right-6 top-6" />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold text-foreground">
-            {t("Lead Engine")}
+          <h1 className="flex justify-center text-foreground">
+            <LeadEngineLogo className="scale-125" />
           </h1>
           <p className="text-muted text-sm leading-relaxed mt-2">
             {selectedTemplate
-              ? `Sign in to use the ${selectedTemplate.title} template.`
+              ? t("Sign in to use the {name} template.", { name: selectedTemplate.title })
               : t("Sign in by email, then connect your Instagram professional account.")}
           </p>
         </div>

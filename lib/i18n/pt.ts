@@ -368,6 +368,7 @@ export const pt: Record<string, string> = {
   "We sent you a secure sign-in link. Open it on this device to continue.":
     "Enviamos um link seguro de acesso. Abra neste aparelho pra continuar.",
   "Back to sign in": "Voltar pro login",
+  "Sign in to use the {name} template.": "Entre pra usar o modelo {name}.",
   "Workspace invitation": "Convite pro espaço de trabalho",
   "You were invited as": "Você foi convidado como",
   "Sign in to accept": "Entre pra aceitar",
