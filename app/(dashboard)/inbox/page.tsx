@@ -165,16 +165,29 @@ export default function InboxPage() {
     for (const c of conversations) if (c.contact.id) contactsRef.current[c.id] = c.contact.id;
   }, [conversations]);
 
+  // Deep link from a contact (/inbox?account=<id>&contact=<igsid>): pick that
+  // account and open the person's conversation once the list loads.
+  const deepLinkRef = useRef<{ account: string | null; contact: string } | null>(null);
+  const [deepLinkMissing, setDeepLinkMissing] = useState(false);
+
   // Accounts for the selector; default to the first connected account. Uses the
   // lightweight accounts endpoint (one query) rather than the heavy dashboard
   // stats aggregation, so the inbox isn't gated on analytics before it can load.
   useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const contact = query.get("contact");
+    if (contact) deepLinkRef.current = { account: query.get("account"), contact };
     fetch("/api/instagram/accounts")
       .then((r) => r.json())
       .then((payload) => {
         if (!payload.success) return;
         const next: AccountOption[] = payload.data.instagramAccounts ?? [];
         setAccounts(next);
+        const linked = deepLinkRef.current?.account;
+        if (linked && next.some((a) => a.id === linked)) {
+          setSelectedAccountId(linked);
+          return;
+        }
         setSelectedAccountId((prev) => {
           // Keep the seeded account only if it's still connected; otherwise
           // fall back to the default so a removed account can't wedge the inbox.
@@ -308,6 +321,24 @@ export default function InboxPage() {
     setThreadLoading(!cached.data);
   }
 
+  // Open the deep-linked conversation as soon as the fresh list has it.
+  useEffect(() => {
+    const link = deepLinkRef.current;
+    if (!link || convLoading || !selectedAccountId) return;
+    if (link.account && link.account !== selectedAccountId) return;
+    const match = conversations.find((c) => c.contact.id === link.contact);
+    if (!match) {
+      // The list may still be the cached copy; wait for the fresh fetch.
+      if (conversations.length === 0) return;
+      deepLinkRef.current = null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off notice for a deep link
+      setDeepLinkMissing(true);
+      return;
+    }
+    deepLinkRef.current = null;
+    openConversation(match.id);
+  }, [conversations, convLoading, selectedAccountId]);
+
   async function handleSend() {
     const text = draft.trim();
     if (!text || !active?.contact.id || sending) return;
@@ -386,6 +417,11 @@ export default function InboxPage() {
           <div className="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-foreground">
             {t("Conversations")}
           </div>
+          {deepLinkMissing && (
+            <p className="shrink-0 border-b border-border bg-surface-hover px-4 py-2 text-xs text-muted">
+              {t("This person's conversation is not among the recent ones Instagram returns.")}
+            </p>
+          )}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {convLoading ? (
               <p className="px-4 py-6 text-sm text-muted">{t("Loading…")}</p>

@@ -130,6 +130,140 @@ describe("handleMcpMessage", () => {
     expect(res?.result).toMatchObject({ isError: true });
   });
 
+  it("mentions that moderation starts in observe mode", async () => {
+    const res = await handleMcpMessage({ jsonrpc: "2.0", id: 8, method: "initialize" }, fakeCall());
+    expect((res?.result as { instructions: string }).instructions).toMatch(/modo observar/);
+  });
+
+  it("refuses to switch moderation to hide without confirmar", async () => {
+    const call = fakeCall();
+    const res = await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 9,
+        method: "tools/call",
+        params: { name: "configurar_moderacao", arguments: { modo: "esconder" } },
+      },
+      call
+    );
+    expect(res?.result).toMatchObject({ isError: true });
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it("switches moderation to hide only with confirmar: true", async () => {
+    const call = fakeCall({ success: true, data: { mode: "HIDE" } });
+    await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "tools/call",
+        params: {
+          name: "configurar_moderacao",
+          arguments: { modo: "esconder", confirmar: true, termosBloqueados: ["concorrente"] },
+        },
+      },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("PATCH", "/api/moderation/settings", {
+      mode: "HIDE",
+      blockedTerms: ["concorrente"],
+    });
+  });
+
+  it("observe mode needs no confirmation", async () => {
+    const call = fakeCall({ success: true, data: {} });
+    await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 11,
+        method: "tools/call",
+        params: { name: "configurar_moderacao", arguments: { modo: "observar" } },
+      },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("PATCH", "/api/moderation/settings", { mode: "OBSERVE" });
+  });
+
+  it("hides a recorded comment only with confirmar, and only by record id", async () => {
+    const refused = fakeCall();
+    const res = await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 12,
+        method: "tools/call",
+        params: { name: "esconder_comentario", arguments: { id: "mod_1" } },
+      },
+      refused
+    );
+    expect(res?.result).toMatchObject({ isError: true });
+    expect(refused).not.toHaveBeenCalled();
+
+    const call = fakeCall({ success: true, data: {} });
+    await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 13,
+        method: "tools/call",
+        params: { name: "esconder_comentario", arguments: { id: "mod_1", confirmar: true } },
+      },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("POST", "/api/moderation/log/mod_1/hide", undefined);
+  });
+
+  it("restores a hidden comment by record id", async () => {
+    const call = fakeCall({ success: true, data: {} });
+    await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 14,
+        method: "tools/call",
+        params: { name: "restaurar_comentario", arguments: { id: "mod_1" } },
+      },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("POST", "/api/moderation/log/mod_1/restore", undefined);
+  });
+
+  it("lists contacts with search and tag filters", async () => {
+    const call = fakeCall({ success: true, data: { contacts: [] } });
+    await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 15,
+        method: "tools/call",
+        params: { name: "listar_contatos", arguments: { busca: "@ana", etiqueta: "clicou", limite: 5 } },
+      },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("GET", "/api/contacts?q=%40ana&tag=clicou&limit=5", undefined);
+  });
+
+  it("tags and annotates contacts through POST/PATCH", async () => {
+    const call = fakeCall({ success: true, data: {} });
+    await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 16,
+        method: "tools/call",
+        params: { name: "etiquetar_contato", arguments: { id: "ct_1", adicionar: ["vip"], remover: ["frio"] } },
+      },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("POST", "/api/contacts/ct_1/tags", { add: ["vip"], remove: ["frio"] });
+
+    await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 17,
+        method: "tools/call",
+        params: { name: "anotar_contato", arguments: { id: "ct_1", nota: "comprou o Comandos Pro" } },
+      },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("PATCH", "/api/contacts/ct_1", { notes: "comprou o Comandos Pro" });
+  });
+
   it("rejects unknown tools and methods", async () => {
     const call = fakeCall();
     expect(

@@ -5,6 +5,7 @@
  *
  * 2026-10-03: visual do menu lateral do instagram.com (ícone + texto, item ativo
  * em negrito), marca Lead Engine e troca de idioma PT | EN no rodapé.
+ * Contatos (CRM) e Moderação entram logo depois de Campanhas.
  */
 
 import Link from "next/link";
@@ -28,6 +29,12 @@ const icones: Record<string, Icone> = {
   "/campaigns": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M12 21s-7-4.4-9.3-9C1.1 8.6 3 4.5 6.9 4.5c2.3 0 3.8 1.4 5.1 3.2 1.3-1.8 2.8-3.2 5.1-3.2 3.9 0 5.8 4.1 4.2 7.5C19 16.6 12 21 12 21z" /></svg>
   ),
+  "/contacts": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="9" cy="8" r="4" /><path {...traco(ativo)} d="M2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 9M18 14.5a6 6 0 0 1 4 6.5" /></svg>
+  ),
+  "/moderation": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M12 2.5 4 5.5v6c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10v-6z" /><path {...traco(ativo)} d="m8.5 12 2.5 2.5 4.5-5" /></svg>
+  ),
   "/logs": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></svg>
   ),
@@ -44,6 +51,8 @@ const navItems = [
   { label: "Overview", href: "/overview" },
   { label: "Inbox", href: "/inbox" },
   { label: "Campaigns", href: "/campaigns" },
+  { label: "Contacts", href: "/contacts" },
+  { label: "Moderation", href: "/moderation" },
   { label: "DM Logs", href: "/logs" },
   { label: "Settings", href: "/settings" },
   { label: "Diagnostics", href: "/diagnostics" },

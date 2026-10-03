@@ -424,6 +424,43 @@ export async function sendCommentReply(
   return handleResponse(response);
 }
 
+/**
+ * Hide (or unhide) a comment on one of our posts. Instagram API with Instagram
+ * Login: POST /{ig-comment-id}?hide=true|false, needs
+ * instagram_business_manage_comments (already requested at connect). The media
+ * owner's own comments always stay visible, and live comments are not
+ * supported; both come back as Meta errors.
+ */
+export async function hideComment(
+  accessToken: string,
+  commentId: string,
+  hidden: boolean
+): Promise<{ success: boolean }> {
+  const url = new URL(`${instagramGraphBase()}/${encodeURIComponent(commentId)}`);
+  url.searchParams.set("hide", String(hidden));
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  return handleResponse(response);
+}
+
+/** Current state of one comment (used to double-check a hide). */
+export async function getComment(
+  accessToken: string,
+  commentId: string,
+  fields = "id,hidden,text,username,timestamp"
+): Promise<{ id: string; hidden?: boolean; text?: string; username?: string; timestamp?: string }> {
+  const url = new URL(`${instagramGraphBase()}/${encodeURIComponent(commentId)}`);
+  url.searchParams.set("fields", fields);
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  return handleResponse(response);
+}
+
 export async function getMediaComments(
   accessToken: string,
   mediaId: string

@@ -41,6 +41,14 @@ import {
   renderMessageWithTracking,
   renderMessageWithoutLink,
 } from "@/lib/tracking/message";
+import { recipientQuery } from "@/lib/tracking/recipient";
+import {
+  AUTO_TAGS,
+  addTagSafe,
+  onDmLogSent,
+  trackInteraction,
+} from "@/lib/contacts/record";
+import { moderateComment } from "@/lib/moderation/moderate";
 
 const BACKOFF_DELAYS = [5 * 60 * 1000, 15 * 60 * 1000, 45 * 60 * 1000];
 
@@ -98,10 +106,12 @@ type WorkerTrackedLink = {
  */
 function buildLinkButtons(
   trackedLinks: WorkerTrackedLink[],
-  primaryLabel: string | null
+  primaryLabel: string | null,
+  recipientId?: string | null
 ): { title: string; url: string }[] {
   return trackedLinks.slice(0, 3).map((link, index) => ({
-    url: buildTrackedUrl(link.slug),
+    // The signed recipient lets /r/<slug> credit the click to this person.
+    url: buildTrackedUrl(link.slug, undefined, recipientQuery(link.slug, recipientId)),
     title: (index === 0 ? primaryLabel : link.label) || link.label || "Open link",
   }));
 }
@@ -115,12 +125,16 @@ function buildInlineLinkFallback(
   message: string,
   commenterName: string | null | undefined,
   trackedLinks: WorkerTrackedLink[],
-  bodyText: string
+  bodyText: string,
+  recipientId?: string | null
 ): string {
+  const linkQuery = (slug: string) => recipientQuery(slug, recipientId);
   const base =
-    renderMessageWithTracking({ message, commenterName, trackedLinks }) ||
+    renderMessageWithTracking({ message, commenterName, trackedLinks, linkQuery }) ||
     bodyText;
-  const extraUrls = trackedLinks.slice(1).map((link) => buildTrackedUrl(link.slug));
+  const extraUrls = trackedLinks
+    .slice(1)
+    .map((link) => buildTrackedUrl(link.slug, undefined, linkQuery(link.slug)));
   return extraUrls.length > 0 ? `${base}\n${extraUrls.join("\n")}` : base;
 }
 
@@ -165,7 +179,8 @@ async function sendRevealDirectMessage(
     }) || "Here's your link:";
   const buttons = buildLinkButtons(
     automation.trackedLinks,
-    automation.linkButtonLabel
+    automation.linkButtonLabel,
+    userId
   );
 
   try {
@@ -194,7 +209,8 @@ async function sendRevealDirectMessage(
           automation.dmMessage,
           commenterName,
           automation.trackedLinks,
-          bodyText
+          bodyText,
+          userId
         )
       );
     } catch {
@@ -246,6 +262,33 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     orderBy: { createdAt: "asc" },
   });
 
+  // CRM: the commenter becomes (or updates) a Contact. Never throws.
+  const tracked = await trackInteraction({
+    account: { instagramId: instagramAccountId },
+    igUserId: commenterId,
+    username: commenterName,
+    event: {
+      type: "COMMENT",
+      refId: commentId,
+      occurredAt: new Date(),
+      text: commentText,
+      mediaId,
+    },
+  });
+
+  // Moderation runs here (not in the webhook) so the polling sweep is covered
+  // too. A comment matching a campaign keyword is protected inside, so the
+  // campaign below still answers it. Never throws.
+  const moderation = await moderateComment(job.data, {
+    campaigns: automations.map((a) => ({
+      keywords: a.keywords,
+      wholeWordMatch: a.wholeWordMatch,
+      matchAnyWord: a.matchAnyWord,
+    })),
+  });
+  // A hidden comment is spam: don't let an "any word" campaign DM it.
+  if (moderation?.action === "HIDDEN") return;
+
   for (const automation of automations) {
     // "Any word" campaigns fire on every comment; otherwise require a keyword hit.
     const matchResult = automation.matchAnyWord
@@ -259,6 +302,11 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     if (!matchResult.matched) {
       continue;
     }
+
+    await addTagSafe(
+      tracked?.contact,
+      AUTO_TAGS.commented(matchResult.matchedKeyword ?? automation.keywords[0])
+    );
 
     const existingLog = await prisma.dmLog.findUnique({
       where: {
@@ -604,7 +652,8 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           }) || "Here's your link:";
         const buttons = buildLinkButtons(
           automation.trackedLinks,
-          automation.linkButtonLabel
+          automation.linkButtonLabel,
+          commenterId
         );
 
         try {
@@ -629,7 +678,8 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             automation.dmMessage,
             commenterName,
             automation.trackedLinks,
-            bodyText
+            bodyText,
+            commenterId
           );
           try {
             await sendPrivateReply(
@@ -659,7 +709,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         );
       }
 
-      await prisma.dmLog.update({
+      const sentLog = await prisma.dmLog.update({
         where: {
           automationId_commentId: {
             automationId: automation.id,
@@ -672,6 +722,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           errorMessage: null,
         },
       });
+      if (sentLog?.id) await onDmLogSent(sentLog, automation);
 
       // 2026-10-03: the follow-up was only scheduled on the button-tap and DM
       // keyword paths, so campaigns that reply straight from a comment never
@@ -871,7 +922,7 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
         }
       );
     }
-    await prisma.dmLog.upsert({
+    const sentLog = await prisma.dmLog.upsert({
       where: {
         automationId_commentId: { automationId: automation.id, commentId: dedupeId },
       },
@@ -888,6 +939,7 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
       },
       update: { status: "SENT", dmSentAt: new Date(), errorMessage: null },
     });
+    if (sentLog?.id) await onDmLogSent(sentLog, automation);
   } catch (error) {
     await releaseWorkspaceDMReservation(automation.workspaceId, usage.periodStart);
 
@@ -1177,7 +1229,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
         }
       }
 
-      await prisma.dmLog.upsert({
+      const sentLog = await prisma.dmLog.upsert({
         where: {
           automationId_commentId: {
             automationId: automation.id,
@@ -1196,6 +1248,8 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
           errorMessage: null,
         },
       });
+      // The follow prompt is not the campaign yet; only the reveal counts.
+      if (sentLog?.id && !sendFollowPrompt) await onDmLogSent(sentLog, automation);
     } catch (error) {
       await releaseWorkspaceDMReservation(
         automation.workspaceId,

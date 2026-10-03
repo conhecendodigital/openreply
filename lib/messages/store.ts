@@ -1,6 +1,7 @@
 import { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { parseDirectMessages } from "@/lib/messages/parse";
+import { onDirectMessage } from "@/lib/contacts/record";
 
 // Only Meta CDNs are downloaded (never an arbitrary URL from a payload).
 const META_HOSTS = ["fbcdn.net", "fbsbx.com", "cdninstagram.com", "instagram.com", "facebook.com"];
@@ -26,7 +27,7 @@ export async function storeDirectMessages(payload: unknown): Promise<string[]> {
   for (const m of parsed) {
     const account = await prisma.instagramAccount.findUnique({
       where: { instagramId: m.accountId },
-      select: { workspaceId: true },
+      select: { id: true, workspaceId: true, instagramId: true },
     });
     const msg = await prisma.directMessage.upsert({
       where: { mid: m.mid },
@@ -45,6 +46,20 @@ export async function storeDirectMessages(payload: unknown): Promise<string[]> {
       update: m.deleted ? { deleted: true } : {},
       select: { id: true },
     });
+
+    // CRM: the person becomes a Contact with this DM on the timeline. Never
+    // throws and is idempotent by mid (webhook retries, backfill).
+    if (account && !m.deleted) {
+      await onDirectMessage({
+        account,
+        igUserId: m.contactId,
+        mid: m.mid,
+        fromMe: m.fromMe,
+        text: m.text,
+        sentAt: m.sentAt,
+        storyReply: m.storyReply,
+      });
+    }
 
     for (const [position, media] of m.media.entries()) {
       const status = media.download && isMetaUrl(media.url) ? "pending" : "link";

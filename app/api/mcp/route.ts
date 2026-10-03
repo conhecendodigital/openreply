@@ -11,6 +11,15 @@ import * as conversationsRoute from "@/app/api/instagram/conversations/route";
 import * as conversationRoute from "@/app/api/instagram/conversations/[id]/route";
 import * as overviewRoute from "@/app/api/instagram/overview/route";
 import * as postsRoute from "@/app/api/instagram/posts/route";
+import * as moderationSettingsRoute from "@/app/api/moderation/settings/route";
+import * as moderationLogRoute from "@/app/api/moderation/log/route";
+import * as moderationRestoreRoute from "@/app/api/moderation/log/[id]/restore/route";
+import * as moderationHideRoute from "@/app/api/moderation/log/[id]/hide/route";
+import * as moderationTestRoute from "@/app/api/moderation/test/route";
+import * as contactsRoute from "@/app/api/contacts/route";
+import * as contactTagsListRoute from "@/app/api/contacts/tags/route";
+import * as contactRoute from "@/app/api/contacts/[id]/route";
+import * as contactTagsRoute from "@/app/api/contacts/[id]/tags/route";
 
 // MCP over Streamable HTTP, stateless: every POST carries one JSON-RPC message
 // (or a batch) and gets a JSON answer. Auth is the same bearer token that the
@@ -37,6 +46,16 @@ function resolveHandler(method: string, pathname: string): { handler: Handler; i
     [/^\/api\/instagram\/overview$/, overviewRoute],
     [/^\/api\/instagram\/posts$/, postsRoute],
     [/^\/api\/instagram\/conversations\/([^/]+)$/, conversationRoute],
+    [/^\/api\/moderation\/settings$/, moderationSettingsRoute],
+    [/^\/api\/moderation\/log$/, moderationLogRoute],
+    [/^\/api\/moderation\/test$/, moderationTestRoute],
+    [/^\/api\/moderation\/log\/([^/]+)\/restore$/, moderationRestoreRoute],
+    [/^\/api\/moderation\/log\/([^/]+)\/hide$/, moderationHideRoute],
+    // Static paths before the [id] patterns that would also match them.
+    [/^\/api\/contacts$/, contactsRoute],
+    [/^\/api\/contacts\/tags$/, contactTagsListRoute],
+    [/^\/api\/contacts\/([^/]+)\/tags$/, contactTagsRoute],
+    [/^\/api\/contacts\/([^/]+)$/, contactRoute],
   ];
   for (const [pattern, mod] of routes) {
     const match = pattern.exec(pathname);

@@ -101,6 +101,18 @@ vi.mock("@/lib/billing/usage", () => ({
   releaseWorkspaceDMReservation: mockReleaseWorkspaceDMReservation,
 }));
 
+// CRM and moderation are covered in their own tests; here they are inert.
+vi.mock("@/lib/contacts/record", () => ({
+  AUTO_TAGS: { commented: (k: string) => `comentou:${k}`, received: (n: string) => `recebeu:${n}` },
+  addTagSafe: vi.fn(),
+  onDmLogSent: vi.fn(),
+  trackInteraction: vi.fn(async () => null),
+}));
+
+vi.mock("@/lib/moderation/moderate", () => ({
+  moderateComment: vi.fn(async () => ({ action: "CLEAN" })),
+}));
+
 vi.mock("@/lib/ops/worker-health", () => ({
   recordWorkerAlert: vi.fn(),
 }));
@@ -570,15 +582,16 @@ describe("DM Worker — Full Pipeline", () => {
     await processor(createMockJob());
 
     // Primary button title comes from linkButtonLabel; the second from its
-    // own stored label. Both point at their tracked /r/<slug> URLs.
+    // own stored label. Both point at their tracked /r/<slug> URLs, signed
+    // with the recipient so a click is credited to the person.
     expect(mockSendPrivateReplyWithLinkButton).toHaveBeenCalledWith(
       "decrypted_token",
       "ig_456",
       "comment_555",
       "Hey commenter_user! Here is the offer:",
       [
-        { title: "Get offer", url: "http://localhost:3000/r/abc123" },
-        { title: "Book a call", url: "http://localhost:3000/r/def456" },
+        { title: "Get offer", url: expect.stringMatching(/^http:\/\/localhost:3000\/r\/abc123\?c=commenter_999\./) },
+        { title: "Book a call", url: expect.stringMatching(/^http:\/\/localhost:3000\/r\/def456\?c=commenter_999\./) },
       ]
     );
   });
@@ -648,7 +661,7 @@ describe("DM Worker — Full Pipeline", () => {
       "ig_456",
       "comment_555",
       "Hey commenter_user! Here is the offer:",
-      [{ title: "Get offer", url: "http://localhost:3000/r/abc123" }]
+      [{ title: "Get offer", url: expect.stringMatching(/^http:\/\/localhost:3000\/r\/abc123\?c=commenter_999\./) }]
     );
   });
 
@@ -1168,5 +1181,49 @@ describe("DM Worker — DM keyword trigger", () => {
         create: expect.objectContaining({ status: "FAILED" }),
       })
     );
+  });
+});
+
+describe("DM Worker — CRM and moderation hooks", () => {
+  it("records the comment, tags the keyword and logs the campaign as sent", async () => {
+    const crm = await import("@/lib/contacts/record");
+    vi.mocked(crm.trackInteraction).mockResolvedValueOnce({
+      contact: { id: "ct_1", workspaceId: "workspace_123" },
+      inserted: true,
+    });
+    mockPrisma.dmLog.update.mockResolvedValue({ id: "log_1", commenterId: "commenter_999" });
+    const processor = getProcessor();
+
+    await processor(createMockJob());
+
+    expect(crm.trackInteraction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        igUserId: "commenter_999",
+        event: expect.objectContaining({ type: "COMMENT", refId: "comment_555" }),
+      })
+    );
+    expect(crm.addTagSafe).toHaveBeenCalledWith(
+      { id: "ct_1", workspaceId: "workspace_123" },
+      "comentou:LINK"
+    );
+    expect(crm.onDmLogSent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "log_1" }),
+      expect.objectContaining({ id: "auto_789" })
+    );
+  });
+
+  it("passes the post's campaigns to moderation and skips campaigns for a hidden comment", async () => {
+    const moderation = await import("@/lib/moderation/moderate");
+    vi.mocked(moderation.moderateComment).mockResolvedValueOnce({ action: "HIDDEN" });
+    const processor = getProcessor();
+
+    await processor(createMockJob());
+
+    expect(moderation.moderateComment).toHaveBeenCalledWith(
+      expect.objectContaining({ commentId: "comment_555" }),
+      { campaigns: [{ keywords: ["LINK", "PRICE"], wholeWordMatch: true, matchAnyWord: false }] }
+    );
+    expect(mockSendPrivateReply).not.toHaveBeenCalled();
+    expect(mockPrisma.dmLog.create).not.toHaveBeenCalled();
   });
 });

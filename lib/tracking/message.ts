@@ -51,14 +51,20 @@ export function renderMessageWithoutLink({
     .trim();
 }
 
-export function buildTrackedUrl(slug: string, baseUrl?: string) {
+/**
+ * Public /r/<slug> URL. `query` (without "?") is appended when given, e.g. the
+ * signed recipient from lib/tracking/recipient.ts so a click is credited to
+ * the person who got the DM.
+ */
+export function buildTrackedUrl(slug: string, baseUrl?: string, query?: string) {
   const resolvedBaseUrl =
     baseUrl ??
     (typeof window !== "undefined"
       ? window.location.origin
       : process.env.NEXTAUTH_URL ?? "http://localhost:3000");
 
-  return `${resolvedBaseUrl.replace(/\/$/, "")}/r/${slug}`;
+  const url = `${resolvedBaseUrl.replace(/\/$/, "")}/r/${slug}`;
+  return query ? `${url}?${query}` : url;
 }
 
 export function renderMessageWithTracking({
@@ -66,18 +72,25 @@ export function renderMessageWithTracking({
   commenterName,
   trackedLinks,
   baseUrl,
+  linkQuery,
 }: {
   message: string;
   commenterName?: string | null;
   trackedLinks?: MessageTrackedLink[];
   baseUrl?: string;
+  /** Extra query per link slug (recipient attribution in private DMs). */
+  linkQuery?: (slug: string) => string;
 }) {
   let rendered = message.replace(/\{username\}/gi, commenterName ?? "there");
   const primaryLink = trackedLinks?.[0];
 
   if (!primaryLink) return rendered;
 
-  const trackedUrl = buildTrackedUrl(primaryLink.slug, baseUrl);
+  const trackedUrl = buildTrackedUrl(
+    primaryLink.slug,
+    baseUrl,
+    linkQuery?.(primaryLink.slug)
+  );
 
   if (/\{link\}/i.test(rendered)) {
     return rendered.replace(/\{link\}/gi, trackedUrl);

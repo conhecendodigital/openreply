@@ -85,6 +85,9 @@ model Workspace {
   webhookEvents     WebhookEvent[]
   operationalEvents OperationalEvent[]
   apiTokens         ApiToken[]
+  contacts           Contact[]
+  moderationSettings ModerationSettings[]
+  commentModerations CommentModeration[]
 
   @@index([ownerId])
 }
@@ -206,6 +209,9 @@ model InstagramAccount {
   dmLogs      DmLog[]
   linkClicks  LinkClick[]
   followerSnapshots FollowerSnapshot[]
+  contacts           Contact[]
+  moderationSettings ModerationSettings?
+  commentModerations CommentModeration[]
 
   @@index([workspaceId])
 }
@@ -361,6 +367,10 @@ model LinkClick {
   ipHash             String?
   userAgent          String?
   referrer           String?
+  /// DmLog that delivered the link, when the click URL carried the recipient.
+  dmLogId            String?
+  /// IGSID of the person who received the link (from the signed ?c= param).
+  contactIgUserId    String?
   createdAt          DateTime @default(now())
 
   workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -374,6 +384,7 @@ model LinkClick {
   @@index([trackedLinkId])
   @@index([createdAt])
   @@index([workspaceId, createdAt])
+  @@index([contactIgUserId])
 }
 
 model WebhookEvent {
@@ -408,6 +419,163 @@ model OperationalEvent {
   @@index([source])
   @@index([level])
   @@index([createdAt])
+}
+
+// ─── Comment moderation ──────────────────────────────────────────────────────
+
+/// Per Instagram account: how new comments are screened. Starts in OBSERVE, so
+/// nothing is hidden until the owner switches to HIDE.
+model ModerationSettings {
+  id                 String         @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String         @unique
+  mode               ModerationMode @default(OBSERVE)
+  /// Built-in categories turned on: spam_link | scam | politics | offense.
+  categories         String[]       @default(["spam_link", "scam", "offense"])
+  /// Owner's own words/phrases that always flag a comment.
+  blockedTerms       String[]       @default([])
+  /// A comment containing any of these is never hidden.
+  allowedTerms       String[]       @default([])
+  /// Ask Jev (TypeSafe) when the rules find nothing. Needs TYPESAFE_API_KEY.
+  useJev             Boolean        @default(false)
+  jevMinConfidence   Float          @default(0.8)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+/// One decision per flagged (or protected) comment. Clean comments are not
+/// stored here; ProcessedComment already records that they were seen.
+model CommentModeration {
+  id                 String           @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String
+  commentId          String           @unique
+  mediaId            String
+  commenterIgId      String
+  commenterUsername  String?
+  commentText        String
+  /// ok | spam_link | scam | politics | offense | blocked_term | jev
+  verdict            String
+  reason             String?
+  matchedRule        String?
+  jevConfidence      Float?
+  action             ModerationAction
+  /// own_account | campaign_keyword | allowed_term
+  protectedReason    String?
+  mode               ModerationMode
+  error              String?
+  hiddenAt           DateTime?
+  restoredAt         DateTime?
+  /// userId, or "mcp" when restored through the API key.
+  restoredBy         String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([instagramAccountId, action])
+  @@index([commenterIgId])
+}
+
+enum ModerationMode {
+  OFF
+  OBSERVE
+  HIDE
+}
+
+enum ModerationAction {
+  NONE
+  WOULD_HIDE
+  HIDDEN
+  RESTORED
+  SKIPPED_PROTECTED
+  FAILED
+}
+
+// ─── Contacts (CRM) ──────────────────────────────────────────────────────────
+
+/// Everyone who commented, sent a DM or clicked a link, per connected account.
+/// Keyed by the person's IGSID, which is the same id in comments and DMs.
+model Contact {
+  id                  String    @id @default(cuid())
+  workspaceId         String
+  /// Internal InstagramAccount.id (not the instagramId).
+  instagramAccountId  String
+  /// The person's IGSID.
+  igUserId            String
+  username            String?
+  name                String?
+  firstSeenAt         DateTime
+  lastSeenAt          DateTime
+  /// Last DM from the person (Instagram's 24-hour window starts here).
+  lastInboundAt       DateTime?
+  commentsCount       Int       @default(0)
+  dmsInCount          Int       @default(0)
+  dmsOutCount         Int       @default(0)
+  campaignsCount      Int       @default(0)
+  clicksCount         Int       @default(0)
+  hiddenCommentsCount Int       @default(0)
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  tags             ContactTag[]
+  events           ContactEvent[]
+
+  @@unique([instagramAccountId, igUserId])
+  @@index([workspaceId, lastSeenAt])
+  @@index([workspaceId, username])
+}
+
+/// A tag as plain text: "comentou:FOTO", "recebeu:<campanha>", "clicou", or a
+/// manual one.
+model ContactTag {
+  id          String   @id @default(cuid())
+  contactId   String
+  workspaceId String
+  name        String
+  /// auto | manual
+  source      String
+  createdAt   DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, name])
+  @@index([workspaceId, name])
+}
+
+/// Timeline of a contact. The unique (contactId, type, refId) makes webhook
+/// retries, polling and the backfill idempotent: counters only move when a row
+/// is really inserted.
+model ContactEvent {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  contactId    String
+  /// COMMENT | DM_IN | DM_OUT | CAMPAIGN_SENT | CLICK | TAG_ADDED | TAG_REMOVED | COMMENT_HIDDEN | COMMENT_RESTORED
+  type         String
+  /// commentId | mid | dmLogId | linkClickId | moderationId | tag name
+  refId        String
+  automationId String?
+  mediaId      String?
+  text         String?
+  meta         Json?
+  occurredAt   DateTime
+  createdAt    DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, type, refId])
+  @@index([contactId, occurredAt])
+  @@index([workspaceId, type, occurredAt])
 }
 
 enum WorkspaceRole {
