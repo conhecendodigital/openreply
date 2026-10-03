@@ -145,28 +145,97 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data as T;
 }
 
+/**
+ * Options for a send. `metadata` is a custom string Meta echoes back on the
+ * message_echoes webhook (Messenger documents it; ChatbotX relies on it for
+ * Instagram Login too). We use "le:<origin>:<ledgerId>" so an echo of our own
+ * send is never mistaken for the owner typing on the phone.
+ */
+export interface SendOptions {
+  metadata?: string;
+}
+
+// If Meta ever rejects the metadata field, stop sending it for the life of the
+// process (the ledger + text match still classify echoes) instead of breaking
+// every DM.
+let metadataDisabled = process.env.META_SEND_METADATA === "0";
+
+export function resetSendMetadataForTests() {
+  metadataDisabled = process.env.META_SEND_METADATA === "0";
+}
+
+function isMetadataRejection(error: unknown): boolean {
+  return (
+    error instanceof MetaApiError &&
+    (error.code === 100 || error.code === 400) &&
+    /metadata/i.test(error.message)
+  );
+}
+
+async function postMessage(
+  accessToken: string,
+  instagramAccountId: string,
+  recipient: { id: string } | { comment_id: string },
+  message: Record<string, unknown>,
+  options?: SendOptions
+): Promise<{ recipient_id: string; message_id: string }> {
+  const send = async (withMetadata: boolean) => {
+    const response = await fetch(
+      `${instagramGraphBase()}/${instagramAccountId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          recipient,
+          message:
+            withMetadata && options?.metadata
+              ? { ...message, metadata: options.metadata.slice(0, 1000) }
+              : message,
+        }),
+      }
+    );
+    return handleResponse<{ recipient_id: string; message_id: string }>(response);
+  };
+
+  const withMetadata = Boolean(options?.metadata) && !metadataDisabled;
+  try {
+    return await send(withMetadata);
+  } catch (error) {
+    // A rejected parameter means nothing was sent, so one retry is safe.
+    if (withMetadata && isMetadataRejection(error)) {
+      metadataDisabled = true;
+      console.warn("[Meta] metadata rejected on send; continuing without it");
+      return send(false);
+    }
+    throw error;
+  }
+}
+
+function buttonTemplate(text: string, buttons: unknown[]) {
+  return {
+    attachment: {
+      type: "template",
+      payload: {
+        template_type: "button",
+        // Button template text is capped at 640 chars by Meta.
+        text: text.slice(0, 640),
+        buttons,
+      },
+    },
+  };
+}
+
 export async function sendPrivateReply(
   accessToken: string,
   instagramAccountId: string,
   commentId: string,
-  message: string
+  message: string,
+  options?: SendOptions
 ): Promise<{ recipient_id: string; message_id: string }> {
-  const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        recipient: { comment_id: commentId },
-        message: { text: message },
-      }),
-    }
-  );
-
-  return handleResponse(response);
+  return postMessage(accessToken, instagramAccountId, { comment_id: commentId }, { text: message }, options);
 }
 
 /**
@@ -181,36 +250,16 @@ export async function sendPrivateReplyWithButton(
   commentId: string,
   text: string,
   buttonTitle: string,
-  payload: string
+  payload: string,
+  options?: SendOptions
 ): Promise<{ recipient_id: string; message_id: string }> {
-  const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        recipient: { comment_id: commentId },
-        message: {
-          attachment: {
-            type: "template",
-            payload: {
-              template_type: "button",
-              // Button template text is capped at 640 chars by Meta.
-              text: text.slice(0, 640),
-              buttons: [
-                { type: "postback", title: buttonTitle.slice(0, 20), payload },
-              ],
-            },
-          },
-        },
-      }),
-    }
+  return postMessage(
+    accessToken,
+    instagramAccountId,
+    { comment_id: commentId },
+    buttonTemplate(text, [{ type: "postback", title: buttonTitle.slice(0, 20), payload }]),
+    options
   );
-
-  return handleResponse(response);
 }
 
 /**
@@ -224,35 +273,16 @@ export async function sendDirectMessageWithButton(
   userId: string,
   text: string,
   buttonTitle: string,
-  payload: string
+  payload: string,
+  options?: SendOptions
 ): Promise<{ recipient_id: string; message_id: string }> {
-  const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        recipient: { id: userId },
-        message: {
-          attachment: {
-            type: "template",
-            payload: {
-              template_type: "button",
-              text: text.slice(0, 640),
-              buttons: [
-                { type: "postback", title: buttonTitle.slice(0, 20), payload },
-              ],
-            },
-          },
-        },
-      }),
-    }
+  return postMessage(
+    accessToken,
+    instagramAccountId,
+    { id: userId },
+    buttonTemplate(text, [{ type: "postback", title: buttonTitle.slice(0, 20), payload }]),
+    options
   );
-
-  return handleResponse(response);
 }
 
 /**
@@ -309,33 +339,16 @@ export async function sendPrivateReplyWithLinkButton(
   instagramAccountId: string,
   commentId: string,
   text: string,
-  buttons: LinkButton[]
+  buttons: LinkButton[],
+  options?: SendOptions
 ): Promise<{ recipient_id: string; message_id: string }> {
-  const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        recipient: { comment_id: commentId },
-        message: {
-          attachment: {
-            type: "template",
-            payload: {
-              template_type: "button",
-              text: text.slice(0, 640),
-              buttons: toWebUrlButtons(buttons),
-            },
-          },
-        },
-      }),
-    }
+  return postMessage(
+    accessToken,
+    instagramAccountId,
+    { comment_id: commentId },
+    buttonTemplate(text, toWebUrlButtons(buttons)),
+    options
   );
-
-  return handleResponse(response);
 }
 
 /**
@@ -346,24 +359,10 @@ export async function sendDirectMessage(
   accessToken: string,
   instagramAccountId: string,
   userId: string,
-  message: string
+  message: string,
+  options?: SendOptions
 ): Promise<{ recipient_id: string; message_id: string }> {
-  const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        recipient: { id: userId },
-        message: { text: message },
-      }),
-    }
-  );
-
-  return handleResponse(response);
+  return postMessage(accessToken, instagramAccountId, { id: userId }, { text: message }, options);
 }
 
 /**
@@ -375,33 +374,16 @@ export async function sendDirectMessageWithLinkButton(
   instagramAccountId: string,
   userId: string,
   text: string,
-  buttons: LinkButton[]
+  buttons: LinkButton[],
+  options?: SendOptions
 ): Promise<{ recipient_id: string; message_id: string }> {
-  const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        recipient: { id: userId },
-        message: {
-          attachment: {
-            type: "template",
-            payload: {
-              template_type: "button",
-              text: text.slice(0, 640),
-              buttons: toWebUrlButtons(buttons),
-            },
-          },
-        },
-      }),
-    }
+  return postMessage(
+    accessToken,
+    instagramAccountId,
+    { id: userId },
+    buttonTemplate(text, toWebUrlButtons(buttons)),
+    options
   );
-
-  return handleResponse(response);
 }
 
 export async function sendCommentReply(
@@ -805,6 +787,23 @@ export async function refreshLongLivedToken(
   };
 }
 
+/**
+ * Fields each connected account subscribes to (POST /<IG_ID>/subscribed_apps).
+ * messaging_referral: ig.me?ref= into an existing thread; messaging_postbacks:
+ * button and Ice Breaker taps (they carry the ref of a new thread);
+ * messaging_seen: the read fallback. Echoes of what the account sends arrive on
+ * "messages" (is_echo), so no separate field is needed. Same set ChatbotX uses
+ * in production, minus optins and live comments. Accounts connected before
+ * 2026-10-04 must be subscribed again (reconnect, or the one-off script).
+ */
+export const WEBHOOK_SUBSCRIBED_FIELDS = [
+  "comments",
+  "messages",
+  "messaging_postbacks",
+  "messaging_referral",
+  "messaging_seen",
+];
+
 export async function subscribeInstagramAccountToWebhooks(
   instagramAccountId: string,
   accessToken: string
@@ -818,7 +817,7 @@ export async function subscribeInstagramAccountToWebhooks(
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        subscribed_fields: ["comments", "messages"],
+        subscribed_fields: WEBHOOK_SUBSCRIBED_FIELDS,
       }),
     }
   );

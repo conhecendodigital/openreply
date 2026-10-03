@@ -501,4 +501,199 @@ export const pt: Record<string, string> = {
   "Restore": "Restaurar",
   "View contact": "Ver contato",
   "Could not change the comment": "Não deu pra mudar o comentário",
+
+  // Etapa 2 (2026-10-04): aprovações, assumir conversa, sequências, links de conversa
+  Approvals: "Aprovações",
+  Sequences: "Sequências",
+  "Conversation links": "Links de conversa",
+  "{n} waiting": "{n} esperando",
+
+  // Rascunhos da IA
+  "Waiting for you": "Esperando você",
+  Approved: "Aprovado",
+  Sent: "Enviado",
+  Discarded: "Descartado",
+  Expired: "Expirado",
+  "The 24-hour window closed. The person needs to message you again before anything can be sent.":
+    "A janela de 24h fechou. A pessoa precisa te mandar mensagem de novo antes de qualquer envio.",
+  "You took over this conversation, so automations and the AI stay quiet.":
+    "Você assumiu essa conversa, então as automações e a IA ficam quietas.",
+  "There is already a draft waiting for this person.": "Já tem um rascunho esperando pra essa pessoa.",
+  "This draft changed after you opened it. Nothing was sent: read the new text and approve again.":
+    "Esse rascunho mudou depois que você abriu. Nada foi enviado: leia o texto novo e aprove de novo.",
+  "This draft was already handled. Reload to see its status.":
+    "Esse rascunho já foi resolvido. Recarregue pra ver como ficou.",
+  "Instagram returned an unknown error. It may have been sent: check the Direct before trying again.":
+    "O Instagram devolveu um erro desconhecido. Pode ter sido enviado: confira no Direct antes de tentar de novo.",
+  "Only a person can approve a draft.": "Só uma pessoa pode aprovar um rascunho.",
+  "Something went wrong. Try again.": "Algo deu errado. Tente de novo.",
+  "Network error": "Erro de conexão",
+  "24h window closed": "Janela de 24h fechada",
+  "Window open · {h}h left": "Janela aberta · faltam {h}h",
+  "you replied in the Direct": "você respondeu pelo Direct",
+  "you replied from the phone": "você respondeu pelo celular",
+  "you turned it on": "você ligou",
+  "Could not change it": "Não deu pra mudar",
+  "You're answering until {date}": "Você está respondendo até {date}",
+  "You're answering": "Você está respondendo",
+  "On because {why}": "Ligado porque {why}",
+  "Hand back to automation": "Devolver pra automação",
+  "Take over conversation": "Assumir conversa",
+  "You took over": "Você assumiu",
+  "Draft from the AI": "Rascunho da IA",
+  Draft: "Rascunho",
+  "Why:": "Motivo:",
+  "Proposed reply": "Resposta proposta",
+  "At most 1000 characters": "No máximo 1000 caracteres",
+  "The 24-hour window closed. Instagram won't deliver this until the person messages you again.":
+    "A janela de 24h fechou. O Instagram não entrega isso até a pessoa te mandar mensagem de novo.",
+  "You took over this conversation. You can still send this draft yourself.":
+    "Você assumiu essa conversa. Ainda dá pra enviar esse rascunho você mesmo.",
+  "Save edit": "Salvar edição",
+  "Discarding…": "Descartando…",
+  Discard: "Descartar",
+  "Approve and send": "Aprovar e enviar",
+  "AI draft waiting for your approval": "Rascunho da IA esperando sua aprovação",
+  "Draft approved and sent.": "Rascunho aprovado e enviado.",
+  "Draft discarded. Nothing was sent.": "Rascunho descartado. Nada foi enviado.",
+  "You're answering this person. Campaigns, follow-ups, sequences and the AI stay quiet until you hand it back.":
+    "Você está respondendo essa pessoa. Campanhas, follow-ups, sequências e a IA ficam quietos até você devolver.",
+
+  // Aprovações
+  "Failed to load drafts": "Não deu pra carregar os rascunhos",
+  "No saved messages yet.": "Nenhuma mensagem salva ainda.",
+  "(story reply)": "(resposta ao story)",
+  "Replies the AI proposed. Nothing is sent until you approve. You can edit the text first.":
+    "Respostas que a IA propôs. Nada é enviado até você aprovar. Dá pra editar o texto antes.",
+  Waiting: "Esperando",
+  History: "Histórico",
+  "All caught up": "Tudo em dia",
+  "No history yet": "Nenhum histórico ainda",
+  "When the AI proposes a reply, it shows up here and in the Direct.":
+    "Quando a IA propuser uma resposta, ela aparece aqui e no Direct.",
+  "Approved, discarded and expired drafts show up here.": "Rascunhos aprovados, descartados e expirados aparecem aqui.",
+  Received: "Recebidas",
+  "Approved by {who} via API key · {time}": "Aprovado por {who} pela chave de API · {time}",
+  "Approved by you in the Lead Engine · {time}": "Aprovado por você no Lead Engine · {time}",
+  edited: "editado",
+
+  // Ficha do contato
+  Conversation: "Conversa",
+  "Automations can answer this person. Replying by hand in the Direct or on your phone takes over (24 h by default).":
+    "As automações podem responder essa pessoa. Responder na mão pelo Direct ou pelo celular assume a conversa (24 h por padrão).",
+  "Earlier drafts": "Rascunhos anteriores",
+  "No AI drafts for this person.": "Nenhum rascunho da IA pra essa pessoa.",
+  "You took over the conversation": "Você assumiu a conversa",
+  "Handed back to automation": "Devolvida pra automação",
+  "AI draft approved and sent": "Rascunho da IA aprovado e enviado",
+  "Sequence message sent": "Mensagem da sequência enviada",
+  "Opened a conversation link": "Abriu um link de conversa",
+  "Tapped a button": "Tocou num botão",
+
+  // Sequências
+  "In progress": "Em andamento",
+  Finished: "Concluídas",
+  "Stopped: replied": "Paradas: respondeu",
+  "Stopped: window closed": "Paradas: janela fechou",
+  "Stopped: you took over": "Paradas: você assumiu",
+  "Stopped: turned off": "Paradas: desligada",
+  "{h} h {m} min": "{h} h {m} min",
+  "{h} h": "{h} h",
+  "{m} min": "{m} min",
+  "Wait after the link": "Esperar depois do link",
+  "Wait after the previous step": "Esperar depois do passo anterior",
+  Wait: "Espera",
+  Unit: "Unidade",
+  minutes: "minutos",
+  hours: "horas",
+  "Move up": "Subir",
+  "Move down": "Descer",
+  "Message, e.g. Did the link work? Any questions, just reply here.":
+    "Mensagem, ex.: Deu certo o link? Qualquer dúvida, responde aqui.",
+  "Failed to load the sequence": "Não deu pra carregar a sequência",
+  "Follow-up messages after a campaign delivers its link.": "Mensagens de acompanhamento depois que a campanha entrega o link.",
+  "How the 24-hour rule works": "Como funciona a regra das 24h",
+  "Instagram only lets you message someone within 24 hours of their last message. Outside that, nothing goes out.":
+    "O Instagram só deixa mandar mensagem até 24 horas depois da última mensagem da pessoa. Fora disso, nada sai.",
+  "Each step only goes out if the window is still open, and the whole sequence must fit in under 23 hours.":
+    "Cada passo só sai se a janela ainda estiver aberta, e a sequência inteira precisa caber em menos de 23 horas.",
+  "It stops as soon as the person replies, when the window closes, or when you take over the conversation.":
+    "Ela para assim que a pessoa responde, quando a janela fecha ou quando você assume a conversa.",
+  "If the link went as a private reply to a comment, the sequence waits for the person's first reply, which is what opens the window.":
+    "Se o link foi como resposta privada a um comentário, a sequência espera a primeira resposta da pessoa, que é o que abre a janela.",
+  "No campaigns yet.": "Nenhuma campanha ainda.",
+  "Discard the changes you didn't save?": "Descartar as mudanças que você não salvou?",
+  "Campaign on": "Campanha ligada",
+  "Campaign off": "Campanha desligada",
+  "Pick a campaign to create or edit its sequence.": "Escolha uma campanha pra criar ou editar a sequência dela.",
+  "No steps yet": "Nenhum passo ainda",
+  "{n} step(s) · {total} in total": "{n} passo(s) · {total} no total",
+  On: "Ligada",
+  "Turn the sequence on or off": "Ligar ou desligar a sequência",
+  "The campaign itself is off, so nobody new enters the sequence until you turn it on.":
+    "A campanha está desligada, então ninguém novo entra na sequência até você ligar.",
+  "Add step": "Adicionar passo",
+  "Up to {n} steps, under 23 h in total.": "Até {n} passos, menos de 23 h no total.",
+  "Total wait must stay under 23 hours (Instagram's 24-hour window)":
+    "A espera total precisa ficar abaixo de 23 horas (janela de 24h do Instagram)",
+  "Sequences start off. Turn it on when the messages are ready.":
+    "Toda sequência nasce desligada. Ligue quando as mensagens estiverem prontas.",
+
+  // Links de conversa
+  Bio: "Bio",
+  Page: "Página",
+  Reels: "Reels",
+  Ad: "Anúncio",
+  Other: "Outro",
+  "QR code for {label}": "QR code de {label}",
+  "Download QR (SVG)": "Baixar QR (SVG)",
+  Copied: "Copiado",
+  "Failed to load links": "Não deu pra carregar os links",
+  "This code is already in use": "Esse código já está em uso",
+  "Could not create the link": "Não deu pra criar o link",
+  "Could not delete": "Não deu pra apagar",
+  "Delete the link {code}? Anyone who opens it later won't be tagged.":
+    "Apagar o link {code}? Quem abrir depois não vai ser etiquetado.",
+  "A link that opens your Direct. Put it in a story, the bio or a page and see who came from where.":
+    "Um link que abre o seu Direct. Coloque no story, na bio ou numa página e veja quem veio de onde.",
+  "New link": "Novo link",
+  "Where it goes": "Onde vai ficar",
+  "Origin name": "Nome da origem",
+  "e.g. live, whatsapp, youtube": "ex.: live, whatsapp, youtube",
+  "Name / code (optional)": "Nome / código (opcional)",
+  "e.g. story-october (blank = random)": "ex.: story-outubro (vazio = aleatório)",
+  "Campaign that fires (optional)": "Campanha que dispara (opcional)",
+  "None, just tag the person": "Nenhuma, só etiquetar a pessoa",
+  off: "desligada",
+  "Tag (optional)": "Etiqueta (opcional)",
+  "Use only letters, numbers, - _ = (up to 64)": "Use só letras, números, - _ = (até 64)",
+  "Whoever opens it gets the tag {tag}.": "Quem abrir ganha a etiqueta {tag}.",
+  "Creating…": "Criando…",
+  "Create link": "Criar link",
+  "No links yet.": "Nenhum link ainda.",
+  "Link active": "Link ativo",
+  "Link paused": "Link pausado",
+  "Turn the link on or off": "Ligar ou desligar o link",
+  "conversations opened": "conversas abertas",
+  people: "pessoas",
+  "Copy link": "Copiar link",
+  "Copy ig.me": "Copiar ig.me",
+  "The first link counts clicks and then opens the ig.me link. Use the ig.me link where a redirect isn't allowed.":
+    "O primeiro link conta os cliques e depois abre o ig.me. Use o link ig.me onde não pode redirecionamento.",
+  Tag: "Etiqueta",
+  "Hide QR": "Esconder QR",
+  "Show QR": "Mostrar QR",
+  "The linked campaign is off: people get tagged, but no message goes out.":
+    "A campanha ligada ao link está desligada: as pessoas ganham a etiqueta, mas nenhuma mensagem sai.",
+  "Good to know": "Bom saber",
+  "The link opens in the Instagram app (not on Instagram Web).": "O link abre no app do Instagram (não no Instagram Web).",
+  "For a brand new conversation to carry the code, the account needs Ice Breakers set up (Meta's rule).":
+    "Pra uma conversa nova trazer o código, a conta precisa ter Ice Breakers configurados (regra da Meta).",
+  "Any message the campaign sends follows the 24-hour rule: it only goes out after the person opened the conversation.":
+    "Toda mensagem da campanha segue a regra das 24h: só sai depois que a pessoa abriu a conversa.",
+
+  // Moderação: teto por hora
+  "Hide at most per hour": "Esconder no máximo por hora",
+  "Above this, comments are only recorded as \"would hide\" (rule: cap). Hiding by hand doesn't count.":
+    "Acima disso, o comentário só fica registrado como \"esconderia\" (regra: teto). Esconder na mão não conta.",
 };

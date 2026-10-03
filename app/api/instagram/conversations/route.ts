@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentWorkspaceId } from "@/lib/auth";
+import { getApiCaller, getCurrentWorkspaceId } from "@/lib/auth";
+import { getCurrentWorkspaceContext } from "@/lib/workspace-access";
+import { sendTracked } from "@/lib/meta/send";
+import { startTakeover } from "@/lib/messaging/takeover";
+import { upsertContact } from "@/lib/contacts/record";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import {
   getConversations,
@@ -95,15 +99,31 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Send a direct message reply.
+// Send a direct message reply, typed by a human in the Lead Engine inbox.
+// 2026-10-04: API keys cannot use this any more (the MCP's enviar_dm sent DMs
+// with no human approval). The AI proposes with POST /api/drafts and a human
+// approves. A manual send turns human takeover on for that person.
 export async function POST(request: NextRequest) {
-  const workspaceId = await getCurrentWorkspaceId();
-  if (!workspaceId) {
+  const caller = await getApiCaller();
+  if (caller.kind === "token") {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "API keys cannot send DMs directly. Propose a draft (POST /api/drafts) and a human approves it.",
+        code: "human_only",
+      },
+      { status: 403 }
+    );
+  }
+  const context = await getCurrentWorkspaceContext();
+  if (!context) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
       { status: 401 }
     );
   }
+  const workspaceId = context.workspaceId;
 
   let body: { instagramAccountId?: string; recipientId?: string; text?: string };
   try {
@@ -134,15 +154,36 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const recipientId = body.recipientId;
   try {
     const accessToken = decryptToken(account.accessToken);
-    const result = await sendDirectMessage(
-      accessToken,
-      account.instagramId,
-      body.recipientId,
-      text
+    const result = await sendTracked(
+      {
+        workspaceId,
+        instagramAccountId: account.id,
+        contactIgUserId: recipientId,
+        origin: "inbox",
+        refId: context.userId,
+        text,
+      },
+      (options) => sendDirectMessage(accessToken, account.instagramId, recipientId, text, options)
     );
-    return NextResponse.json({ success: true, data: result });
+
+    // The owner is answering by hand: the robot steps aside for this person.
+    let takeoverUntil: Date | null = null;
+    try {
+      const contact = await upsertContact({
+        workspaceId,
+        instagramAccountId: account.id,
+        igUserId: recipientId,
+        at: new Date(),
+      });
+      takeoverUntil =
+        (await startTakeover({ contactId: contact.id, by: context.userId, reason: "inbox_send" }))?.until ?? null;
+    } catch (error) {
+      console.warn("[Conversations] Could not start takeover:", error);
+    }
+    return NextResponse.json({ success: true, data: { ...result, takeoverUntil } });
   } catch (err) {
     console.error("[Conversations] Send error:", err);
     // Surface Meta's own message — the common case is the 24-hour messaging

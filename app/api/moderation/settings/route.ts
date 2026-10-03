@@ -24,6 +24,7 @@ const patchSchema = z.object({
   allowedTerms: termList.optional(),
   useJev: z.boolean().optional(),
   jevMinConfidence: z.number().min(0.5).max(1).optional(),
+  maxHidesPerHour: z.number().int().min(1).max(500).optional(),
 });
 
 async function loadOrCreate(workspaceId: string, instagramAccountId: string) {
@@ -43,7 +44,7 @@ function present(
     account: { id: account.id, username: account.username },
     availableCategories: MODERATION_CATEGORIES,
     jevAvailable: isJevAvailable(),
-    limits: { maxTerms: MAX_TERMS, maxTermLength: MAX_TERM_LENGTH },
+    limits: { maxTerms: MAX_TERMS, maxTermLength: MAX_TERM_LENGTH, maxHidesPerHour: { min: 1, max: 500 } },
   };
 }
 
@@ -83,6 +84,7 @@ export async function PATCH(request: NextRequest) {
       ...(input.allowedTerms ? { allowedTerms: cleanTerms(input.allowedTerms) } : {}),
       ...(input.useJev !== undefined ? { useJev: input.useJev } : {}),
       ...(input.jevMinConfidence !== undefined ? { jevMinConfidence: input.jevMinConfidence } : {}),
+      ...(input.maxHidesPerHour !== undefined ? { maxHidesPerHour: input.maxHidesPerHour } : {}),
     },
   });
 

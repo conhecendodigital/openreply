@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { generateApiToken } from "@/lib/api-token";
+import { API_TOKEN_SCOPES } from "@/lib/api-token-auth";
 import { isApiTokenRequest } from "@/lib/auth";
 import { getBaseUrl } from "@/lib/env";
 import {
@@ -11,7 +12,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const createSchema = z.object({ name: z.string().trim().min(1).max(60) });
+const createSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  // "drafts:approve" only for deterministic code (e.g. the Telegram bot's
+  // approve button), never for the key the AI uses to propose drafts.
+  scopes: z.array(z.enum(API_TOKEN_SCOPES)).max(API_TOKEN_SCOPES.length).optional(),
+});
 
 // API keys are managed from a signed-in session only: a key must never be able
 // to mint or revoke keys, or a leaked one could lock the owner out.
@@ -47,7 +53,7 @@ export async function GET() {
 
   const tokens = await prisma.apiToken.findMany({
     where: { workspaceId: context.workspaceId, revokedAt: null },
-    select: { id: true, name: true, prefix: true, createdAt: true, lastUsedAt: true },
+    select: { id: true, name: true, prefix: true, scopes: true, createdAt: true, lastUsedAt: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -58,6 +64,7 @@ export async function GET() {
         tokens,
         mcpUrl: `${getBaseUrl().replace(/\/$/, "")}/api/mcp`,
         envTokenConfigured: Boolean(process.env.OPENREPLY_API_TOKEN),
+        availableScopes: API_TOKEN_SCOPES,
       },
     },
     { headers: { "Cache-Control": "no-store" } }
@@ -83,9 +90,10 @@ export async function POST(request: NextRequest) {
       name: parsed.data.name,
       tokenHash,
       prefix,
+      scopes: [...new Set(parsed.data.scopes ?? [])],
       createdById: context.userId,
     },
-    select: { id: true, name: true, prefix: true, createdAt: true, lastUsedAt: true },
+    select: { id: true, name: true, prefix: true, scopes: true, createdAt: true, lastUsedAt: true },
   });
 
   // The only time the full key leaves the server.

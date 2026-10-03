@@ -5,7 +5,7 @@
  */
 
 export type InternalCall = (
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
   body?: unknown
 ) => Promise<{ status: number; json: unknown }>;
@@ -86,7 +86,7 @@ type ApiEnvelope = { success?: boolean; data?: unknown; error?: unknown; details
 
 async function api(
   call: InternalCall,
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
   body?: unknown
 ): Promise<{ ok: true; data: unknown } | { ok: false; result: ToolResult }> {
@@ -335,31 +335,6 @@ export const TOOLS: Tool[] = [
       return text(res.data);
     },
   },
-  {
-    name: "enviar_dm",
-    description:
-      "Envia uma DM de texto pela API oficial. Só funciona até 24 h depois da última mensagem da pessoa. Nunca envie sem o ok do dono da conta.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        recipientId: { ...str, description: "contact.id da conversa (de listar_conversas)" },
-        text: { ...str, description: "Texto da mensagem" },
-      },
-      required: ["recipientId", "text"],
-    },
-    async run(args, call) {
-      const recipientId = requireString(args, "recipientId");
-      const message = requireString(args, "text");
-      if (!recipientId || !message) return text("Informe recipientId e text.", true);
-      const res = await api(call, "POST", "/api/instagram/conversations", {
-        recipientId,
-        text: message,
-      });
-      if (!res.ok) return res.result;
-      return text({ enviada: true, resposta: res.data });
-    },
-  },
-
   // ─── Moderação de comentários ─────────────────────────────────────────────
   {
     name: "ver_moderacao",
@@ -635,6 +610,244 @@ export const TOOLS: Tool[] = [
       return text({ salvo: true, id });
     },
   },
+
+  // ─── Rascunhos (vendedor) — DM escrita por IA nunca sai sem aprovação ─────
+  {
+    name: "listar_dms_sem_resposta",
+    description:
+      "Pessoas que mandaram DM e ainda não têm resposta nossa, com etiquetas, últimas mensagens e quantas horas faltam da janela de 24 h. Nunca lista quem o Matheus assumiu.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limite: { type: "integer", description: "Quantas (até 50, padrão 20)" },
+        incluirJanelaFechada: { ...bool, description: "true = também quem já passou das 24 h (não dá pra responder pela API)" },
+      },
+    },
+    async run(args, call) {
+      const params = new URLSearchParams();
+      if (args.limite !== undefined) params.set("limite", String(args.limite));
+      if (args.incluirJanelaFechada === true) params.set("incluirFechadas", "true");
+      const res = await api(call, "GET", `/api/inbox/unanswered?${params.toString()}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "propor_resposta",
+    description:
+      "Cria um RASCUNHO de resposta pra uma pessoa. NÃO ENVIA NADA: o rascunho fica esperando o Matheus aprovar (no Lead Engine ou no botão do Telegram). Um rascunho pendente por pessoa; recusa se a janela de 24 h fechou ou se o Matheus assumiu a conversa.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contactId: { ...str, description: "ID do contato (de listar_dms_sem_resposta)" },
+        texto: { ...str, description: "Texto da resposta (até 1000 caracteres)" },
+        motivo: { ...str, description: "Por que essa resposta (o Matheus lê antes de aprovar)" },
+        baseadoEmMid: { ...str, description: "mid da DM que você está respondendo (opcional)" },
+      },
+      required: ["contactId", "texto", "motivo"],
+    },
+    async run(args, call) {
+      const contactId = requireString(args, "contactId");
+      const texto = requireString(args, "texto");
+      if (!contactId || !texto) return text("Informe contactId e texto.", true);
+      const res = await api(call, "POST", "/api/drafts", {
+        contactId,
+        text: texto,
+        reason: requireString(args, "motivo"),
+        basedOnMid: requireString(args, "baseadoEmMid"),
+        origin: "vendedor",
+      });
+      if (!res.ok) return res.result;
+      return text({
+        rascunhoCriado: true,
+        enviado: false,
+        aviso: "Rascunho criado, NADA foi enviado. Só sai quando um humano aprovar.",
+        rascunho: res.data,
+      });
+    },
+  },
+  {
+    name: "listar_rascunhos",
+    description: "Lista os rascunhos (padrão: os pendentes) com o contexto de cada pessoa.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["PENDING", "SENT", "EXPIRED", "REJECTED", "FAILED", "APPROVED", "all"],
+          description: "Filtro (padrão PENDING)",
+        },
+        limite: { type: "integer", description: "Quantos (até 100, padrão 30)" },
+      },
+    },
+    async run(args, call) {
+      const params = new URLSearchParams();
+      if (typeof args.status === "string") params.set("status", args.status);
+      if (args.limite !== undefined) params.set("limit", String(args.limite));
+      const res = await api(call, "GET", `/api/drafts?${params.toString()}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "editar_rascunho",
+    description: "Troca o texto (ou o motivo) de um rascunho pendente. Não envia.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { ...str, description: "ID do rascunho" },
+        texto: { ...str, description: "Novo texto" },
+        motivo: { ...str, description: "Novo motivo" },
+      },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const body: Record<string, unknown> = {};
+      const texto = requireString(args, "texto");
+      if (texto) body.text = texto;
+      if (typeof args.motivo === "string") body.reason = args.motivo;
+      if (Object.keys(body).length === 0) return text("Nada pra alterar.", true);
+      const res = await api(call, "PATCH", `/api/drafts/${encodeURIComponent(id)}`, body);
+      if (!res.ok) return res.result;
+      return text({ editado: true, id, enviado: false });
+    },
+  },
+  {
+    name: "aprovar_rascunho",
+    description:
+      "ENVIA um rascunho de verdade pela API do Instagram. Só com o ok explícito do Matheus: exige aprovadoPor (quem aprovou, ex.: \"Matheus via Telegram\") e confirmar: true, e a chave precisa ter a permissão drafts:approve (a chave do vendedor não tem). Se a janela de 24 h fechou, o rascunho vira EXPIRADO e nada é enviado.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { ...str, description: "ID do rascunho" },
+        aprovadoPor: { ...str, description: "Quem aprovou (obrigatório)" },
+        confirmar: { ...bool, description: "Obrigatório: true" },
+        textoAprovado: {
+          ...str,
+          description:
+            "Obrigatório: o texto exato que o Matheus viu e aprovou. Se o rascunho mudou depois, nada é enviado.",
+        },
+      },
+      required: ["id", "aprovadoPor", "confirmar", "textoAprovado"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      const aprovadoPor = requireString(args, "aprovadoPor");
+      const textoAprovado = requireString(args, "textoAprovado");
+      if (!id) return text("Informe o id.", true);
+      if (!aprovadoPor || args.confirmar !== true || !textoAprovado) {
+        return text(
+          "Recusado: enviar um rascunho exige a aprovação explícita do Matheus (aprovadoPor, confirmar: true e textoAprovado, o texto que ele viu). Nada foi enviado.",
+          true
+        );
+      }
+      const res = await api(call, "POST", `/api/drafts/${encodeURIComponent(id)}/approve`, {
+        aprovadoPor,
+        confirmar: true,
+        textoAprovado,
+      });
+      if (!res.ok) return res.result;
+      return text({ enviado: true, rascunho: res.data });
+    },
+  },
+  {
+    name: "descartar_rascunho",
+    description: "Descarta um rascunho pendente. Nada é enviado.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { ...str, description: "ID do rascunho" } },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const res = await api(call, "POST", `/api/drafts/${encodeURIComponent(id)}/reject`);
+      if (!res.ok) return res.result;
+      return text({ descartado: true, id });
+    },
+  },
+  {
+    name: "assumir_conversa",
+    description:
+      "O Matheus assume a conversa com uma pessoa: nenhuma automação, sequência ou rascunho do vendedor fala com ela até devolver (ou até passar o prazo, padrão 24 h).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contactId: { ...str, description: "ID do contato" },
+        horas: { type: "integer", description: "Por quantas horas (1 a 168, padrão o da conta: 24)" },
+      },
+      required: ["contactId"],
+    },
+    async run(args, call) {
+      const contactId = requireString(args, "contactId");
+      if (!contactId) return text("Informe o contactId.", true);
+      const body: Record<string, unknown> = { on: true };
+      if (args.horas !== undefined) body.hours = Number(args.horas);
+      const res = await api(call, "POST", `/api/contacts/${encodeURIComponent(contactId)}/takeover`, body);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "devolver_conversa",
+    description:
+      "Devolve a conversa pro robô: as automações voltam a responder essa pessoa. Só um humano devolve: a chave precisa da permissão drafts:approve (a chave do vendedor não tem).",
+    inputSchema: {
+      type: "object",
+      properties: { contactId: { ...str, description: "ID do contato" } },
+      required: ["contactId"],
+    },
+    async run(args, call) {
+      const contactId = requireString(args, "contactId");
+      if (!contactId) return text("Informe o contactId.", true);
+      const res = await api(call, "POST", `/api/contacts/${encodeURIComponent(contactId)}/takeover`, { on: false });
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+
+  // ─── Links de conversa (ig.me) ────────────────────────────────────────────
+  {
+    name: "listar_links_conversa",
+    description: "Links ig.me/m/...?ref= com origem, campanha, etiqueta, cliques, aberturas e pessoas.",
+    inputSchema: { type: "object", properties: {} },
+    async run(_args, call) {
+      const res = await api(call, "GET", "/api/conversation-links");
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "criar_link_conversa",
+    description:
+      "Cria um link https://ig.me/m/<conta>?ref=<código> pra story, bio ou página. Quem abrir a DM por ele ganha a etiqueta \"veio:<origem>\" e, se tiver campanha ligada (e ela estiver ativa), recebe a campanha. Não manda nada sozinho pra ninguém.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        origem: { ...str, description: "story | bio | pagina | outro texto curto" },
+        codigo: { ...str, description: "Código (letras, números, - _ =; até 64). Vazio = aleatório" },
+        automationId: { ...str, description: "Campanha disparada ao abrir a conversa (opcional)" },
+        etiqueta: { ...str, description: "Etiqueta (padrão veio:<origem>)" },
+      },
+      required: ["origem"],
+    },
+    async run(args, call) {
+      const origem = requireString(args, "origem");
+      if (!origem) return text("Informe a origem.", true);
+      const body: Record<string, unknown> = { origin: origem };
+      const codigo = requireString(args, "codigo");
+      if (codigo) body.code = codigo;
+      const automationId = requireString(args, "automationId");
+      if (automationId) body.automationId = automationId;
+      const etiqueta = requireString(args, "etiqueta");
+      if (etiqueta) body.tagName = etiqueta;
+      const res = await api(call, "POST", "/api/conversation-links", body);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
 ];
 
 function rpcResult(id: JsonRpcId, result: unknown) {
@@ -670,7 +883,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. Automações nascem desligadas; ligar e enviar DM só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta.",
       });
     }
     case "ping":

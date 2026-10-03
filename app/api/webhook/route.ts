@@ -8,11 +8,23 @@ import {
   parseReadEvents,
   verifyWebhookSignature,
 } from "@/lib/meta/webhook";
-import { MESSAGE_JOB_NAME, POSTBACK_JOB_NAME, SAVE_MEDIA_JOB_NAME } from "@/lib/queue/client";
-import { storeDirectMessages } from "@/lib/messages/store";
+import {
+  CRM_DM_JOB_NAME,
+  MESSAGE_JOB_NAME,
+  POSTBACK_JOB_NAME,
+  REFERRAL_JOB_NAME,
+  SAVE_MEDIA_JOB_NAME,
+  safeJobKey,
+  type CrmDmJob,
+} from "@/lib/queue/client";
+import { handleCrmDm } from "@/lib/messaging/crm-dm";
+import { storeParsedDirectMessages } from "@/lib/messages/store";
+import { parseDirectMessages } from "@/lib/messages/parse";
+import { parseReferralEvents, referralEventKey } from "@/lib/conversation-links/referral";
 import { Prisma } from "@/app/generated/prisma/client";
 
 const OPENING_DM_READ_FALLBACK_DELAY_MS = 5 * 60 * 1000;
+const REFERRAL_AFTER_MESSAGE_DELAY_MS = 5_000;
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -81,14 +93,54 @@ export async function POST(request: NextRequest) {
 
   // 2026-10-03: keep every DM (and download its media right away) so the inbox
   // shows the full conversation like the Instagram app. Never blocks the rest.
+  // 2026-10-04: only the cheap part stays here (store the message). The CRM
+  // (contact, timeline, tags, echo -> takeover, sequence stop) runs in the
+  // worker as CRM_DM_JOB, deduped by mid, so it survives a crash and never
+  // holds Meta's request.
+  let crmLost = false;
+  const directMessages = (() => {
+    try {
+      return parseDirectMessages(payload);
+    } catch {
+      return [];
+    }
+  })();
   try {
-    const mediaIds = await storeDirectMessages(payload);
+    const mediaIds = await storeParsedDirectMessages(directMessages);
     const q = getDMQueue();
     for (const id of mediaIds) {
       await q.add(SAVE_MEDIA_JOB_NAME, { instagramAccountId: "", mediaId: id }, { jobId: `media_${id}` });
     }
   } catch (err) {
     console.error("[Webhook] Could not store DM:", err);
+  }
+  for (const m of directMessages) {
+    if (m.deleted) continue;
+    const crmJob: CrmDmJob = {
+      instagramAccountId: m.accountId,
+      igUserId: m.contactId,
+      mid: m.mid,
+      fromMe: m.fromMe,
+      text: m.text,
+      sentAt: m.sentAt.toISOString(),
+      storyReply: m.storyReply,
+      metadata: m.metadata,
+      appId: m.appId,
+      hasTemplate: Boolean(m.template),
+    };
+    try {
+      await getDMQueue().add(CRM_DM_JOB_NAME, crmJob, { jobId: `crm_${safeJobKey(m.mid)}` });
+    } catch (err) {
+      // Queue unreachable: run the CRM here rather than lose the event
+      // (contact, timeline, takeover, sequence stop). Idempotent by mid.
+      console.error("[Webhook] Could not queue DM CRM, running it inline:", err);
+      try {
+        await handleCrmDm(crmJob, { inline: true });
+      } catch (inlineErr) {
+        console.error("[Webhook] Inline DM CRM failed:", inlineErr);
+        crmLost = true;
+      }
+    }
   }
 
   try {
@@ -190,6 +242,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ig.me?ref= links: someone opened the DM through a conversation link.
+    for (const event of parseReferralEvents(payload)) {
+      await queue.add(
+        REFERRAL_JOB_NAME,
+        {
+          instagramAccountId: event.instagramAccountId,
+          igUserId: event.igUserId,
+          ref: event.ref,
+          kind: event.kind,
+          ...(event.mid ? { mid: event.mid } : {}),
+          timestamp: event.timestamp,
+        },
+        {
+          jobId: `ref_${event.instagramAccountId}_${event.igUserId}_${safeJobKey(referralEventKey(event))}`,
+          // A link opened by a typed message is also a DM-keyword trigger
+          // (MESSAGE_JOB, same DmLog key): let that one go first.
+          ...(event.kind === "message" ? { delay: REFERRAL_AFTER_MESSAGE_DELAY_MS } : {}),
+        }
+      );
+    }
+
     // If a user reads the opening DM and never taps the button, deliver the
     // same next-step DM after five minutes. The worker no-ops this delayed job
     // if a real button tap has already delivered the reveal.
@@ -240,6 +313,10 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    // Neither queued nor run inline: answer 500 so Meta delivers the payload
+    // again (storing and every job are idempotent by id).
+    if (crmLost) throw new Error("DM CRM could not be queued nor run inline");
 
     await prisma.webhookEvent.update({
       where: { id: webhookEvent.id },

@@ -1,6 +1,6 @@
 import { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
-import { parseDirectMessages } from "@/lib/messages/parse";
+import { parseDirectMessages, type ParsedDirectMessage } from "@/lib/messages/parse";
 import { onDirectMessage } from "@/lib/contacts/record";
 
 // Only Meta CDNs are downloaded (never an arbitrary URL from a payload).
@@ -19,9 +19,23 @@ export function isMetaUrl(url: string): boolean {
 /**
  * Save every DM in a webhook payload. Returns the ids of media rows that still
  * need downloading (the worker fetches them right away, before the link expires).
+ *
+ * 2026-10-04: the CRM update no longer runs here by default. The webhook only
+ * stores the message (the inbox needs it) and queues CRM_DM_JOB, so a slow CRM
+ * never holds Meta's request. Scripts (backfill) pass { crm: true } to keep
+ * the old inline behaviour.
  */
-export async function storeDirectMessages(payload: unknown): Promise<string[]> {
-  const parsed = parseDirectMessages(payload);
+export async function storeDirectMessages(
+  payload: unknown,
+  options: { crm?: boolean } = {}
+): Promise<string[]> {
+  return storeParsedDirectMessages(parseDirectMessages(payload), options);
+}
+
+export async function storeParsedDirectMessages(
+  parsed: ParsedDirectMessage[],
+  options: { crm?: boolean } = {}
+): Promise<string[]> {
   const pending: string[] = [];
 
   for (const m of parsed) {
@@ -49,7 +63,7 @@ export async function storeDirectMessages(payload: unknown): Promise<string[]> {
 
     // CRM: the person becomes a Contact with this DM on the timeline. Never
     // throws and is idempotent by mid (webhook retries, backfill).
-    if (account && !m.deleted) {
+    if (options.crm && account && !m.deleted) {
       await onDirectMessage({
         account,
         igUserId: m.contactId,

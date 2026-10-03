@@ -41,7 +41,12 @@ export type ModerationSettingsValues = {
   allowedTerms: string[];
   useJev: boolean;
   jevMinConfidence: number;
+  /** Ceiling of automatic hides per hour per account (default 30). */
+  maxHidesPerHour?: number;
 };
+
+export const DEFAULT_MAX_HIDES_PER_HOUR = 30;
+export const CAP_RULE = "teto";
 
 export const DEFAULT_MODERATION_SETTINGS: ModerationSettingsValues = {
   mode: "OBSERVE",
@@ -50,7 +55,37 @@ export const DEFAULT_MODERATION_SETTINGS: ModerationSettingsValues = {
   allowedTerms: [],
   useJev: false,
   jevMinConfidence: 0.8,
+  maxHidesPerHour: DEFAULT_MAX_HIDES_PER_HOUR,
 };
+
+/**
+ * Take one automatic-hide slot for this account in the last hour. Runs under
+ * a per-account advisory lock, so the worker's parallel jobs cannot all pass
+ * the count at once. The slot is the row itself (hiddenBy "auto" + hiddenAt),
+ * written before the API call. Manual hides (owner / MCP) never count.
+ */
+export async function reserveHideSlot(input: {
+  instagramAccountId: string;
+  moderationId: string;
+  cap: number;
+  now?: Date;
+}): Promise<boolean> {
+  const now = input.now ?? new Date();
+  const hourAgo = new Date(now.getTime() - 3_600_000);
+  return prisma.$transaction(async (tx) => {
+    const lockKey = `modhide:${input.instagramAccountId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    const used = await tx.commentModeration.count({
+      where: { instagramAccountId: input.instagramAccountId, hiddenBy: "auto", hiddenAt: { gt: hourAgo } },
+    });
+    if (used >= input.cap) return false;
+    await tx.commentModeration.update({
+      where: { id: input.moderationId },
+      data: { hiddenBy: "auto", hiddenAt: now },
+    });
+    return true;
+  });
+}
 
 /** Comments this short are never sent to Jev (they are almost never spam). */
 const JEV_MIN_WORDS = 4;
@@ -149,6 +184,8 @@ export type ModerationOutcome = {
   moderationId?: string;
   verdict?: ModerationVerdict;
   protectedReason?: string;
+  /** True when the hourly ceiling turned a hide into WOULD_HIDE. */
+  capped?: boolean;
 };
 
 function errorText(error: unknown): string {
@@ -235,13 +272,32 @@ export async function moderateComment(
       };
     }
 
+    // Hourly ceiling: above it the match is only recorded (WOULD_HIDE "teto").
+    const cap = settings.maxHidesPerHour ?? DEFAULT_MAX_HIDES_PER_HOUR;
+    const hasSlot = await reserveHideSlot({
+      instagramAccountId: account.id,
+      moderationId: row.id,
+      cap,
+    });
+    if (!hasSlot) {
+      await prisma.commentModeration.update({
+        where: { id: row.id },
+        data: {
+          matchedRule: CAP_RULE,
+          reason: `${evaluation.reason ? `${evaluation.reason} · ` : ""}teto de ${cap}/h atingido`.slice(0, 500),
+        },
+      });
+      return { action: "WOULD_HIDE", moderationId: row.id, verdict: evaluation.verdict, capped: true };
+    }
+
     try {
       if (!account.accessToken) throw new Error("No Instagram access token available");
       await hideComment(decryptToken(account.accessToken), job.commentId, true);
     } catch (error) {
       await prisma.commentModeration.update({
         where: { id: row.id },
-        data: { action: "FAILED", error: errorText(error).slice(0, 500) },
+        // Give the slot back: nothing was hidden.
+        data: { action: "FAILED", error: errorText(error).slice(0, 500), hiddenBy: null, hiddenAt: null },
       });
       return { action: "FAILED", moderationId: row.id, verdict: evaluation.verdict };
     }
@@ -249,7 +305,7 @@ export async function moderateComment(
     const hiddenAt = new Date();
     await prisma.commentModeration.update({
       where: { id: row.id },
-      data: { action: "HIDDEN", hiddenAt },
+      data: { action: "HIDDEN", hiddenAt, hiddenBy: "auto" },
     });
     await trackInteraction({
       account,
@@ -329,7 +385,7 @@ export async function setModerationHidden(input: {
   const updated = await prisma.commentModeration.update({
     where: { id: row.id },
     data: input.hidden
-      ? { action: "HIDDEN", hiddenAt: now, error: null, restoredAt: null, restoredBy: null }
+      ? { action: "HIDDEN", hiddenAt: now, hiddenBy: input.actor, error: null, restoredAt: null, restoredBy: null }
       : { action: "RESTORED", restoredAt: now, restoredBy: input.actor },
   });
 

@@ -26,7 +26,7 @@ async function main() {
     });
     if (batch.length === 0) break;
     for (const ev of batch) {
-      const ids = await storeDirectMessages(ev.payload);
+      const ids = await storeDirectMessages(ev.payload, { crm: true });
       eventos += 1;
       for (const id of ids) {
         await queue.add(SAVE_MEDIA_JOB_NAME, { instagramAccountId: "", mediaId: id }, { jobId: `media_${id}` });

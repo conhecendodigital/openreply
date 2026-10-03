@@ -64,6 +64,8 @@ while true; do
       if [ "$last_slot" != "$hhmm" ]; then
         last_slot="$hhmm"
         call attach-next-reel
+        # Expired takeovers, drafts whose 24 h window closed, stale sequences.
+        call messaging-sweep
       fi
       ;;
   esac

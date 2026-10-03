@@ -72,17 +72,66 @@ export interface SaveMediaJob {
   mediaId: string;
 }
 
+// CRM for one DM (both directions), taken out of the webhook request. Also
+// classifies echoes (ours vs typed on the phone -> human takeover) and stops
+// sequences when the person replies.
+export interface CrmDmJob {
+  /** Our account's instagramId (webhook entry.id). */
+  instagramAccountId: string;
+  igUserId: string;
+  mid: string;
+  fromMe: boolean;
+  text: string | null;
+  /** ISO string. */
+  sentAt: string;
+  storyReply: boolean;
+  metadata: string | null;
+  appId: string | null;
+  hasTemplate: boolean;
+  /** Set on the delayed re-check of an echo we could not classify yet. */
+  late?: boolean;
+}
+
+// Someone opened the DM through an ig.me?ref= link.
+export interface ReferralJob {
+  instagramAccountId: string;
+  igUserId: string;
+  ref: string;
+  kind: "referral" | "postback" | "message";
+  mid?: string;
+  /** Milliseconds. */
+  timestamp: number;
+}
+
+// One step of a campaign's sequence, scheduled with the step's delay.
+export interface SequenceStepJob {
+  instagramAccountId: string;
+  enrollmentId: string;
+  order: number;
+}
+
 export type DmQueueJob =
   | ProcessCommentJob
   | ProcessPostbackJob
   | ProcessFollowUpJob
   | ProcessMessageJob
-  | SaveMediaJob;
+  | SaveMediaJob
+  | CrmDmJob
+  | ReferralJob
+  | SequenceStepJob;
 
 export const SAVE_MEDIA_JOB_NAME = "save-media";
 export const POSTBACK_JOB_NAME = "process-postback";
 export const FOLLOWUP_JOB_NAME = "process-followup";
 export const MESSAGE_JOB_NAME = "process-message";
+export const CRM_DM_JOB_NAME = "crm-dm";
+export const REFERRAL_JOB_NAME = "process-referral";
+export const SEQUENCE_STEP_JOB_NAME = "sequence-step";
+
+/** BullMQ job ids cannot contain ":"; base64url keeps them injective. */
+export function safeJobKey(value: string): string {
+  return Buffer.from(value).toString("base64url");
+}
 
 let dmQueue: Queue<DmQueueJob> | null = null;
 

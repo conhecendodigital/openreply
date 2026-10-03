@@ -20,6 +20,14 @@ import * as contactsRoute from "@/app/api/contacts/route";
 import * as contactTagsListRoute from "@/app/api/contacts/tags/route";
 import * as contactRoute from "@/app/api/contacts/[id]/route";
 import * as contactTagsRoute from "@/app/api/contacts/[id]/tags/route";
+import * as contactTakeoverRoute from "@/app/api/contacts/[id]/takeover/route";
+import * as draftsRoute from "@/app/api/drafts/route";
+import * as draftRoute from "@/app/api/drafts/[id]/route";
+import * as draftApproveRoute from "@/app/api/drafts/[id]/approve/route";
+import * as draftRejectRoute from "@/app/api/drafts/[id]/reject/route";
+import * as unansweredRoute from "@/app/api/inbox/unanswered/route";
+import * as conversationLinksRoute from "@/app/api/conversation-links/route";
+import * as conversationLinkRoute from "@/app/api/conversation-links/[id]/route";
 
 // MCP over Streamable HTTP, stateless: every POST carries one JSON-RPC message
 // (or a batch) and gets a JSON answer. Auth is the same bearer token that the
@@ -55,7 +63,16 @@ function resolveHandler(method: string, pathname: string): { handler: Handler; i
     [/^\/api\/contacts$/, contactsRoute],
     [/^\/api\/contacts\/tags$/, contactTagsListRoute],
     [/^\/api\/contacts\/([^/]+)\/tags$/, contactTagsRoute],
+    [/^\/api\/contacts\/([^/]+)\/takeover$/, contactTakeoverRoute],
     [/^\/api\/contacts\/([^/]+)$/, contactRoute],
+    // Etapa 2. Static paths before the [id] patterns.
+    [/^\/api\/drafts$/, draftsRoute],
+    [/^\/api\/drafts\/([^/]+)\/approve$/, draftApproveRoute],
+    [/^\/api\/drafts\/([^/]+)\/reject$/, draftRejectRoute],
+    [/^\/api\/drafts\/([^/]+)$/, draftRoute],
+    [/^\/api\/inbox\/unanswered$/, unansweredRoute],
+    [/^\/api\/conversation-links$/, conversationLinksRoute],
+    [/^\/api\/conversation-links\/([^/]+)$/, conversationLinkRoute],
   ];
   for (const [pattern, mod] of routes) {
     const match = pattern.exec(pathname);

@@ -15,7 +15,9 @@ const {
   mockQueueAdd,
   mockReserveWorkspaceDMSend,
   mockReleaseWorkspaceDMReservation,
+  LEDGER_OPTIONS,
 } = vi.hoisted(() => ({
+  LEDGER_OPTIONS: { metadata: "le:test:row" },
   mockPrisma: {
     automation: {
       findMany: vi.fn(),
@@ -109,6 +111,22 @@ vi.mock("@/lib/contacts/record", () => ({
   trackInteraction: vi.fn(async () => null),
 }));
 
+// Etapa 2 guards and ledger: inert here (own tests in etapa2-*.test.ts). The
+// ledger mock passes { metadata } to every send, as lib/meta/send.ts does.
+vi.mock("@/lib/messaging/guard", () => ({
+  checkAutomation: vi.fn(async () => ({ ok: true, contact: null })),
+}));
+vi.mock("@/lib/meta/send", () => ({
+  sendTracked: vi.fn(async (_ctx: unknown, send: (o?: unknown) => Promise<unknown>) => send(LEDGER_OPTIONS)),
+}));
+vi.mock("@/lib/sequences/engine", () => ({
+  enrollInSequence: vi.fn(async () => null),
+  onPersonReplied: vi.fn(),
+  runSequenceStep: vi.fn(),
+}));
+vi.mock("@/lib/messaging/takeover", () => ({ startTakeover: vi.fn() }));
+vi.mock("@/lib/messaging/echo", () => ({ classifyEcho: vi.fn(), ECHO_RECHECK_DELAY_MS: 20_000 }));
+
 vi.mock("@/lib/moderation/moderate", () => ({
   moderateComment: vi.fn(async () => ({ action: "CLEAN" })),
 }));
@@ -126,6 +144,10 @@ vi.mock("@/lib/queue/client", () => ({
   FOLLOWUP_JOB_NAME: "process-followup",
   MESSAGE_JOB_NAME: "process-message",
   SAVE_MEDIA_JOB_NAME: "save-media",
+  CRM_DM_JOB_NAME: "crm-dm",
+  REFERRAL_JOB_NAME: "process-referral",
+  SEQUENCE_STEP_JOB_NAME: "sequence-step",
+  safeJobKey: (v: string) => Buffer.from(v).toString("base64url"),
 }));
 
 vi.mock("bullmq", () => {
@@ -360,7 +382,8 @@ describe("DM Worker — Full Pipeline", () => {
       "decrypted_token",
       "ig_456",
       "comment_555",
-      "Hey commenter_user! Here is the link: https://example.com"
+      "Hey commenter_user! Here is the link: https://example.com",
+      LEDGER_OPTIONS
     );
     expect(mockReleaseWorkspaceDMReservation).not.toHaveBeenCalled();
     expect(mockPrisma.dmLog.update).toHaveBeenCalledWith({
@@ -553,7 +576,8 @@ describe("DM Worker — Full Pipeline", () => {
       "decrypted_token",
       "ig_456",
       "comment_555",
-      "Hey there! Here is the link: https://example.com"
+      "Hey there! Here is the link: https://example.com",
+      LEDGER_OPTIONS
     );
   });
 
@@ -592,7 +616,8 @@ describe("DM Worker — Full Pipeline", () => {
       [
         { title: "Get offer", url: expect.stringMatching(/^http:\/\/localhost:3000\/r\/abc123\?c=commenter_999\./) },
         { title: "Book a call", url: expect.stringMatching(/^http:\/\/localhost:3000\/r\/def456\?c=commenter_999\./) },
-      ]
+      ],
+      LEDGER_OPTIONS
     );
   });
 
@@ -625,7 +650,8 @@ describe("DM Worker — Full Pipeline", () => {
       "comment_555",
       "Follow me first commenter_user, then tap 👇",
       "I'm following ✅",
-      "followcheck:auto_789"
+      "followcheck:auto_789",
+      LEDGER_OPTIONS
     );
     expect(mockSendPrivateReplyWithLinkButton).not.toHaveBeenCalled();
     expect(mockSendPrivateReply).not.toHaveBeenCalled();
@@ -661,7 +687,8 @@ describe("DM Worker — Full Pipeline", () => {
       "ig_456",
       "comment_555",
       "Hey commenter_user! Here is the offer:",
-      [{ title: "Get offer", url: expect.stringMatching(/^http:\/\/localhost:3000\/r\/abc123\?c=commenter_999\./) }]
+      [{ title: "Get offer", url: expect.stringMatching(/^http:\/\/localhost:3000\/r\/abc123\?c=commenter_999\./) }],
+      LEDGER_OPTIONS
     );
   });
 
@@ -694,7 +721,8 @@ describe("DM Worker — Full Pipeline", () => {
       "comment_555",
       "Hey commenter_user, welcome!",
       "Get the link",
-      "followcheck:auto_789"
+      "followcheck:auto_789",
+      LEDGER_OPTIONS
     );
     // Follow status is verified on the tap, not at comment time.
     expect(mockGetUserFollowStatus).not.toHaveBeenCalled();
@@ -730,7 +758,8 @@ describe("DM Worker — Full Pipeline", () => {
       "decrypted_token",
       "ig_456",
       "commenter_999",
-      "Hey commenter_user! Here is the link: https://example.com"
+      "Hey commenter_user! Here is the link: https://example.com",
+      LEDGER_OPTIONS
     );
   });
 
@@ -807,7 +836,8 @@ describe("DM Worker — Full Pipeline", () => {
       "decrypted_token",
       "ig_456",
       "commenter_999",
-      "Hey commenter_user! Here is the link: https://example.com"
+      "Hey commenter_user! Here is the link: https://example.com",
+      LEDGER_OPTIONS
     );
   });
 
@@ -1039,7 +1069,8 @@ describe("DM Worker — DM keyword trigger", () => {
       "decrypted_token",
       "ig_456",
       "commenter_999",
-      "Hey commenter_user! Here is the link: https://example.com"
+      "Hey commenter_user! Here is the link: https://example.com",
+      LEDGER_OPTIONS
     );
     // Never a private reply — there is no comment to reply to.
     expect(mockSendPrivateReply).not.toHaveBeenCalled();
@@ -1124,7 +1155,8 @@ describe("DM Worker — DM keyword trigger", () => {
       "commenter_999",
       expect.any(String),
       "I'm following ✅",
-      "followcheck:auto_789"
+      "followcheck:auto_789",
+      LEDGER_OPTIONS
     );
     expect(mockSendDirectMessage).not.toHaveBeenCalled();
   });

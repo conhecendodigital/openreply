@@ -6,13 +6,20 @@ import {
   POSTBACK_JOB_NAME,
   FOLLOWUP_JOB_NAME,
   SAVE_MEDIA_JOB_NAME,
+  CRM_DM_JOB_NAME,
+  REFERRAL_JOB_NAME,
+  SEQUENCE_STEP_JOB_NAME,
   type DmQueueJob,
   type SaveMediaJob,
   type ProcessCommentJob,
   type ProcessMessageJob,
   type ProcessPostbackJob,
   type ProcessFollowUpJob,
+  type CrmDmJob,
+  type ReferralJob,
+  type SequenceStepJob,
 } from "./client";
+import type { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { downloadDirectMedia } from "@/lib/messages/store";
 import {
@@ -27,7 +34,13 @@ import {
   sendPrivateReply,
   sendPrivateReplyWithButton,
   sendPrivateReplyWithLinkButton,
+  type SendOptions,
 } from "@/lib/meta/client";
+import { sendTracked, type OutboundOrigin } from "@/lib/meta/send";
+import { checkAutomation } from "@/lib/messaging/guard";
+import { handleCrmDm } from "@/lib/messaging/crm-dm";
+import { isAmbiguousDeliveryError } from "@/lib/messaging/errors";
+import { enrollInSequence, runSequenceStep } from "@/lib/sequences/engine";
 import { decryptToken } from "@/lib/meta/oauth";
 import { matchKeywords } from "@/lib/utils/keyword-matcher";
 import { reserveDMSlot } from "@/lib/utils/rate-limiter";
@@ -73,15 +86,36 @@ const NON_TEMPLATE_REJECTIONS = [
   /requested user cannot be found/i,
 ];
 
+// Moved to lib/messaging/errors.ts (sequences and drafts use it too).
+export { isAmbiguousDeliveryError };
+
 /**
- * Meta's generic "An unknown error has occurred" (code 1) / "unexpected error"
- * (code 2): seen in production for button DMs that were actually delivered.
- * Treat as "maybe delivered": no text fallback, no retry.
+ * Every send goes through the OutboundMessage ledger (lib/meta/send.ts) so
+ * its echo is recognised as ours and never turns human takeover on.
  */
-export function isAmbiguousDeliveryError(error: unknown): boolean {
-  if (error instanceof MetaApiError && (error.code === 1 || error.code === 2)) return true;
-  const message = error instanceof Error ? error.message : "";
-  return /an unknown error has occurred|an unexpected error has occurred/i.test(message);
+type Ledger = <T extends { message_id?: string }>(
+  text: string | null,
+  send: (options?: SendOptions) => Promise<T>
+) => Promise<T>;
+
+function ledgerFor(
+  automation: { workspaceId: string; instagramAccountId: string },
+  igUserId: string,
+  origin: OutboundOrigin,
+  refId?: string | null
+): Ledger {
+  return (text, send) =>
+    sendTracked(
+      {
+        workspaceId: automation.workspaceId,
+        instagramAccountId: automation.instagramAccountId,
+        contactIgUserId: igUserId,
+        origin,
+        refId: refId ?? null,
+        text,
+      },
+      send
+    );
 }
 
 function isTemplateRejection(error: unknown): boolean {
@@ -155,18 +189,17 @@ async function sendRevealDirectMessage(
   automation: RevealAutomation,
   userId: string,
   commenterName: string | null,
-  context: string
+  context: string,
+  ledger: Ledger
 ): Promise<void> {
   if (automation.trackedLinks.length === 0) {
-    await sendDirectMessage(
-      accessToken,
-      automation.instagramAccount.instagramId,
-      userId,
-      renderMessageWithTracking({
-        message: automation.dmMessage,
-        commenterName,
-        trackedLinks: automation.trackedLinks,
-      })
+    const text = renderMessageWithTracking({
+      message: automation.dmMessage,
+      commenterName,
+      trackedLinks: automation.trackedLinks,
+    });
+    await ledger(text, (o) =>
+      sendDirectMessage(accessToken, automation.instagramAccount.instagramId, userId, text, o)
     );
     return;
   }
@@ -184,12 +217,15 @@ async function sendRevealDirectMessage(
   );
 
   try {
-    await sendDirectMessageWithLinkButton(
-      accessToken,
-      automation.instagramAccount.instagramId,
-      userId,
-      bodyText,
-      buttons
+    await ledger(bodyText, (o) =>
+      sendDirectMessageWithLinkButton(
+        accessToken,
+        automation.instagramAccount.instagramId,
+        userId,
+        bodyText,
+        buttons,
+        o
+      )
     );
   } catch (buttonError) {
     // A closed messaging window rejects the text retry too, so don't let it
@@ -200,17 +236,21 @@ async function sendRevealDirectMessage(
       `[DM Worker] Button template rejected in ${context}, falling back to inline link:`,
       formatError(buttonError)
     );
+    const fallbackText = buildInlineLinkFallback(
+      automation.dmMessage,
+      commenterName,
+      automation.trackedLinks,
+      bodyText,
+      userId
+    );
     try {
-      await sendDirectMessage(
-        accessToken,
-        automation.instagramAccount.instagramId,
-        userId,
-        buildInlineLinkFallback(
-          automation.dmMessage,
-          commenterName,
-          automation.trackedLinks,
-          bodyText,
-          userId
+      await ledger(fallbackText, (o) =>
+        sendDirectMessage(
+          accessToken,
+          automation.instagramAccount.instagramId,
+          userId,
+          fallbackText,
+          o
         )
       );
     } catch {
@@ -497,6 +537,25 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
       continue;
     }
 
+    // A human took over this person: the robot stays quiet, private reply
+    // included. (The window does not apply to the first private reply.)
+    const gate = await checkAutomation({
+      instagramId: instagramAccountId,
+      igUserId: commenterId,
+      requireWindow: false,
+    });
+    if (!gate.ok) {
+      await prisma.dmLog.update({
+        where: { automationId_commentId: { automationId: automation.id, commentId } },
+        data: {
+          status: "SKIPPED_TAKEOVER",
+          matchedKeyword: matchResult.matchedKeyword,
+          errorMessage: "A human took over this conversation",
+        },
+      });
+      continue;
+    }
+
     const usage = await reserveWorkspaceDMSend(automation.workspaceId);
     if (!usage.allowed) {
       await prisma.dmLog.update({
@@ -611,6 +670,8 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
       sendFollowPrompt = alreadyFollows !== true;
     }
 
+    const ledger = ledgerFor(automation, commenterId, "private_reply", commentId);
+
     try {
       if (useOpeningDm) {
         const openingText = renderMessageWithTracking({
@@ -618,15 +679,18 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           commenterName,
           trackedLinks: [],
         });
-        await sendPrivateReplyWithButton(
-          accessToken,
-          automation.instagramAccount.instagramId,
-          commentId,
-          openingText,
-          automation.openingDmButtonLabel as string,
-          automation.requireFollow
-            ? `followcheck:${automation.id}`
-            : `reveal:${automation.id}`
+        await ledger(openingText, (o) =>
+          sendPrivateReplyWithButton(
+            accessToken,
+            automation.instagramAccount.instagramId,
+            commentId,
+            openingText,
+            automation.openingDmButtonLabel as string,
+            automation.requireFollow
+              ? `followcheck:${automation.id}`
+              : `reveal:${automation.id}`,
+            o
+          )
         );
       } else if (sendFollowPrompt) {
         const promptText = renderMessageWithoutLink({
@@ -635,13 +699,16 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             "quick favor before i send your link. i don't make any money from this, it's free. if you want to support me, just don't unfollow after, and star the repo on github if it helps you. tap the button once you're following and i'll send it over",
           commenterName,
         });
-        await sendPrivateReplyWithButton(
-          accessToken,
-          automation.instagramAccount.instagramId,
-          commentId,
-          promptText,
-          automation.followPromptButtonLabel || "i'm following",
-          `followcheck:${automation.id}`
+        await ledger(promptText, (o) =>
+          sendPrivateReplyWithButton(
+            accessToken,
+            automation.instagramAccount.instagramId,
+            commentId,
+            promptText,
+            automation.followPromptButtonLabel || "i'm following",
+            `followcheck:${automation.id}`,
+            o
+          )
         );
       } else if (automation.trackedLinks.length > 0) {
         // Try button template first; if Meta rejects it, fall back to inline links.
@@ -657,12 +724,15 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         );
 
         try {
-          await sendPrivateReplyWithLinkButton(
-            accessToken,
-            automation.instagramAccount.instagramId,
-            commentId,
-            bodyText,
-            buttons
+          await ledger(bodyText, (o) =>
+            sendPrivateReplyWithLinkButton(
+              accessToken,
+              automation.instagramAccount.instagramId,
+              commentId,
+              bodyText,
+              buttons,
+              o
+            )
           );
         } catch (buttonError) {
           // Only a template rejection is worth retrying as text. Anything else
@@ -682,11 +752,14 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             commenterId
           );
           try {
-            await sendPrivateReply(
-              accessToken,
-              automation.instagramAccount.instagramId,
-              commentId,
-              fallbackMessage
+            await ledger(fallbackMessage, (o) =>
+              sendPrivateReply(
+                accessToken,
+                automation.instagramAccount.instagramId,
+                commentId,
+                fallbackMessage,
+                o
+              )
             );
           } catch {
             // The first attempt consumed the comment's single private reply, so
@@ -701,11 +774,14 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           commenterName,
           trackedLinks: automation.trackedLinks,
         });
-        await sendPrivateReply(
-          accessToken,
-          automation.instagramAccount.instagramId,
-          commentId,
-          dmMessage
+        await ledger(dmMessage, (o) =>
+          sendPrivateReply(
+            accessToken,
+            automation.instagramAccount.instagramId,
+            commentId,
+            dmMessage,
+            o
+          )
         );
       }
 
@@ -748,6 +824,12 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           console.warn("[DM Worker] Could not schedule follow-up:", formatError(err));
         }
       }
+      // Sequence: the link went as a private reply, so the window is not open
+      // yet; the enrollment waits for the person's first reply. Not for the
+      // opening DM / follow prompt (no link yet: the tap path enrolls).
+      if (!useOpeningDm && !sendFollowPrompt) {
+        await enrollInSequence({ automation, igUserId: commenterId, username: commenterName });
+      }
     } catch (error) {
       await releaseWorkspaceDMReservation(
         automation.workspaceId,
@@ -779,6 +861,22 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
  */
 async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
   const { instagramAccountId, userId, payload, fallback } = job.data;
+  const tappedAt = new Date();
+
+  // A real tap opens the 24-hour window (Meta lists it next to a DM). Any
+  // payload counts, Ice Breakers included. The read fallback is not a tap.
+  if (!fallback) {
+    await trackInteraction({
+      account: { instagramId: instagramAccountId },
+      igUserId: userId,
+      event: {
+        type: "POSTBACK_IN",
+        refId: job.data.mid ?? `${payload}@${job.id ?? tappedAt.getTime()}`,
+        occurredAt: tappedAt,
+        text: payload.slice(0, 200),
+      },
+    });
+  }
 
   const isFollowCheck = payload.startsWith("followcheck:");
   if (!isFollowCheck && !payload.startsWith("reveal:")) return;
@@ -822,6 +920,35 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
     if (existingReveal?.status === "SENT") return;
   }
 
+  // Takeover and the 24-hour window, before anything is spent. A tap opens the
+  // window by itself; the read fallback needs one opened by the person.
+  const gate = await checkAutomation({
+    instagramId: instagramAccountId,
+    igUserId: userId,
+    inboundAt: fallback ? null : tappedAt,
+  });
+  if (!gate.ok) {
+    if (gate.reason === "takeover" && !fallback) {
+      await prisma.dmLog.upsert({
+        where: { automationId_commentId: { automationId: automation.id, commentId: dedupeId } },
+        create: {
+          workspaceId: automation.workspaceId,
+          automationId: automation.id,
+          instagramAccountId: automation.instagramAccountId,
+          commenterId: userId,
+          commentText: "(button tap)",
+          commentId: dedupeId,
+          status: "SKIPPED_TAKEOVER",
+          errorMessage: "A human took over this conversation",
+        },
+        update: { status: "SKIPPED_TAKEOVER", errorMessage: "A human took over this conversation" },
+      });
+    } else {
+      console.log(`[DM Worker] Postback not answered (${gate.reason})`);
+    }
+    return;
+  }
+
   // Personalize {username} from the opening DM log for this user, if present.
   const openingLog = await prisma.dmLog.findFirst({
     where: { automationId: automation.id, commenterId: userId },
@@ -835,6 +962,8 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
   } catch {
     return;
   }
+
+  const ledger = ledgerFor(automation, userId, "automation", dedupeId);
 
   // Follow-gate: before revealing the link, verify the user follows. On a
   // `followcheck:` tap a non-follower gets the prompt again (no quota spent);
@@ -853,13 +982,16 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
         commenterName,
       });
       try {
-        await sendDirectMessageWithButton(
-          accessToken,
-          automation.instagramAccount.instagramId,
-          userId,
-          promptText,
-          automation.followPromptButtonLabel || "i'm following",
-          `followcheck:${automation.id}`
+        await ledger(promptText, (o) =>
+          sendDirectMessageWithButton(
+            accessToken,
+            automation.instagramAccount.instagramId,
+            userId,
+            promptText,
+            automation.followPromptButtonLabel || "i'm following",
+            `followcheck:${automation.id}`,
+            o
+          )
         );
       } catch (error) {
         console.log(
@@ -899,7 +1031,8 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
       automation,
       userId,
       commenterName,
-      "postback"
+      "postback",
+      ledger
     );
     // Optional appreciation follow-up: once the link has been delivered, send a
     // short thank-you. It is scheduled as its own delayed job so it can go out
@@ -940,6 +1073,12 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
       update: { status: "SENT", dmSentAt: new Date(), errorMessage: null },
     });
     if (sentLog?.id) await onDmLogSent(sentLog, automation);
+    await enrollInSequence({
+      automation,
+      igUserId: userId,
+      username: commenterName,
+      inboundAt: fallback ? null : tappedAt,
+    });
   } catch (error) {
     await releaseWorkspaceDMReservation(automation.workspaceId, usage.periodStart);
 
@@ -981,8 +1120,8 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
 
 /**
  * Send the scheduled appreciation follow-up. Runs after its delay elapses.
- * Best-effort: if the message can't be delivered (e.g. the 24-hour messaging
- * window closed because the delay was long), it is logged, not retried forever.
+ * 2026-10-04: checks takeover and the 24-hour window first (it used to send
+ * blind and fail silently when the delay was long).
  */
 async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
   const { instagramAccountId, userId, automationId, commenterName } = job.data;
@@ -1002,6 +1141,12 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
     return;
   }
 
+  const gate = await checkAutomation({ instagramId: instagramAccountId, igUserId: userId });
+  if (!gate.ok) {
+    console.log(`[DM Worker] Follow-up not sent (${gate.reason})`);
+    return;
+  }
+
   let accessToken: string;
   try {
     accessToken = decryptToken(automation.instagramAccount.accessToken);
@@ -1009,21 +1154,270 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
     return;
   }
 
+  const text = renderMessageWithoutLink({
+    message: automation.followUpMessage,
+    commenterName: commenterName ?? null,
+  });
   try {
-    await sendDirectMessage(
-      accessToken,
-      automation.instagramAccount.instagramId,
-      userId,
-      renderMessageWithoutLink({
-        message: automation.followUpMessage,
-        commenterName: commenterName ?? null,
-      })
+    await ledgerFor(automation, userId, "followup", automation.id)(text, (o) =>
+      sendDirectMessage(accessToken, automation.instagramAccount.instagramId, userId, text, o)
     );
   } catch (error) {
     console.log(
       "[DM Worker] Failed to send follow-up message:",
       formatError(error)
     );
+  }
+}
+
+const CAMPAIGN_INCLUDE = {
+  instagramAccount: true,
+  workspace: true,
+  trackedLinks: {
+    select: { slug: true, label: true, destinationUrl: true },
+    orderBy: { createdAt: "asc" },
+  },
+} satisfies Prisma.AutomationInclude;
+
+type CampaignAutomation = Prisma.AutomationGetPayload<{ include: typeof CAMPAIGN_INCLUDE }>;
+
+/**
+ * Deliver a campaign to someone who is already talking to us (DM keyword,
+ * ig.me link). Dedup per trigger id (DmLog @@unique automationId+commentId).
+ * Respects takeover and the window, and enrolls the sequence afterwards.
+ */
+async function deliverCampaignToDm(input: {
+  automation: CampaignAutomation;
+  senderId: string;
+  dedupeId: string;
+  triggerText: string;
+  matchedKeyword: string | null;
+  attemptsMade: number;
+  /** The person's DM / tap / link that opened the window. */
+  inboundAt: Date;
+  context: string;
+}): Promise<void> {
+  const { automation, senderId, dedupeId } = input;
+
+  const existingLog = await prisma.dmLog.findUnique({
+    where: {
+      automationId_commentId: {
+        automationId: automation.id,
+        commentId: dedupeId,
+      },
+    },
+  });
+
+  // Already replied to this message (or deliberately skipped it) — a retry
+  // of the job must not send a second DM.
+  if (
+    existingLog?.status === "SENT" ||
+    existingLog?.status === "SKIPPED_PLAN_LIMIT" ||
+    existingLog?.status === "SKIPPED_TAKEOVER"
+  ) {
+    return;
+  }
+
+  const logBase = {
+    workspaceId: automation.workspaceId,
+    automationId: automation.id,
+    instagramAccountId: automation.instagramAccountId,
+    commenterId: senderId,
+    commentText: input.triggerText,
+    commentId: dedupeId,
+    matchedKeyword: input.matchedKeyword,
+  };
+  const logWhere = {
+    automationId_commentId: { automationId: automation.id, commentId: dedupeId },
+  };
+
+  const gate = await checkAutomation({
+    instagramId: automation.instagramAccount.instagramId,
+    igUserId: senderId,
+    inboundAt: input.inboundAt,
+  });
+  if (!gate.ok) {
+    if (gate.reason === "takeover") {
+      await prisma.dmLog.upsert({
+        where: logWhere,
+        create: { ...logBase, status: "SKIPPED_TAKEOVER", errorMessage: "A human took over this conversation" },
+        update: { status: "SKIPPED_TAKEOVER", errorMessage: "A human took over this conversation" },
+      });
+    } else {
+      console.log(`[DM Worker] ${input.context}: not answered (${gate.reason})`);
+    }
+    return;
+  }
+
+  if (!automation.instagramAccount.accessToken) {
+    await prisma.dmLog.upsert({
+      where: logWhere,
+      create: {
+        ...logBase,
+        status: "FAILED",
+        errorMessage: "No Instagram access token available",
+      },
+      update: {
+        status: "FAILED",
+        errorMessage: "No Instagram access token available",
+      },
+    });
+    return;
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = decryptToken(automation.instagramAccount.accessToken);
+  } catch {
+    await prisma.dmLog.upsert({
+      where: logWhere,
+      create: {
+        ...logBase,
+        status: "FAILED",
+        errorMessage: "Failed to decrypt Instagram access token",
+      },
+      update: {
+        status: "FAILED",
+        errorMessage: "Failed to decrypt Instagram access token",
+      },
+    });
+    return;
+  }
+
+  // Reuse a name captured on an earlier interaction so {username} still
+  // renders — the messages webhook carries only the sender's IGSID.
+  const priorLog = await prisma.dmLog.findFirst({
+    where: { automationId: automation.id, commenterId: senderId },
+    select: { commenterName: true },
+  });
+  const commenterName = priorLog?.commenterName ?? null;
+
+  // Follow gate: anyone not confirmed as a follower gets the prompt instead of
+  // the link, with the same `followcheck:` button that re-verifies on tap.
+  // `null` (unverifiable) prompts too — this is first contact, exactly like a
+  // comment, so it follows processComment's fail-closed rule rather than the
+  // postback path's fail-open one. Fail-open is only safe after a tap, where
+  // the user has already claimed to follow; here it would hand the link to
+  // anyone whose status the API happens not to resolve.
+  let sendFollowPrompt = false;
+  if (automation.requireFollow) {
+    const follows = await getUserFollowStatus(accessToken, senderId);
+    sendFollowPrompt = follows !== true;
+  }
+
+  const usage = await reserveWorkspaceDMSend(automation.workspaceId);
+  if (!usage.allowed) {
+    await prisma.dmLog.upsert({
+      where: logWhere,
+      create: {
+        ...logBase,
+        status: "SKIPPED_PLAN_LIMIT",
+        errorMessage: `Monthly DM limit reached (${usage.limit})`,
+      },
+      update: {
+        status: "SKIPPED_PLAN_LIMIT",
+        errorMessage: `Monthly DM limit reached (${usage.limit})`,
+      },
+    });
+    return;
+  }
+
+  const ledger = ledgerFor(automation, senderId, "automation", dedupeId);
+
+  try {
+    if (sendFollowPrompt) {
+      const promptText = renderMessageWithoutLink({
+        message:
+          automation.followPromptMessage ||
+          "Almost there! Follow me and tap the button below to grab your link 💛",
+        commenterName,
+      });
+      await ledger(promptText, (o) =>
+        sendDirectMessageWithButton(
+          accessToken,
+          automation.instagramAccount.instagramId,
+          senderId,
+          promptText,
+          automation.followPromptButtonLabel || "I'm following ✅",
+          `followcheck:${automation.id}`,
+          o
+        )
+      );
+    } else {
+      await sendRevealDirectMessage(
+        accessToken,
+        automation,
+        senderId,
+        commenterName,
+        input.context,
+        ledger
+      );
+
+      // The link has been delivered, so the appreciation follow-up applies
+      // here exactly as it does after a button tap. Not scheduled behind the
+      // follow prompt — no link went out yet in that branch.
+      if (automation.followUpEnabled && automation.followUpMessage?.trim()) {
+        await getDMQueue().add(
+          FOLLOWUP_JOB_NAME,
+          {
+            instagramAccountId: automation.instagramAccount.instagramId,
+            userId: senderId,
+            automationId: automation.id,
+            commenterName,
+          },
+          {
+            delay: Math.max(0, automation.followUpDelayMinutes ?? 0) * 60_000,
+            jobId: `followup_${automation.id}_${senderId}`,
+          }
+        );
+      }
+    }
+
+    const sentLog = await prisma.dmLog.upsert({
+      where: logWhere,
+      create: {
+        ...logBase,
+        commenterName,
+        status: "SENT",
+        dmSentAt: new Date(),
+      },
+      update: {
+        status: "SENT",
+        dmSentAt: new Date(),
+        errorMessage: null,
+      },
+    });
+    // The follow prompt is not the campaign yet; only the reveal counts.
+    if (sentLog?.id && !sendFollowPrompt) {
+      await onDmLogSent(sentLog, automation);
+      await enrollInSequence({
+        automation,
+        igUserId: senderId,
+        username: commenterName,
+        inboundAt: input.inboundAt,
+      });
+    }
+  } catch (error) {
+    await releaseWorkspaceDMReservation(
+      automation.workspaceId,
+      usage.periodStart
+    );
+    await prisma.dmLog.upsert({
+      where: logWhere,
+      create: {
+        ...logBase,
+        commenterName,
+        status: "FAILED",
+        attempts: input.attemptsMade + 1,
+        errorMessage: formatError(error),
+      },
+      update: {
+        status: "FAILED",
+        attempts: input.attemptsMade + 1,
+        errorMessage: formatError(error),
+      },
+    });
+    throw error;
   }
 }
 
@@ -1037,6 +1431,7 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
  */
 async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
   const { instagramAccountId, messageId, messageText, senderId } = job.data;
+  const receivedAt = new Date(job.timestamp || Date.now());
 
   const automations = await prisma.automation.findMany({
     where: {
@@ -1044,14 +1439,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
       isActive: true,
       instagramAccount: { instagramId: instagramAccountId },
     },
-    include: {
-      instagramAccount: true,
-      workspace: true,
-      trackedLinks: {
-        select: { slug: true, label: true, destinationUrl: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
+    include: CAMPAIGN_INCLUDE,
     orderBy: { createdAt: "asc" },
   });
 
@@ -1068,215 +1456,105 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
 
     if (!matchResult.matched) continue;
 
-    const existingLog = await prisma.dmLog.findUnique({
-      where: {
-        automationId_commentId: {
-          automationId: automation.id,
-          commentId: dedupeId,
-        },
-      },
-    });
-
-    // Already replied to this message (or deliberately skipped it) — a retry
-    // of the job must not send a second DM.
-    if (
-      existingLog?.status === "SENT" ||
-      existingLog?.status === "SKIPPED_PLAN_LIMIT"
-    ) {
-      continue;
-    }
-
-    const logBase = {
-      workspaceId: automation.workspaceId,
-      automationId: automation.id,
-      instagramAccountId: automation.instagramAccountId,
-      commenterId: senderId,
-      commentText: messageText,
-      commentId: dedupeId,
+    await deliverCampaignToDm({
+      automation,
+      senderId,
+      dedupeId,
+      triggerText: messageText,
       matchedKeyword: matchResult.matchedKeyword,
-    };
-
-    if (!automation.instagramAccount.accessToken) {
-      await prisma.dmLog.upsert({
-        where: {
-          automationId_commentId: {
-            automationId: automation.id,
-            commentId: dedupeId,
-          },
-        },
-        create: {
-          ...logBase,
-          status: "FAILED",
-          errorMessage: "No Instagram access token available",
-        },
-        update: {
-          status: "FAILED",
-          errorMessage: "No Instagram access token available",
-        },
-      });
-      continue;
-    }
-
-    let accessToken: string;
-    try {
-      accessToken = decryptToken(automation.instagramAccount.accessToken);
-    } catch {
-      await prisma.dmLog.upsert({
-        where: {
-          automationId_commentId: {
-            automationId: automation.id,
-            commentId: dedupeId,
-          },
-        },
-        create: {
-          ...logBase,
-          status: "FAILED",
-          errorMessage: "Failed to decrypt Instagram access token",
-        },
-        update: {
-          status: "FAILED",
-          errorMessage: "Failed to decrypt Instagram access token",
-        },
-      });
-      continue;
-    }
-
-    // Reuse a name captured on an earlier interaction so {username} still
-    // renders — the messages webhook carries only the sender's IGSID.
-    const priorLog = await prisma.dmLog.findFirst({
-      where: { automationId: automation.id, commenterId: senderId },
-      select: { commenterName: true },
+      attemptsMade: job.attemptsMade,
+      inboundAt: receivedAt,
+      context: "message trigger",
     });
-    const commenterName = priorLog?.commenterName ?? null;
+  }
+}
 
-    // Follow gate: anyone not confirmed as a follower gets the prompt instead of
-    // the link, with the same `followcheck:` button that re-verifies on tap.
-    // `null` (unverifiable) prompts too — this is first contact, exactly like a
-    // comment, so it follows processComment's fail-closed rule rather than the
-    // postback path's fail-open one. Fail-open is only safe after a tap, where
-    // the user has already claimed to follow; here it would hand the link to
-    // anyone whose status the API happens not to resolve.
-    let sendFollowPrompt = false;
-    if (automation.requireFollow) {
-      const follows = await getUserFollowStatus(accessToken, senderId);
-      sendFollowPrompt = follows !== true;
-    }
+/**
+ * CRM for one DM, out of the webhook request: contact + timeline + tags
+ * (onDirectMessage), lastOutboundAt, and then
+ *  - inbound: the person answered, so their running sequences stop (or the
+ *    one waiting for this first reply starts);
+ *  - echo: ours (metadata / ledger / template / same text) or typed by the
+ *    owner on the phone, which turns human takeover on.
+ */
+async function processCrmDm(job: Job<CrmDmJob>): Promise<void> {
+  await handleCrmDm(job.data);
+}
 
-    const usage = await reserveWorkspaceDMSend(automation.workspaceId);
-    if (!usage.allowed) {
-      await prisma.dmLog.upsert({
-        where: {
-          automationId_commentId: {
-            automationId: automation.id,
-            commentId: dedupeId,
-          },
-        },
-        create: {
-          ...logBase,
-          status: "SKIPPED_PLAN_LIMIT",
-          errorMessage: `Monthly DM limit reached (${usage.limit})`,
-        },
-        update: {
-          status: "SKIPPED_PLAN_LIMIT",
-          errorMessage: `Monthly DM limit reached (${usage.limit})`,
-        },
-      });
-      continue;
-    }
+/**
+ * Someone opened the DM through ig.me/m/<user>?ref=<code>: tag where they came
+ * from, count the open once per event, reopen the window (thread already
+ * existed) and, when the link has a campaign, deliver it.
+ */
+async function processReferral(job: Job<ReferralJob>): Promise<void> {
+  const data = job.data;
+  const link = await prisma.conversationLink.findFirst({
+    where: { code: data.ref, isActive: true, instagramAccount: { instagramId: data.instagramAccountId } },
+    select: { id: true, code: true, origin: true, tagName: true, automationId: true },
+  });
+  if (!link) return;
 
-    try {
-      if (sendFollowPrompt) {
-        const promptText = renderMessageWithoutLink({
-          message:
-            automation.followPromptMessage ||
-            "Almost there! Follow me and tap the button below to grab your link 💛",
-          commenterName,
-        });
-        await sendDirectMessageWithButton(
-          accessToken,
-          automation.instagramAccount.instagramId,
-          senderId,
-          promptText,
-          automation.followPromptButtonLabel || "I'm following ✅",
-          `followcheck:${automation.id}`
-        );
-      } else {
-        await sendRevealDirectMessage(
-          accessToken,
-          automation,
-          senderId,
-          commenterName,
-          "message trigger"
-        );
+  const occurredAt = new Date(data.timestamp || Date.now());
+  const eventKey = data.mid ?? `ref:${data.timestamp}`;
+  const tracked = await trackInteraction({
+    account: { instagramId: data.instagramAccountId },
+    igUserId: data.igUserId,
+    event: {
+      type: "REFERRAL",
+      refId: `${link.id}:${eventKey}`,
+      occurredAt,
+      text: link.code,
+      meta: { code: link.code, origin: link.origin, kind: data.kind },
+    },
+    tags: [link.tagName || AUTO_TAGS.cameFrom(link.origin)],
+  }, { throwOnError: true });
+  if (!tracked) return;
 
-        // The link has been delivered, so the appreciation follow-up applies
-        // here exactly as it does after a button tap. Not scheduled behind the
-        // follow prompt — no link went out yet in that branch.
-        if (automation.followUpEnabled && automation.followUpMessage?.trim()) {
-          await getDMQueue().add(
-            FOLLOWUP_JOB_NAME,
-            {
-              instagramAccountId: automation.instagramAccount.instagramId,
-              userId: senderId,
-              automationId: automation.id,
-              commenterName,
-            },
-            {
-              delay: Math.max(0, automation.followUpDelayMinutes ?? 0) * 60_000,
-              jobId: `followup_${automation.id}_${senderId}`,
-            }
-          );
-        }
-      }
+  const { count } = await prisma.conversationLinkOpen.createMany({
+    data: [
+      {
+        linkId: link.id,
+        contactId: tracked.contact.id,
+        eventKey,
+        kind: data.kind,
+        isNewThread: data.kind !== "referral",
+        occurredAt,
+      },
+    ],
+    skipDuplicates: true,
+  });
+  // Count the open once per event. A retried job (the campaign send threw)
+  // still goes on to the delivery: DmLog dedupes it, so nothing is sent twice.
+  if (count === 1) {
+    await prisma.conversationLink.update({ where: { id: link.id }, data: { opens: { increment: 1 } } });
+  }
 
-      const sentLog = await prisma.dmLog.upsert({
-        where: {
-          automationId_commentId: {
-            automationId: automation.id,
-            commentId: dedupeId,
-          },
-        },
-        create: {
-          ...logBase,
-          commenterName,
-          status: "SENT",
-          dmSentAt: new Date(),
-        },
-        update: {
-          status: "SENT",
-          dmSentAt: new Date(),
-          errorMessage: null,
-        },
-      });
-      // The follow prompt is not the campaign yet; only the reveal counts.
-      if (sentLog?.id && !sendFollowPrompt) await onDmLogSent(sentLog, automation);
-    } catch (error) {
-      await releaseWorkspaceDMReservation(
-        automation.workspaceId,
-        usage.periodStart
-      );
-      await prisma.dmLog.upsert({
-        where: {
-          automationId_commentId: {
-            automationId: automation.id,
-            commentId: dedupeId,
-          },
-        },
-        create: {
-          ...logBase,
-          commenterName,
-          status: "FAILED",
-          attempts: job.attemptsMade + 1,
-          errorMessage: formatError(error),
-        },
-        update: {
-          status: "FAILED",
-          attempts: job.attemptsMade + 1,
-          errorMessage: formatError(error),
-        },
-      });
-      throw error;
-    }
+  if (!link.automationId) return;
+  const automation = await prisma.automation.findFirst({
+    where: { id: link.automationId, isActive: true },
+    include: CAMPAIGN_INCLUDE,
+  });
+  if (!automation || automation.instagramAccount.instagramId !== data.instagramAccountId) return;
+
+  await deliverCampaignToDm({
+    automation,
+    senderId: data.igUserId,
+    // A link opened by a typed message is also that message: same DmLog key
+    // as the DM-keyword path (processMessage), so one campaign never answers
+    // the same message twice.
+    dedupeId: data.kind === "message" && data.mid ? `dm:${data.mid}` : `ref:${eventKey}`,
+    triggerText: `(link ${link.code})`,
+    matchedKeyword: null,
+    attemptsMade: job.attemptsMade,
+    inboundAt: occurredAt,
+    context: "conversation link",
+  });
+}
+
+async function processSequenceStep(job: Job<SequenceStepJob>): Promise<void> {
+  const outcome = await runSequenceStep(job.data);
+  if (outcome !== "sent" && outcome !== "noop") {
+    console.log(`[DM Worker] Sequence ${job.data.enrollmentId} step ${job.data.order}: ${outcome}`);
   }
 }
 
@@ -1293,6 +1571,15 @@ async function runJob(job: Job<DmQueueJob>): Promise<void> {
   if (job.name === SAVE_MEDIA_JOB_NAME) {
     await downloadDirectMedia((job.data as SaveMediaJob).mediaId);
     return;
+  }
+  if (job.name === CRM_DM_JOB_NAME) {
+    return processCrmDm(job as Job<CrmDmJob>);
+  }
+  if (job.name === REFERRAL_JOB_NAME) {
+    return processReferral(job as Job<ReferralJob>);
+  }
+  if (job.name === SEQUENCE_STEP_JOB_NAME) {
+    return processSequenceStep(job as Job<SequenceStepJob>);
   }
   return processComment(job as Job<ProcessCommentJob>);
 }

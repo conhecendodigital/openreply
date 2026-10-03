@@ -6,9 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockPrisma, mockHideComment } = vi.hoisted(() => ({
   mockPrisma: {
+    // reserveHideSlot (hourly ceiling): transaction + advisory lock.
+    $executeRaw: vi.fn(async () => 1),
+    $transaction: vi.fn(async function (this: unknown, fn: (tx: unknown) => unknown) {
+      return fn(this);
+    }),
     instagramAccount: { findUnique: vi.fn() },
     automation: { findMany: vi.fn() },
-    commentModeration: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    commentModeration: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn(async () => 0) },
     contact: { upsert: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     contactEvent: { createMany: vi.fn(), findFirst: vi.fn() },
     contactTag: { createMany: vi.fn(), deleteMany: vi.fn() },
@@ -393,7 +398,9 @@ describe("CRM: contact upsert and automatic tags", () => {
     expect(mockPrisma.contact.update).not.toHaveBeenCalled();
   });
 
-  it("storeDirectMessages feeds the CRM: inbound → DM_IN, echo → DM_OUT, deleted → nothing", async () => {
+  // 2026-10-04: the webhook no longer runs the CRM inline (CRM_DM_JOB does);
+  // the backfill script keeps it with { crm: true }.
+  it("storeDirectMessages feeds the CRM (backfill mode): inbound → DM_IN, echo → DM_OUT, deleted → nothing", async () => {
     mockPrisma.instagramAccount.findUnique.mockResolvedValue(ACC);
     const payload = (messaging: unknown[]) => ({ object: "instagram", entry: [{ id: "ig_owner", time: 1, messaging }] });
 
@@ -401,7 +408,8 @@ describe("CRM: contact upsert and automatic tags", () => {
       payload([
         { sender: { id: "ig_person" }, recipient: { id: "ig_owner" }, timestamp: at.getTime(), message: { mid: "mid_in", text: "quero" } },
         { sender: { id: "ig_owner" }, recipient: { id: "ig_person" }, timestamp: at.getTime(), message: { mid: "mid_out", text: "aqui", is_echo: true } },
-      ])
+      ]),
+      { crm: true }
     );
     const types = mockPrisma.contactEvent.createMany.mock.calls
       .map((c) => c[0].data[0])
@@ -422,7 +430,8 @@ describe("CRM: contact upsert and automatic tags", () => {
     await storeDirectMessages(
       payload([
         { sender: { id: "ig_person" }, recipient: { id: "ig_owner" }, timestamp: 1, message: { mid: "mid_del", is_deleted: true } },
-      ])
+      ]),
+      { crm: true }
     );
     expect(mockPrisma.directMessage.upsert).toHaveBeenCalledTimes(1);
     expect(mockPrisma.contactEvent.createMany).not.toHaveBeenCalled();
@@ -432,10 +441,13 @@ describe("CRM: contact upsert and automatic tags", () => {
     mockPrisma.instagramAccount.findUnique.mockResolvedValue(ACC);
     mockPrisma.contact.upsert.mockRejectedValue(new Error("table missing"));
     await expect(
-      storeDirectMessages({
-        object: "instagram",
-        entry: [{ id: "ig_owner", time: 1, messaging: [{ sender: { id: "ig_person" }, recipient: { id: "ig_owner" }, timestamp: 1, message: { mid: "m1", text: "oi" } }] }],
-      })
+      storeDirectMessages(
+        {
+          object: "instagram",
+          entry: [{ id: "ig_owner", time: 1, messaging: [{ sender: { id: "ig_person" }, recipient: { id: "ig_owner" }, timestamp: 1, message: { mid: "m1", text: "oi" } }] }],
+        },
+        { crm: true }
+      )
     ).resolves.toEqual([]);
     expect(mockPrisma.directMessage.upsert).toHaveBeenCalled();
   });

@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockPrisma, mockHideComment, mockTrack, mockRemoveTag } = vi.hoisted(() => ({
   mockPrisma: {
+    // reserveHideSlot (hourly ceiling): transaction + advisory lock.
+    $executeRaw: vi.fn(async () => 1),
+    $transaction: vi.fn(async function (this: unknown, fn: (tx: unknown) => unknown) {
+      return fn(this);
+    }),
     instagramAccount: { findUnique: vi.fn() },
     automation: { findMany: vi.fn() },
     commentModeration: {
@@ -9,6 +14,7 @@ const { mockPrisma, mockHideComment, mockTrack, mockRemoveTag } = vi.hoisted(() 
       findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      count: vi.fn(async () => 0),
     },
   },
   mockHideComment: vi.fn(),

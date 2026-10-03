@@ -3,7 +3,7 @@ import Nodemailer from "next-auth/providers/nodemailer";
 import Resend from "next-auth/providers/resend";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { headers } from "next/headers";
-import { resolveApiTokenUserId } from "@/lib/api-token-auth";
+import { resolveApiToken, resolveApiTokenUserId } from "@/lib/api-token-auth";
 import { prisma } from "@/lib/db/client";
 import { ensureWorkspaceForUser, getPrimaryWorkspace } from "@/lib/workspace";
 import { isEmailAllowedToSignIn } from "@/lib/env";
@@ -88,6 +88,30 @@ export async function isApiTokenRequest(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export type ApiCaller =
+  | { kind: "session" }
+  /** tokenId null: an Authorization header that is not a valid key. */
+  | { kind: "token"; tokenId: string | null; scopes: string[] };
+
+/**
+ * Who is calling: a signed-in human (session) or an API key (MCP, scripts).
+ * Any Authorization header counts as a key, even an invalid one, so a request
+ * can never pass as "human" just by also carrying a cookie.
+ */
+export async function getApiCaller(): Promise<ApiCaller> {
+  let authorization: string | null = null;
+  try {
+    authorization = (await headers()).get("authorization");
+  } catch {
+    return { kind: "session" };
+  }
+  if (!authorization) return { kind: "session" };
+  const resolved = await resolveApiToken(authorization);
+  return resolved
+    ? { kind: "token", tokenId: resolved.tokenId, scopes: resolved.scopes }
+    : { kind: "token", tokenId: null, scopes: [] };
 }
 
 export async function getCurrentUserId(): Promise<string | null> {

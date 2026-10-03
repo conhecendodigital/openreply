@@ -25,6 +25,7 @@ interface Settings {
   allowedTerms: string[];
   useJev: boolean;
   jevMinConfidence: number;
+  maxHidesPerHour?: number;
   jevAvailable: boolean;
   availableCategories: string[];
   limits: { maxTerms: number; maxTermLength: number };
@@ -212,7 +213,7 @@ export default function ModerationPage() {
     return () => window.clearTimeout(timer);
   }, [loadLogs]);
 
-  async function save(patch: Partial<Pick<Settings, "mode" | "categories" | "blockedTerms" | "allowedTerms" | "useJev">>) {
+  async function save(patch: Partial<Pick<Settings, "mode" | "categories" | "blockedTerms" | "allowedTerms" | "useJev" | "maxHidesPerHour">>) {
     if (!settings) return;
     setSaving(true);
     setSaveError(null);
@@ -392,6 +393,32 @@ export default function ModerationPage() {
                   disabled={saving || !settings.jevAvailable}
                   label={t("Ask Jev when the rules find nothing")}
                   onChange={(next) => void save({ useJev: next })}
+                />
+              </li>
+              <li className="flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{t("Hide at most per hour")}</p>
+                  <p className="text-xs text-muted">
+                    {t("Above this, comments are only recorded as \"would hide\" (rule: cap). Hiding by hand doesn't count.")}
+                  </p>
+                </div>
+                <input
+                  key={`${settings.account.id}-${settings.maxHidesPerHour ?? 30}`}
+                  type="number"
+                  min={1}
+                  max={500}
+                  defaultValue={settings.maxHidesPerHour ?? 30}
+                  disabled={saving}
+                  aria-label={t("Hide at most per hour")}
+                  onBlur={(e) => {
+                    const n = Math.round(Number(e.target.value));
+                    if (!Number.isFinite(n) || n < 1 || n > 500 || n === (settings.maxHidesPerHour ?? 30)) {
+                      e.target.value = String(settings.maxHidesPerHour ?? 30);
+                      return;
+                    }
+                    void save({ maxHidesPerHour: n });
+                  }}
+                  className="w-20 shrink-0 rounded-lg border border-border bg-surface-hover px-2 py-1 text-right text-sm outline-none focus:border-border-hover"
                 />
               </li>
             </ul>

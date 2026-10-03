@@ -6,8 +6,11 @@
  * 2026-10-03: visual do menu lateral do instagram.com (ícone + texto, item ativo
  * em negrito), marca Lead Engine e troca de idioma PT | EN no rodapé.
  * Contatos (CRM) e Moderação entram logo depois de Campanhas.
+ * 2026-10-04: Aprovações (com o número de rascunhos esperando), Sequências e
+ * Links de conversa.
  */
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LangSwitch, useT } from "@/components/lang-provider";
@@ -28,6 +31,15 @@ const icones: Record<string, Icone> = {
   ),
   "/campaigns": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M12 21s-7-4.4-9.3-9C1.1 8.6 3 4.5 6.9 4.5c2.3 0 3.8 1.4 5.1 3.2 1.3-1.8 2.8-3.2 5.1-3.2 3.9 0 5.8 4.1 4.2 7.5C19 16.6 12 21 12 21z" /></svg>
+  ),
+  "/approvals": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M21 11.5a8.4 8.4 0 0 1-12.3 7.5L3 21l2-5.5A8.4 8.4 0 1 1 21 11.5z" /><path {...traco(ativo)} d="m8.5 11.5 2.5 2.5 4.5-4.5" /></svg>
+  ),
+  "/sequences": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="5" cy="6" r="2" /><circle {...traco(ativo)} cx="5" cy="18" r="2" /><path {...traco(ativo)} d="M5 8v8M10 6h10M10 12h7M10 18h10" /></svg>
+  ),
+  "/conversation-links": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>
   ),
   "/contacts": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="9" cy="8" r="4" /><path {...traco(ativo)} d="M2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 9M18 14.5a6 6 0 0 1 4 6.5" /></svg>
@@ -50,7 +62,10 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Overview", href: "/overview" },
   { label: "Inbox", href: "/inbox" },
+  { label: "Approvals", href: "/approvals" },
   { label: "Campaigns", href: "/campaigns" },
+  { label: "Sequences", href: "/sequences" },
+  { label: "Conversation links", href: "/conversation-links" },
   { label: "Contacts", href: "/contacts" },
   { label: "Moderation", href: "/moderation" },
   { label: "DM Logs", href: "/logs" },
@@ -82,6 +97,24 @@ export function LeadEngineLogo({ className = "" }: { className?: string }) {
 export default function Sidebar({ isOpen, onClose, workspaceName }: SidebarProps) {
   const pathname = usePathname();
   const t = useT();
+  // How many AI drafts wait for a human, shown next to "Approvals".
+  const [pendingDrafts, setPendingDrafts] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const check = () =>
+      fetch("/api/drafts?status=PENDING&limit=1", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((p) => {
+          if (alive && p.success) setPendingDrafts(Number(p.data.total) || 0);
+        })
+        .catch(() => undefined);
+    void check();
+    const timer = window.setInterval(check, 30_000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [pathname]);
 
   return (
     <>
@@ -118,7 +151,15 @@ export default function Sidebar({ isOpen, onClose, workspaceName }: SidebarProps
                 }`}
               >
                 {Icon && <Icon ativo={isActive} />}
-                <span>{t(item.label)}</span>
+                <span className="flex-1">{t(item.label)}</span>
+                {item.href === "/approvals" && pendingDrafts > 0 && (
+                  <span
+                    className="grid h-5 min-w-5 place-items-center rounded-full bg-error px-1.5 text-[11px] font-semibold text-white"
+                    aria-label={t("{n} waiting", { n: pendingDrafts })}
+                  >
+                    {pendingDrafts > 99 ? "99+" : pendingDrafts}
+                  </span>
+                )}
               </Link>
             );
           })}

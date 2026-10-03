@@ -8,6 +8,11 @@
  * (Meta only exposes the 20 most recent per thread) and refreshed by polling.
  * Sending is subject to Instagram's 24-hour messaging window — Meta's error is
  * surfaced verbatim when it applies.
+ *
+ * 2026-10-04 (Etapa 2): a pending AI draft shows as a card above the composer
+ * (edit, approve and send, discard), the list marks people with a draft, and
+ * the thread header has "Take over" / "Hand back to automation" plus the
+ * 24-hour window. Nothing the AI wrote is sent without that click.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -17,6 +22,18 @@ import type { ConversationListItem } from "@/app/api/instagram/conversations/rou
 import type { ThreadMessage } from "@/app/api/instagram/conversations/[id]/route";
 
 import { useT } from "@/components/lang-provider";
+import {
+  DraftCard,
+  TakeoverToggle,
+  WindowBadge,
+  type Draft,
+  type MessagingWindow,
+  type TakeoverState,
+} from "@/components/messaging-ui";
+
+// The person behind the open thread, as the CRM knows them.
+type ThreadContact = { id: string; window: MessagingWindow | null; takeover: TakeoverState | null };
+
 const POLL_MS = 12_000;
 // Cached list/threads are shown instantly on revisit, then revalidated in the
 // background. The Instagram Conversations API is slow (often several seconds),
@@ -158,6 +175,11 @@ export default function InboxPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Pending AI drafts of this account, by the person's Instagram id.
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const [threadContact, setThreadContact] = useState<ThreadContact | null>(null);
+
   const active = conversations.find((c) => c.id === activeId) ?? null;
   // conversation id → the other person's id, so the thread can load the saved history
   const contactsRef = useRef<Record<string, string>>({});
@@ -232,6 +254,35 @@ export default function InboxPage() {
     [selectedAccountId]
   );
 
+  const loadDrafts = useCallback(async () => {
+    if (!selectedAccountId) return;
+    try {
+      const res = await fetch(
+        `/api/drafts?status=PENDING&limit=100&instagramAccountId=${encodeURIComponent(selectedAccountId)}`,
+        { cache: "no-store" }
+      );
+      const payload = await res.json();
+      if (!payload.success) return;
+      const next: Record<string, Draft> = {};
+      for (const d of payload.data.drafts as Draft[]) {
+        // Newest first: keep the newest one per person.
+        if (!next[d.contact.igUserId]) next[d.contact.igUserId] = d;
+      }
+      setDrafts(next);
+    } catch {
+      // keep whatever is shown
+    }
+  }, [selectedAccountId]);
+
+  useEffect(() => {
+    if (!selectedAccountId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- account changed: drop the old account's drafts
+    setDrafts({});
+    void loadDrafts();
+    const timer = window.setInterval(() => void loadDrafts(), POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [selectedAccountId, loadDrafts]);
+
   // Load + poll conversations for the selected account. A cached list is shown
   // immediately (so revisits are instant) while a fresh copy loads silently.
   useEffect(() => {
@@ -305,6 +356,71 @@ export default function InboxPage() {
     return () => window.clearInterval(timer);
   }, [activeId, loadMessages]);
 
+  // The open person's CRM record: takeover state and 24-hour window.
+  const activeIgId = active?.contact.id ?? "";
+  const loadThreadContact = useCallback(async () => {
+    if (!activeIgId || !selectedAccountId) return;
+    try {
+      const search = await fetch(
+        `/api/contacts?instagramAccountId=${encodeURIComponent(selectedAccountId)}&q=${encodeURIComponent(activeIgId)}&limit=5`,
+        { cache: "no-store" }
+      ).then((r) => r.json());
+      const found = (search.data?.contacts ?? []).find((c: { igUserId: string }) => c.igUserId === activeIgId) as
+        | { id: string }
+        | undefined;
+      if (!found) {
+        setThreadContact(null);
+        return;
+      }
+      const detail = await fetch(`/api/contacts/${encodeURIComponent(found.id)}?limit=1`, { cache: "no-store" }).then((r) =>
+        r.json()
+      );
+      setThreadContact({
+        id: found.id,
+        window: detail.data?.messaging?.window ?? null,
+        takeover: detail.data?.messaging?.takeover ?? null,
+      });
+    } catch {
+      // keep whatever is shown
+    }
+  }, [activeIgId, selectedAccountId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- new thread: forget the previous person
+    setThreadContact(null);
+    setDraftNotice(null);
+    if (!activeIgId) return;
+    void loadThreadContact();
+    const timer = window.setInterval(() => void loadThreadContact(), POLL_MS * 3);
+    return () => window.clearInterval(timer);
+  }, [activeIgId, loadThreadContact]);
+
+  const activeDraft = active?.contact.id ? drafts[active.contact.id] ?? null : null;
+  // The draft carries fresh context too, so the header works before the CRM lookup returns.
+  const headerContact: ThreadContact | null =
+    threadContact ??
+    (activeDraft
+      ? { id: activeDraft.contact.id, window: activeDraft.contact.window, takeover: activeDraft.contact.takeover }
+      : null);
+
+  function handleDraftDone(result: { id: string; status: string; message?: string }) {
+    setDrafts((prev) => {
+      const next = { ...prev };
+      for (const [k, d] of Object.entries(next)) if (d.id === result.id) delete next[k];
+      return next;
+    });
+    if (result.status === "SENT") {
+      setDraftNotice(t("Draft approved and sent."));
+      if (active) void loadMessages(active.id, true);
+      void loadConversations(true);
+    } else if (result.status === "REJECTED") {
+      setDraftNotice(t("Draft discarded. Nothing was sent."));
+    } else if (result.message) {
+      setDraftNotice(t(result.message));
+    }
+    void loadThreadContact();
+  }
+
   // Keep the thread pinned to the latest message.
   useEffect(() => {
     const el = scrollRef.current;
@@ -368,6 +484,13 @@ export default function InboxPage() {
       });
       const data = await res.json();
       if (data.success) {
+        // A manual reply means you took over: automations pause for this person.
+        if (data.data?.takeoverUntil) {
+          setThreadContact((prev) =>
+            prev ? { ...prev, takeover: { active: true, until: data.data.takeoverUntil, reason: "inbox_send" } } : prev
+          );
+        }
+        void loadThreadContact();
         await loadMessages(active.id, true);
         void loadConversations(true);
       } else {
@@ -432,6 +555,7 @@ export default function InboxPage() {
             ) : (
               conversations.map((c) => {
                 const isActive = c.id === activeId;
+                const hasDraft = Boolean(c.contact.id && drafts[c.contact.id]);
                 return (
                   <button
                     key={c.id}
@@ -442,8 +566,18 @@ export default function InboxPage() {
                     }`}
                   >
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-foreground">
-                        @{c.contact.username ?? t("unknown")}
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-sm font-medium text-foreground">
+                          @{c.contact.username ?? t("unknown")}
+                        </span>
+                        {hasDraft && (
+                          <span
+                            className="shrink-0 rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-white"
+                            title={t("AI draft waiting for your approval")}
+                          >
+                            {t("Draft")}
+                          </span>
+                        )}
                       </span>
                       <span className="shrink-0 text-[11px] text-zinc-500">
                         {formatTime(c.updatedTime)}
@@ -482,10 +616,32 @@ export default function InboxPage() {
                 >
                   {t("Back")}
                 </button>
-                <span className="truncate">
-                  @{active.contact.username ?? t("unknown")}
-                </span>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate">
+                    @{active.contact.username ?? t("unknown")}
+                  </span>
+                  {headerContact?.window && (
+                    <span className="mt-0.5 font-normal">
+                      <WindowBadge window={headerContact.window} />
+                    </span>
+                  )}
+                </div>
+                {headerContact && (
+                  <TakeoverToggle
+                    size="sm"
+                    contactId={headerContact.id}
+                    takeover={headerContact.takeover}
+                    onChange={(next) =>
+                      setThreadContact((prev) => ({ ...(prev ?? headerContact), takeover: next }))
+                    }
+                  />
+                )}
               </div>
+              {headerContact?.takeover?.active && (
+                <p className="shrink-0 border-b border-border bg-surface-hover px-4 py-2 text-xs text-muted">
+                  {t("You're answering this person. Campaigns, follow-ups, sequences and the AI stay quiet until you hand it back.")}
+                </p>
+              )}
 
               <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
                 {threadLoading && messages.length === 0 ? (
@@ -560,6 +716,17 @@ export default function InboxPage() {
               </div>
 
               <div className="shrink-0 border-t border-border p-3">
+                {activeDraft && (
+                  <DraftCard
+                    key={activeDraft.id}
+                    draft={activeDraft}
+                    onDone={handleDraftDone}
+                    className="mb-3 max-h-[45dvh] overflow-y-auto"
+                  />
+                )}
+                {draftNotice && !activeDraft && (
+                  <p className="mb-2 text-xs text-muted">{draftNotice}</p>
+                )}
                 {sendError && (
                   <p className="mb-2 text-xs text-error">{sendError}</p>
                 )}

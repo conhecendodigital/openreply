@@ -7,6 +7,10 @@
  * tags you can add and remove, notes, the timeline of everything that happened
  * with the person (comment, DM, campaign, click, tag, moderation) and a button
  * that opens the conversation in the Inbox.
+ *
+ * 2026-10-04 (Etapa 2): a "Conversation" panel with the 24-hour window, the
+ * takeover switch and the AI drafts for this person (pending ones can be
+ * approved here; the rest is history).
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -14,6 +18,16 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ContactAvatar, TagChip, useDateTime, useTimeAgo } from "@/components/contact-ui";
 import { useT } from "@/components/lang-provider";
+import {
+  DRAFT_STATUS_COLORS,
+  DRAFT_STATUS_LABELS,
+  DraftCard,
+  TakeoverToggle,
+  WindowBadge,
+  type Draft,
+  type MessagingWindow,
+  type TakeoverState,
+} from "@/components/messaging-ui";
 
 interface Contact {
   id: string;
@@ -57,6 +71,7 @@ interface Payload {
   events: ContactEvent[];
   nextCursor: string | null;
   moderation: Moderation[];
+  messaging?: { window: MessagingWindow; takeover: TakeoverState };
   links: { inbox: string; profile: string | null };
 }
 
@@ -110,6 +125,36 @@ const EVENT_KINDS: Record<string, { label: string; color: string; icon: React.Re
     color: "text-error",
     icon: <path {...stroke} d="M3 3l18 18M10.6 5.1A9.6 9.6 0 0 1 12 5c5 0 9 5 10 7a14 14 0 0 1-3 3.8M6.6 6.6C4.4 8 2.8 10.4 2 12c1 2 5 7 10 7 1.8 0 3.4-.6 4.8-1.5M9.9 9.9a3 3 0 0 0 4.2 4.2" />,
   },
+  TAKEOVER_ON: {
+    label: "You took over the conversation",
+    color: "text-foreground",
+    icon: <path {...stroke} d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" />,
+  },
+  TAKEOVER_OFF: {
+    label: "Handed back to automation",
+    color: "text-muted",
+    icon: <path {...stroke} d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4" />,
+  },
+  DRAFT_SENT: {
+    label: "AI draft approved and sent",
+    color: "text-accent",
+    icon: <path {...stroke} d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z" />,
+  },
+  SEQUENCE_STEP: {
+    label: "Sequence message sent",
+    color: "text-[#d6249f]",
+    icon: <path {...stroke} d="M4 6h10M4 12h16M4 18h7" />,
+  },
+  REFERRAL: {
+    label: "Opened a conversation link",
+    color: "text-success",
+    icon: <path {...stroke} d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />,
+  },
+  POSTBACK_IN: {
+    label: "Tapped a button",
+    color: "text-foreground",
+    icon: <path {...stroke} d="M9 11V5a2 2 0 1 1 4 0v6m0-2a2 2 0 1 1 4 0v2m0 0a2 2 0 1 1 4 0v3a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L4 14a2 2 0 0 1 3.4-2L9 13" />,
+  },
   COMMENT_RESTORED: {
     label: "Comment restored",
     color: "text-foreground",
@@ -145,6 +190,8 @@ export default function ContactPage() {
   const [notesBusy, setNotesBusy] = useState(false);
   // Instagram's 24-hour window: replies are only possible after a recent DM.
   const [windowOpen, setWindowOpen] = useState(false);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [takeover, setTakeover] = useState<TakeoverState | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -156,6 +203,7 @@ export default function ContactPage() {
         const lastIn = payload.data.contact.lastInboundAt;
         setWindowOpen(Boolean(lastIn) && Date.now() - new Date(lastIn).getTime() < 24 * 3600 * 1000);
         setNotesSaved(true);
+        setTakeover(payload.data.messaging?.takeover ?? null);
         setError(null);
       } else {
         setError(res.status === 404 ? "Contact not found" : payload.error ?? "Failed to load contact");
@@ -165,10 +213,23 @@ export default function ContactPage() {
     }
   }, [id]);
 
+  const loadDrafts = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/drafts?status=all&limit=20&contactId=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const payload = await res.json();
+      if (payload.success) setDrafts(payload.data.drafts);
+    } catch {
+      // keep whatever is shown
+    }
+  }, [id]);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 0);
+    const timer = window.setTimeout(() => {
+      void load();
+      void loadDrafts();
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [load, loadDrafts]);
 
   async function loadOlder() {
     if (!data?.nextCursor || olderLoading) return;
@@ -331,6 +392,63 @@ export default function ContactPage() {
             </p>
           </div>
         </div>
+      </section>
+
+      {/* Conversation: window, takeover and AI drafts */}
+      <section className="panel space-y-3 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold">{t("Conversation")}</h3>
+            <WindowBadge window={data.messaging?.window} />
+          </div>
+          <TakeoverToggle
+            size="sm"
+            contactId={contact.id}
+            takeover={takeover}
+            onChange={(next) => {
+              setTakeover(next);
+              void load();
+            }}
+          />
+        </div>
+        <p className="text-xs text-muted">
+          {takeover?.active
+            ? t("You're answering this person. Campaigns, follow-ups, sequences and the AI stay quiet until you hand it back.")
+            : t("Automations can answer this person. Replying by hand in the Direct or on your phone takes over (24 h by default).")}
+        </p>
+        {drafts
+          .filter((d) => d.status === "PENDING")
+          .map((d) => (
+            <DraftCard
+              key={d.id}
+              draft={d}
+              onDone={() => {
+                void loadDrafts();
+                void load();
+              }}
+            />
+          ))}
+        {drafts.some((d) => d.status !== "PENDING") && (
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{t("Earlier drafts")}</p>
+            <ul className="divide-y divide-border">
+              {drafts
+                .filter((d) => d.status !== "PENDING")
+                .map((d) => (
+                  <li key={d.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+                    <p className="min-w-0 whitespace-pre-wrap break-words">{d.text}</p>
+                    <div className="shrink-0 text-right text-xs">
+                      <p className={`font-semibold ${DRAFT_STATUS_COLORS[d.status]}`}>{t(DRAFT_STATUS_LABELS[d.status])}</p>
+                      <p className="text-muted" title={dateTime(d.updatedAt)}>
+                        {timeAgo(d.sentAt ?? d.updatedAt)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
+        {drafts.length === 0 && <p className="text-xs text-muted">{t("No AI drafts for this person.")}</p>}
       </section>
 
       {/* Tags */}

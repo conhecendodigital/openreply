@@ -18,11 +18,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts          Account[]
-  sessions          Session[]
-  ownedWorkspaces   Workspace[]       @relation("WorkspaceOwner")
-  workspaceMembers  WorkspaceMember[]
-  sentInvitations   WorkspaceInvitation[] @relation("WorkspaceInvitationsSent")
+  accounts         Account[]
+  sessions         Session[]
+  ownedWorkspaces  Workspace[]           @relation("WorkspaceOwner")
+  workspaceMembers WorkspaceMember[]
+  sentInvitations  WorkspaceInvitation[] @relation("WorkspaceInvitationsSent")
 }
 
 model Account {
@@ -75,19 +75,23 @@ model Workspace {
   usagePeriodStart  DateTime @default(now())
   dmsSentThisPeriod Int      @default(0)
 
-  members           WorkspaceMember[]
-  invitations       WorkspaceInvitation[]
-  instagramAccounts InstagramAccount[]
-  automations       Automation[]
-  dmLogs            DmLog[]
-  trackedLinks      TrackedLink[]
-  linkClicks        LinkClick[]
-  webhookEvents     WebhookEvent[]
-  operationalEvents OperationalEvent[]
-  apiTokens         ApiToken[]
+  members            WorkspaceMember[]
+  invitations        WorkspaceInvitation[]
+  instagramAccounts  InstagramAccount[]
+  automations        Automation[]
+  dmLogs             DmLog[]
+  trackedLinks       TrackedLink[]
+  linkClicks         LinkClick[]
+  webhookEvents      WebhookEvent[]
+  operationalEvents  OperationalEvent[]
+  apiTokens          ApiToken[]
   contacts           Contact[]
   moderationSettings ModerationSettings[]
   commentModerations CommentModeration[]
+  draftReplies       DraftReply[]
+  outboundMessages   OutboundMessage[]
+  sequences          Sequence[]
+  conversationLinks  ConversationLink[]
 
   @@index([ownerId])
 }
@@ -146,6 +150,10 @@ model ApiToken {
   tokenHash   String    @unique
   /// First characters of the key, so the settings list can tell keys apart.
   prefix      String
+  /// Extra rights beyond read/propose. "drafts:approve" lets this key approve
+  /// and send a draft (give it only to deterministic code, never to the AI
+  /// that proposes the drafts).
+  scopes      String[]  @default([])
   createdById String?
   lastUsedAt  DateTime?
   revokedAt   DateTime?
@@ -193,25 +201,30 @@ model WorkspaceInvitation {
 }
 
 model InstagramAccount {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   workspaceId       String
-  instagramId       String   @unique
+  instagramId       String    @unique
   username          String
   name              String?
   accessToken       String
   tokenExpiresAt    DateTime?
-  webhookSubscribed Boolean  @default(false)
-  connectedAt       DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  webhookSubscribed Boolean   @default(false)
+  /// Hours a human takeover pauses every automation for one person.
+  takeoverHours     Int       @default(24)
+  connectedAt       DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  automations Automation[]
-  dmLogs      DmLog[]
-  linkClicks  LinkClick[]
-  followerSnapshots FollowerSnapshot[]
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automations        Automation[]
+  dmLogs             DmLog[]
+  linkClicks         LinkClick[]
+  followerSnapshots  FollowerSnapshot[]
   contacts           Contact[]
   moderationSettings ModerationSettings?
   commentModerations CommentModeration[]
+  draftReplies       DraftReply[]
+  outboundMessages   OutboundMessage[]
+  conversationLinks  ConversationLink[]
 
   @@index([workspaceId])
 }
@@ -237,51 +250,53 @@ model FollowerSnapshot {
 }
 
 model Automation {
-  id                 String   @id @default(cuid())
+  id                 String @id @default(cuid())
   workspaceId        String
   instagramAccountId String
 
-  name           String
-  goal           String?
-  postId         String?
-  postUrl        String?
-  pendingNextReel Boolean @default(false)
-  matchAnyPost   Boolean @default(false)
-  keywords       String[]
-  matchAnyWord   Boolean @default(false)
+  name                    String
+  goal                    String?
+  postId                  String?
+  postUrl                 String?
+  pendingNextReel         Boolean  @default(false)
+  matchAnyPost            Boolean  @default(false)
+  keywords                String[]
+  matchAnyWord            Boolean  @default(false)
   // Also fire this campaign when someone sends a DM whose text matches the
   // keywords above. Independent of the post trigger — a DM has no media, so
   // postId / matchAnyPost do not apply to it.
-  dmTriggerEnabled Boolean @default(false)
-  dmMessage      String
-  openingDmEnabled     Boolean @default(false)
-  openingDmMessage     String?
-  openingDmButtonLabel String?
-  linkButtonLabel      String?
-  requireFollow           Boolean @default(false)
+  dmTriggerEnabled        Boolean  @default(false)
+  dmMessage               String
+  openingDmEnabled        Boolean  @default(false)
+  openingDmMessage        String?
+  openingDmButtonLabel    String?
+  linkButtonLabel         String?
+  requireFollow           Boolean  @default(false)
   followPromptMessage     String?
   followPromptButtonLabel String?
-  followUpEnabled Boolean @default(false)
-  followUpMessage String?
+  followUpEnabled         Boolean  @default(false)
+  followUpMessage         String?
   // Minutes to wait after the link is delivered before sending the follow-up.
   // 0 sends it right away.
-  followUpDelayMinutes Int @default(0)
-  publicReplyEnabled Boolean @default(false)
-  publicReplyMessage String?
-  publicReplyMessages String[] @default([])
-  isActive       Boolean @default(true)
-  wholeWordMatch Boolean @default(true)
-  reportShareSlug    String? @unique
-  reportShareEnabled Boolean @default(true)
+  followUpDelayMinutes    Int      @default(0)
+  publicReplyEnabled      Boolean  @default(false)
+  publicReplyMessage      String?
+  publicReplyMessages     String[] @default([])
+  isActive                Boolean  @default(true)
+  wholeWordMatch          Boolean  @default(true)
+  reportShareSlug         String?  @unique
+  reportShareEnabled      Boolean  @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
-  dmLogs           DmLog[]
-  trackedLinks     TrackedLink[]
-  linkClicks       LinkClick[]
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount  InstagramAccount   @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  dmLogs            DmLog[]
+  trackedLinks      TrackedLink[]
+  linkClicks        LinkClick[]
+  sequence          Sequence?
+  conversationLinks ConversationLink[]
 
   @@index([workspaceId])
   @@index([instagramAccountId])
@@ -289,20 +304,20 @@ model Automation {
 }
 
 model DmLog {
-  id                 String     @id @default(cuid())
+  id                 String @id @default(cuid())
   workspaceId        String
   automationId       String
   instagramAccountId String
 
-  commenterId   String
-  commenterName String?
-  commentText   String
-  commentId     String
+  commenterId    String
+  commenterName  String?
+  commentText    String
+  commentId      String
   matchedKeyword String?
-  status        DmStatus @default(PENDING)
-  attempts      Int      @default(0)
-  dmSentAt      DateTime?
-  errorMessage  String?
+  status         DmStatus  @default(PENDING)
+  attempts       Int       @default(0)
+  dmSentAt       DateTime?
+  errorMessage   String?
 
   // The public comment reply is delivered independently of the DM, so its
   // outcome is tracked separately. publicReplySentAt makes it idempotent across
@@ -388,14 +403,14 @@ model LinkClick {
 }
 
 model WebhookEvent {
-  id          String        @id @default(cuid())
-  workspaceId String?
-  object      String?
-  payload     Json
-  status      WebhookStatus @default(PENDING)
+  id           String        @id @default(cuid())
+  workspaceId  String?
+  object       String?
+  payload      Json
+  status       WebhookStatus @default(PENDING)
   errorMessage String?
-  createdAt   DateTime      @default(now())
-  processedAt DateTime?
+  createdAt    DateTime      @default(now())
+  processedAt  DateTime?
 
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
@@ -404,13 +419,13 @@ model WebhookEvent {
 }
 
 model OperationalEvent {
-  id          String                @id @default(cuid())
+  id          String                 @id @default(cuid())
   workspaceId String?
   source      OperationalEventSource
-  level       OperationalEventLevel @default(INFO)
+  level       OperationalEventLevel  @default(INFO)
   message     String
   payload     Json?
-  createdAt   DateTime              @default(now())
+  createdAt   DateTime               @default(now())
   resolvedAt  DateTime?
 
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
@@ -439,6 +454,9 @@ model ModerationSettings {
   /// Ask Jev (TypeSafe) when the rules find nothing. Needs TYPESAFE_API_KEY.
   useJev             Boolean        @default(false)
   jevMinConfidence   Float          @default(0.8)
+  /// Ceiling of automatic hides per hour; above it a match is only recorded
+  /// (WOULD_HIDE, matchedRule "teto").
+  maxHidesPerHour    Int            @default(30)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
@@ -470,6 +488,8 @@ model CommentModeration {
   mode               ModerationMode
   error              String?
   hiddenAt           DateTime?
+  /// "auto" (counts toward maxHidesPerHour) | userId | "mcp".
+  hiddenBy           String?
   restoredAt         DateTime?
   /// userId, or "mcp" when restored through the API key.
   restoredBy         String?
@@ -514,8 +534,19 @@ model Contact {
   name                String?
   firstSeenAt         DateTime
   lastSeenAt          DateTime
-  /// Last DM from the person (Instagram's 24-hour window starts here).
+  /// Last DM from the person (Instagram's 24-hour window starts here). Also
+  /// moved by a button tap (postback) and an ig.me link into an existing thread.
   lastInboundAt       DateTime?
+  /// Last DM we sent (any origin), for "no reply yet".
+  lastOutboundAt      DateTime?
+  /// A human is answering this person: no automation, sequence or AI draft.
+  /// Active while humanTakeover && (humanTakeoverUntil null or in the future).
+  humanTakeover       Boolean   @default(false)
+  humanTakeoverUntil  DateTime?
+  /// userId | "echo" | "mcp"
+  humanTakeoverBy     String?
+  /// inbox_send | phone_echo | manual
+  humanTakeoverReason String?
   commentsCount       Int       @default(0)
   dmsInCount          Int       @default(0)
   dmsOutCount         Int       @default(0)
@@ -526,14 +557,18 @@ model Contact {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
-  tags             ContactTag[]
-  events           ContactEvent[]
+  workspace           Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount    InstagramAccount       @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  tags                ContactTag[]
+  events              ContactEvent[]
+  draftReplies        DraftReply[]
+  sequenceEnrollments SequenceEnrollment[]
+  linkOpens           ConversationLinkOpen[]
 
   @@unique([instagramAccountId, igUserId])
   @@index([workspaceId, lastSeenAt])
   @@index([workspaceId, username])
+  @@index([workspaceId, lastInboundAt])
 }
 
 /// A tag as plain text: "comentou:FOTO", "recebeu:<campanha>", "clicou", or a
@@ -561,6 +596,7 @@ model ContactEvent {
   workspaceId  String
   contactId    String
   /// COMMENT | DM_IN | DM_OUT | CAMPAIGN_SENT | CLICK | TAG_ADDED | TAG_REMOVED | COMMENT_HIDDEN | COMMENT_RESTORED
+  /// | POSTBACK_IN | REFERRAL | DRAFT_SENT | TAKEOVER_ON | TAKEOVER_OFF | SEQUENCE_STEP
   type         String
   /// commentId | mid | dmLogId | linkClickId | moderationId | tag name
   refId        String
@@ -599,6 +635,7 @@ enum DmStatus {
   SKIPPED_RATE_LIMIT
   SKIPPED_PLAN_LIMIT
   SKIPPED_NO_MATCH
+  SKIPPED_TAKEOVER
 }
 
 enum WebhookStatus {
@@ -618,4 +655,191 @@ enum OperationalEventLevel {
   INFO
   WARNING
   ERROR
+}
+
+// ─── Etapa 2: drafts, takeover, sequences, conversation links ───────────────
+
+/// Ledger of every message WE send through the API (campaign, follow-up,
+/// sequence, approved draft, inbox, private reply). Written before the POST
+/// (mid null) and completed with the message_id Meta returns, so an echo can
+/// be told apart from a message typed on the phone.
+model OutboundMessage {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  /// Internal InstagramAccount.id.
+  instagramAccountId String
+  /// The person (IGSID). For a private reply, the commenter.
+  contactIgUserId    String
+  mid                String?  @unique
+  /// automation | followup | sequence | draft | inbox | private_reply
+  origin             String
+  /// dmLogId | draftId | enrollmentId | userId
+  refId              String?
+  text               String?
+  error              String?
+  createdAt          DateTime @default(now())
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  @@index([instagramAccountId, contactIgUserId, createdAt])
+}
+
+/// A reply proposed for one person (by the AI "vendedor" or by hand). Nothing
+/// is sent until a human approves it; approval is recorded with who and how.
+model DraftReply {
+  id                 String      @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String
+  contactId          String
+  text               String
+  reason             String?
+  /// vendedor | manual
+  origin             String
+  status             DraftStatus @default(PENDING)
+  /// The inbound DM (mid) that motivated it.
+  basedOnMid         String?
+  createdBy          String?
+  editedAt           DateTime?
+  approvedBy         String?
+  /// session | mcp
+  approvedVia        String?
+  /// ApiToken.id (or "env") when approved through an API key.
+  approvedTokenId    String?
+  approvedAt         DateTime?
+  sentAt             DateTime?
+  sentMid            String?
+  error              String?
+  /// End of the 24-hour window when the draft was created.
+  expiresAt          DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  contact          Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, createdAt])
+  @@index([contactId, status])
+}
+
+enum DraftStatus {
+  PENDING
+  APPROVED
+  SENT
+  REJECTED
+  EXPIRED
+  FAILED
+}
+
+/// Messages sent after a campaign delivered its link, only while the person's
+/// 24-hour window is open. One sequence per campaign.
+model Sequence {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  automationId String   @unique
+  isActive     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automation  Automation           @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  steps       SequenceStep[]
+  enrollments SequenceEnrollment[]
+
+  @@index([workspaceId])
+}
+
+model SequenceStep {
+  id           String @id @default(cuid())
+  sequenceId   String
+  /// 1-based.
+  order        Int
+  message      String
+  /// Wait after the previous step (or after the link, for step 1).
+  delayMinutes Int
+
+  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, order])
+}
+
+model SequenceEnrollment {
+  id            String         @id @default(cuid())
+  workspaceId   String
+  sequenceId    String
+  contactId     String
+  startedAt     DateTime       @default(now())
+  lastStepOrder Int            @default(0)
+  /// Enrolled while the window was closed (link sent as a private reply to a
+  /// comment): steps wait for the person's first reply, which opens the window.
+  waitingReply  Boolean        @default(false)
+  status        SequenceStatus @default(ACTIVE)
+  stoppedAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, contactId])
+  @@index([contactId, status])
+}
+
+enum SequenceStatus {
+  ACTIVE
+  DONE
+  STOPPED_REPLY
+  STOPPED_WINDOW
+  STOPPED_TAKEOVER
+  STOPPED_OFF
+}
+
+/// https://ig.me/m/<username>?ref=<code> for a story, the bio or a page.
+model ConversationLink {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String
+  /// ^[A-Za-z0-9_=-]{1,64}$ (Meta's ref charset). Unique everywhere so /c/<code>
+  /// is never ambiguous.
+  code               String   @unique
+  /// story | bio | pagina | free text
+  origin             String
+  /// Campaign fired when someone opens the conversation through this link.
+  automationId       String?
+  /// Tag added to the contact; default "veio:<origin>".
+  tagName            String?
+  /// Taps on /c/<code> (ig.me itself reports no click).
+  clicks             Int      @default(0)
+  /// Conversations opened through the link (webhook referral).
+  opens              Int      @default(0)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace        Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount       @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  automation       Automation?            @relation(fields: [automationId], references: [id], onDelete: SetNull)
+  openEvents       ConversationLinkOpen[]
+
+  @@index([workspaceId])
+  @@index([instagramAccountId])
+}
+
+model ConversationLinkOpen {
+  id          String   @id @default(cuid())
+  linkId      String
+  contactId   String
+  /// mid, or "ref:<timestamp>" for a referral into an existing thread.
+  eventKey    String
+  /// message | postback | referral
+  kind        String
+  isNewThread Boolean  @default(false)
+  occurredAt  DateTime
+
+  link    ConversationLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  contact Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([linkId, eventKey])
+  @@index([contactId])
 }

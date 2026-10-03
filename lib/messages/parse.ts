@@ -33,6 +33,10 @@ export interface ParsedDirectMessage {
   /** The person replied to (or mentioned us in) a story. */
   storyReply: boolean;
   deleted: boolean;
+  /** Echo only: the custom string we sent as message.metadata ("le:..."). */
+  metadata: string | null;
+  /** Echo only, when Meta includes it: the app that sent the message. */
+  appId: string | null;
 }
 
 type Attachment = {
@@ -55,6 +59,8 @@ type Messaging = {
     is_echo?: boolean;
     is_deleted?: boolean;
     is_unsupported?: boolean;
+    metadata?: string;
+    app_id?: string | number;
     attachments?: Attachment[];
     reply_to?: { story?: { url?: string; id?: string }; mid?: string };
   };
@@ -128,6 +134,8 @@ export function parseDirectMessages(payload: unknown): ParsedDirectMessage[] {
         template: tpl,
         storyReply: Boolean(storyUrl) || media.some((x) => x.type === "story"),
         deleted: Boolean(msg.is_deleted),
+        metadata: typeof msg.metadata === "string" && msg.metadata ? msg.metadata : null,
+        appId: msg.app_id !== undefined && msg.app_id !== null ? String(msg.app_id) : null,
       });
     }
   }

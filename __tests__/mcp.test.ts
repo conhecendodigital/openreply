@@ -123,7 +123,7 @@ describe("handleMcpMessage", () => {
         jsonrpc: "2.0",
         id: 5,
         method: "tools/call",
-        params: { name: "enviar_dm", arguments: { recipientId: "1", text: "oi" } },
+        params: { name: "ler_conversa", arguments: { conversationId: "c1" } },
       },
       fakeCall({ success: false, error: "outside of allowed window" }, 502)
     );

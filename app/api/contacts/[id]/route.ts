@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { fail, intParam, ok, readJson, requireContext } from "@/lib/api-helpers";
+import { describeTakeover, describeWindow } from "@/lib/inbox/context";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,8 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
     events: page,
     nextCursor: hasMore ? page[page.length - 1].occurredAt.toISOString() : null,
     moderation,
+    // Etapa 2: 24-hour window and "Você assumiu" state for the screens.
+    messaging: { window: describeWindow(contact), takeover: describeTakeover(contact) },
     links: {
       inbox: `/inbox?account=${encodeURIComponent(contact.instagramAccountId)}&contact=${encodeURIComponent(contact.igUserId)}`,
       profile: contact.username ? `https://www.instagram.com/${encodeURIComponent(contact.username)}/` : null,

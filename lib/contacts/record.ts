@@ -24,6 +24,13 @@ export const CONTACT_EVENT_TYPES = [
   "TAG_REMOVED",
   "COMMENT_HIDDEN",
   "COMMENT_RESTORED",
+  // Etapa 2
+  "POSTBACK_IN",
+  "REFERRAL",
+  "DRAFT_SENT",
+  "TAKEOVER_ON",
+  "TAKEOVER_OFF",
+  "SEQUENCE_STEP",
 ] as const;
 export type ContactEventType = (typeof CONTACT_EVENT_TYPES)[number];
 
@@ -44,6 +51,18 @@ const COUNTERS: Partial<Record<ContactEventType, CounterField>> = {
   COMMENT_HIDDEN: "hiddenCommentsCount",
 };
 
+/**
+ * What the person did that opens (or resets) Instagram's 24-hour window: a
+ * DM, a button tap, and an ig.me link into a thread (Meta's send-policy list).
+ * A comment does NOT count: from a comment only the one private reply is
+ * allowed until the person answers.
+ */
+export const WINDOW_OPENING_EVENTS: ReadonlySet<ContactEventType> = new Set([
+  "DM_IN",
+  "POSTBACK_IN",
+  "REFERRAL",
+]);
+
 export const MAX_TAG_LENGTH = 60;
 const MAX_EVENT_TEXT = 500;
 
@@ -57,6 +76,7 @@ export const AUTO_TAGS = {
   repliedDm: "respondeu DM",
   sentDm: "mandou DM",
   moderated: (verdict: string) => `moderado:${verdict}`,
+  cameFrom: (origin: string) => `veio:${origin.trim() || "link"}`,
 };
 
 export function normalizeTagName(name: string): string {
@@ -143,7 +163,7 @@ export async function recordEvent(
 
   const counter = COUNTERS[event.type];
   const data: Prisma.ContactUpdateInput = counter ? { [counter]: { increment: 1 } } : {};
-  if (event.type === "DM_IN") {
+  if (WINDOW_OPENING_EVENTS.has(event.type)) {
     // Only move forward: an old DM from the backfill must not shrink the window.
     await prisma.contact.updateMany({
       where: {
@@ -151,6 +171,15 @@ export async function recordEvent(
         OR: [{ lastInboundAt: null }, { lastInboundAt: { lt: event.occurredAt } }],
       },
       data: { lastInboundAt: event.occurredAt },
+    });
+  }
+  if (event.type === "DM_OUT") {
+    await prisma.contact.updateMany({
+      where: {
+        id: contact.id,
+        OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lt: event.occurredAt } }],
+      },
+      data: { lastOutboundAt: event.occurredAt },
     });
   }
   if (Object.keys(data).length > 0) {
@@ -245,7 +274,10 @@ export type TrackResult = { contact: ContactRef; inserted: boolean } | null;
  * Upsert the contact, record the event and add auto tags. Never throws: a CRM
  * failure must not cost a DM.
  */
-export async function trackInteraction(input: TrackInput): Promise<TrackResult> {
+export async function trackInteraction(
+  input: TrackInput,
+  options: { throwOnError?: boolean } = {}
+): Promise<TrackResult> {
   try {
     const account =
       "id" in input.account
@@ -269,6 +301,8 @@ export async function trackInteraction(input: TrackInput): Promise<TrackResult> 
     }
     return { contact: ref, inserted };
   } catch (error) {
+    // A queued CRM job wants the error (BullMQ retries, idempotent by refId).
+    if (options.throwOnError) throw error;
     console.warn(
       "[CRM] Could not record interaction:",
       error instanceof Error ? error.message : error
@@ -338,7 +372,7 @@ export async function onDirectMessage(input: {
   text?: string | null;
   sentAt: Date;
   storyReply?: boolean;
-}): Promise<TrackResult> {
+}, options: { throwOnError?: boolean } = {}): Promise<TrackResult> {
   const result = await trackInteraction({
     account: input.account,
     igUserId: input.igUserId,
@@ -349,7 +383,7 @@ export async function onDirectMessage(input: {
       text: input.text ?? null,
       meta: input.storyReply ? { storyReply: true } : null,
     },
-  });
+  }, options);
   if (!result || input.fromMe || !result.inserted) return result;
 
   try {

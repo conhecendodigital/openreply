@@ -32,7 +32,12 @@ export async function GET(request: NextRequest) {
   const where: Prisma.ContactWhereInput = {
     workspaceId,
     ...(instagramAccountId && instagramAccountId !== "all" ? { instagramAccountId } : {}),
-    ...(tag ? { tags: { some: { name: tag } } } : {}),
+    // "veio:*" filters by prefix (every conversation-link origin).
+    ...(tag
+      ? tag.endsWith("*")
+        ? { tags: { some: { name: { startsWith: tag.slice(0, -1) } } } }
+        : { tags: { some: { name: tag } } }
+      : {}),
     ...(q
       ? {
           OR: [
