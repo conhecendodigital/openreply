@@ -173,7 +173,7 @@ describe("REFERRAL_JOB", () => {
     requireFollow: false,
     followUpEnabled: false,
     linkButtonLabel: null,
-    instagramAccount: { instagramId: "ig_owner", accessToken: "enc" },
+    instagramAccount: { instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
     trackedLinks: [],
   };
 
@@ -237,7 +237,7 @@ describe("follow-up respects the guard", () => {
       instagramAccountId: "acc_row",
       followUpEnabled: true,
       followUpMessage: "e aí, deu certo?",
-      instagramAccount: { instagramId: "ig_owner", accessToken: "enc" },
+      instagramAccount: { instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
     });
     h.mockCheck.mockResolvedValue({ ok: false, reason: "window_closed", contact: null });
     await processor()({

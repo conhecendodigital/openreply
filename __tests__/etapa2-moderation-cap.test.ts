@@ -41,7 +41,7 @@ import {
 } from "../lib/moderation/moderate";
 
 const settings = { ...DEFAULT_MODERATION_SETTINGS, mode: "HIDE" as const, maxHidesPerHour: 30 };
-const account = { id: "acc_row", workspaceId: "ws_1", instagramId: "ig_owner", accessToken: "enc", moderationSettings: settings };
+const account = { id: "acc_row", workspaceId: "ws_1", instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE", moderationSettings: settings };
 const job = {
   instagramAccountId: "ig_owner",
   commentId: "c_1",
@@ -125,7 +125,7 @@ describe("hourly hide ceiling", () => {
       commentText: "x",
       mediaId: "m",
       verdict: "spam_link",
-      instagramAccount: { id: "acc_row", workspaceId: "ws_1", instagramId: "ig_owner", accessToken: "enc" },
+      instagramAccount: { id: "acc_row", workspaceId: "ws_1", instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
     });
     await setModerationHidden({ moderationId: "mod_9", workspaceId: "ws_1", hidden: true, actor: "user_1" });
     expect(mockPrisma.commentModeration.update).toHaveBeenCalledWith(

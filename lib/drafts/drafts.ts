@@ -18,6 +18,7 @@ import { isAmbiguousDeliveryError } from "@/lib/messaging/errors";
 import { sendDirectMessage } from "@/lib/meta/client";
 import { sendTracked } from "@/lib/meta/send";
 import { decryptToken } from "@/lib/meta/oauth";
+import { channelOffCode, channelOffMessage, isChannelOffError, type ChannelOffCode } from "@/lib/channels/status";
 
 export const MAX_DRAFT_TEXT = 1000;
 export const MAX_DRAFT_REASON = 1000;
@@ -37,7 +38,8 @@ export type DraftFailure = {
     | "send_failed"
     | "maybe_sent"
     | "changed"
-    | "no_token";
+    | "no_token"
+    | ChannelOffCode;
   error: string;
   details?: Record<string, unknown>;
 };
@@ -216,10 +218,17 @@ export async function approveAndSend(
     where: { id: input.id, workspaceId: input.workspaceId },
     include: {
       contact: { select: { id: true, workspaceId: true, igUserId: true, lastInboundAt: true } },
-      instagramAccount: { select: { id: true, instagramId: true, accessToken: true } },
+      instagramAccount: { select: { id: true, instagramId: true, accessToken: true, status: true } },
     },
   });
   if (!draft) return { ok: false, status: 404, code: "not_found", error: "Draft not found" };
+
+  // Channel off: refuse BEFORE the claim, so the draft stays PENDING and can
+  // be approved once the channel is reconnected.
+  if (draft.instagramAccount.status !== "ACTIVE") {
+    const code = channelOffCode(draft.instagramAccount.status);
+    return { ok: false, status: 409, code, error: channelOffMessage(code) };
+  }
 
   if (input.expectedText !== undefined && !sameText(input.expectedText, draft.text)) return changedFailure();
 
@@ -286,6 +295,15 @@ export async function approveAndSend(
     sentMid = result?.message_id ?? null;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Send failed";
+    if (isChannelOffError(error)) {
+      // Turned off between the check and the send: nothing went out, so the
+      // draft goes back to PENDING (same text, approval cleared).
+      await prisma.draftReply.update({
+        where: { id: draft.id },
+        data: { status: "PENDING", approvedBy: null, approvedVia: null, approvedTokenId: null, approvedAt: null },
+      });
+      return { ok: false, status: 409, code: error.code, error: error.message };
+    }
     if (isWindowClosedError(error)) {
       const text = `${windowClosedMessage(windowClosesAt(draft.contact))} (Meta: ${message})`.slice(0, 1000);
       await prisma.draftReply.update({ where: { id: draft.id }, data: { status: "EXPIRED", error: text } });

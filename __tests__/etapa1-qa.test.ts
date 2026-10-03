@@ -42,7 +42,7 @@ import { storeDirectMessages } from "../lib/messages/store";
 const ALL = { categories: [...MODERATION_CATEGORIES], blockedTerms: [], allowedTerms: [] };
 const DEFAULTS = { categories: [...DEFAULT_CATEGORIES], blockedTerms: [], allowedTerms: [] };
 
-const ACC = { id: "acc_row", workspaceId: "ws_1", instagramId: "ig_owner" };
+const ACC = { id: "acc_row", workspaceId: "ws_1", instagramId: "ig_owner", status: "ACTIVE" };
 const at = new Date("2026-10-03T12:00:00Z");
 
 function accountWith(settings: Record<string, unknown> | null) {

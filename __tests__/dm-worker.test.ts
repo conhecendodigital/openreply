@@ -192,7 +192,7 @@ const mockAutomation = {
   instagramAccount: {
     id: "ig_account_row_1",
     instagramId: "ig_456",
-    accessToken: "encrypted_token_abc",
+    accessToken: "encrypted_token_abc", status: "ACTIVE",
   },
   workspace: {
     id: "workspace_123",
@@ -354,7 +354,7 @@ describe("DM Worker — Full Pipeline", () => {
       where: {
         OR: [{ postId: "media_101" }, { matchAnyPost: true }],
         isActive: true,
-        instagramAccount: { instagramId: "ig_456" },
+        instagramAccount: { instagramId: "ig_456", status: "ACTIVE" },
       },
       include: {
         instagramAccount: true,

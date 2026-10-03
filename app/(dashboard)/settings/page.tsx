@@ -1,11 +1,15 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import type { AccountOption } from "@/components/account-select";
 import { ApiKeysPanel } from "@/components/api-keys-panel";
 import { InstagramConnectNotice } from "@/components/instagram-connect-notice";
 
 import { useT } from "@/components/lang-provider";
+
+type ChannelStatus = "ACTIVE" | "NEEDS_RECONNECT" | "DISCONNECTED";
+
 interface SettingsData {
   workspace: {
     name: string;
@@ -22,6 +26,7 @@ interface SettingsData {
     AccountOption & {
       tokenExpiresAt: string | null;
       webhookSubscribed: boolean;
+      status?: ChannelStatus;
     }
   >;
 }
@@ -77,10 +82,12 @@ export default function SettingsPage() {
     if (payload.success) setMembersData(payload.data);
   }
 
-  async function disconnectInstagram(instagramAccountId: string) {
+  // Owner's rule (2026-10-03): disconnecting turns the channel off and never
+  // deletes anything. Deleting for real lives on the Channels page.
+  async function disconnectInstagram(instagramAccountId: string, username: string) {
     if (
       !confirm(
-        "Disconnect Instagram? This DELETES every campaign, link and DM log of this account. To fix an expired token, use Connect instead."
+        t("Disconnect @{username}? The channel turns off: no campaign runs and nothing is sent. Nothing is deleted: campaigns, contacts, conversations and history stay, and reconnecting the same account turns everything back on.", { username })
       )
     ) {
       return;
@@ -92,10 +99,10 @@ export default function SettingsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ instagramAccountId }),
     });
-    if (res.status === 409) {
+    if (!res.ok) {
       const payload = await res.json().catch(() => null);
       setBusy(null);
-      alert(payload?.error ?? "This account still has campaigns.");
+      alert(payload?.error ?? t("Could not disconnect."));
       return;
     }
     window.location.reload();
@@ -136,6 +143,7 @@ export default function SettingsPage() {
   }
 
   const accounts = data?.instagramAccounts ?? [];
+  const onAccounts = accounts.filter((a) => (a.status ?? "ACTIVE") !== "DISCONNECTED");
   const canManageMembers =
     membersData?.currentUserRole === "OWNER" ||
     membersData?.currentUserRole === "ADMIN";
@@ -162,12 +170,12 @@ export default function SettingsPage() {
             </div>
             <span
               className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                accounts.length > 0
+                onAccounts.length > 0
                   ? "bg-success/10 text-success"
                   : "bg-warning/10 text-warning"
               }`}
             >
-              {accounts.length > 0 ? t("Connected") : t("Not connected")}
+              {onAccounts.length > 0 ? t("Connected") : t("Not connected")}
             </span>
           </div>
 
@@ -175,13 +183,12 @@ export default function SettingsPage() {
             <div>
               <p className="text-sm font-medium text-foreground">{t("Accounts")}</p>
               <p className="text-xs text-muted mt-0.5">
-                {accounts.length} {t("connected Instagram profile")}
-                {accounts.length === 1 ? "" : "s"}
+                {t("{n} of {total} Instagram profiles on", { n: onAccounts.length, total: accounts.length })}
               </p>
             </div>
-            <span className="text-sm text-muted">
-              {accounts.length > 0 ? `${accounts.length} connected` : t("None")}
-            </span>
+            <Link href="/channels" className="shrink-0 text-sm font-semibold text-accent hover:text-accent-hover">
+              {t("Manage on Channels")}
+            </Link>
           </div>
 
           <div className="space-y-3 py-3">
@@ -198,30 +205,61 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-sm font-semibold text-foreground">
                     @{account.username}
+                    {account.status === "NEEDS_RECONNECT" && (
+                      <span className="ml-2 rounded-full bg-error/10 px-2 py-0.5 text-xs font-semibold text-error">
+                        {t("Needs reconnect")}
+                      </span>
+                    )}
+                    {account.status === "DISCONNECTED" && (
+                      <span className="ml-2 rounded-full bg-surface-hover px-2 py-0.5 text-xs font-semibold text-muted">
+                        {t("Disconnected")}
+                      </span>
+                    )}
                   </p>
                   <p className="mt-1 text-xs text-muted">
-                    {t("Token expires")}{" "}
-                    {account.tokenExpiresAt
-                      ? new Date(account.tokenExpiresAt).toLocaleDateString()
-                      : t("not available")}{" "}
-                    · {account.webhookSubscribed ? t("Webhook ready") : t("Webhook pending")}
+                    {account.status === "DISCONNECTED"
+                      ? t("Channel off. Everything was kept; reconnect to turn it back on.")
+                      : `${t("Token expires")} ${
+                          account.tokenExpiresAt
+                            ? new Date(account.tokenExpiresAt).toLocaleDateString()
+                            : t("not available")
+                        } · ${account.webhookSubscribed ? t("Webhook ready") : t("Webhook pending")}`}
                   </p>
                 </div>
-                <button
-                  onClick={() => disconnectInstagram(account.id)}
-                  disabled={busy === `disconnect:${account.id}`}
-                  className="inline-flex items-center justify-center rounded border border-error/20 px-4 py-2 text-sm font-medium text-error transition-all hover:border-error/40 hover:bg-error/10 disabled:opacity-50"
-                >
-                  {busy === `disconnect:${account.id}`
-                    ? t("Disconnecting...")
-                    : t("Disconnect")}
-                </button>
+                {account.status === "DISCONNECTED" || account.status === "NEEDS_RECONNECT" ? (
+                  <a
+                    href="/api/instagram/connect"
+                    className="inline-flex items-center justify-center rounded bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
+                  >
+                    {t("Reconnect")}
+                  </a>
+                ) : (
+                  <button
+                    onClick={() => disconnectInstagram(account.id, account.username)}
+                    disabled={busy === `disconnect:${account.id}`}
+                    className="inline-flex items-center justify-center rounded border border-error/20 px-4 py-2 text-sm font-medium text-error transition-all hover:border-error/40 hover:bg-error/10 disabled:opacity-50"
+                  >
+                    {busy === `disconnect:${account.id}`
+                      ? t("Disconnecting...")
+                      : t("Disconnect")}
+                  </button>
+                )}
               </div>
             ))}
           </div>
         </div>
 
-        <div className="mt-6 pt-4 border-t border-border flex gap-3">
+        <p className="mt-4 text-xs text-muted">
+          {t("Disconnecting turns the channel off and never deletes anything. Status, tests and the real delete are on the Channels page.")}
+        </p>
+
+        <div className="mt-6 pt-4 border-t border-border flex flex-wrap gap-3">
+          <Link
+            href="/channels"
+            className="px-4 py-2 rounded text-sm font-medium transition-colors bg-surface-hover text-foreground hover:bg-border"
+          >
+            {t("Open Channels")}
+          </Link>
           <a
             href="/api/instagram/connect"
             className="px-4 py-2 rounded text-sm font-medium transition-colors bg-accent text-white hover:bg-accent-hover"

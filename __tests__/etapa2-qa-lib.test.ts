@@ -165,7 +165,7 @@ describe("approving sends only inside the 24-hour window", () => {
     origin: "vendedor",
     status: "PENDING",
     contact: { id: "ct_1", workspaceId: "ws", igUserId: "ig_p", lastInboundAt },
-    instagramAccount: { id: "acc", instagramId: "ig_owner", accessToken: "enc" },
+    instagramAccount: { id: "acc", instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
   });
   const approve = () => approveAndSend({ workspaceId: "ws", id: "d_1", approvedBy: "u", approvedVia: "session", now });
 
@@ -201,7 +201,7 @@ describe("sequence, end to end on an in-memory enrollment", () => {
     workspaceId: "ws",
     instagramAccountId: "acc",
     isActive: true,
-    instagramAccount: { instagramId: "ig_owner", accessToken: "enc" },
+    instagramAccount: { instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
     trackedLinks: [],
   };
   const steps = [
@@ -316,7 +316,7 @@ describe("hourly hide ceiling under parallel jobs", () => {
       id: "acc",
       workspaceId: "ws",
       instagramId: "ig_owner",
-      accessToken: "enc",
+      accessToken: "enc", status: "ACTIVE",
       moderationSettings: { ...DEFAULT_MODERATION_SETTINGS, mode: "HIDE" },
     });
     h.prisma.commentModeration.findUnique.mockResolvedValue(null);

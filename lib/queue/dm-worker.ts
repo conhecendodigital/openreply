@@ -37,6 +37,7 @@ import {
   type SendOptions,
 } from "@/lib/meta/client";
 import { sendTracked, type OutboundOrigin } from "@/lib/meta/send";
+import { assertAccountActive, isChannelOffError, noteMetaError } from "@/lib/channels/status";
 import { checkAutomation } from "@/lib/messaging/guard";
 import { handleCrmDm } from "@/lib/messaging/crm-dm";
 import { isAmbiguousDeliveryError } from "@/lib/messaging/errors";
@@ -283,8 +284,10 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         { matchAnyPost: true },
       ],
       isActive: true,
+      // A channel that is off (disconnected / needs reconnect) runs nothing.
       instagramAccount: {
         instagramId: instagramAccountId,
+        status: "ACTIVE",
       },
     },
     include: {
@@ -481,6 +484,9 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           commenterName,
           trackedLinks: automation.trackedLinks,
         });
+        // The channel may have been turned off since the job started
+        // (moderation ran in between): re-check right before posting.
+        await assertAccountActive(automation.instagramAccountId);
         await sendCommentReply(accessToken, commentId, publicReply);
         await prisma.dmLog.update({
           where: {
@@ -493,6 +499,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           "[DM Worker] Public comment reply failed:",
           formatError(error)
         );
+        await noteMetaError({ id: automation.instagramAccountId }, error);
         await prisma.dmLog
           .update({
             where: {
@@ -885,7 +892,7 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
   );
 
   const automation = await prisma.automation.findFirst({
-    where: { id: automationId, isActive: true },
+    where: { id: automationId, isActive: true, instagramAccount: { status: "ACTIVE" } },
     include: {
       instagramAccount: true,
       workspace: true,
@@ -1127,7 +1134,7 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
   const { instagramAccountId, userId, automationId, commenterName } = job.data;
 
   const automation = await prisma.automation.findFirst({
-    where: { id: automationId, isActive: true },
+    where: { id: automationId, isActive: true, instagramAccount: { status: "ACTIVE" } },
     include: { instagramAccount: true },
   });
 
@@ -1437,7 +1444,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
     where: {
       dmTriggerEnabled: true,
       isActive: true,
-      instagramAccount: { instagramId: instagramAccountId },
+      instagramAccount: { instagramId: instagramAccountId, status: "ACTIVE" },
     },
     include: CAMPAIGN_INCLUDE,
     orderBy: { createdAt: "asc" },
@@ -1530,8 +1537,10 @@ async function processReferral(job: Job<ReferralJob>): Promise<void> {
   }
 
   if (!link.automationId) return;
+  // The open is counted above even with the channel off (history); only the
+  // campaign delivery needs an ACTIVE channel.
   const automation = await prisma.automation.findFirst({
-    where: { id: link.automationId, isActive: true },
+    where: { id: link.automationId, isActive: true, instagramAccount: { status: "ACTIVE" } },
     include: CAMPAIGN_INCLUDE,
   });
   if (!automation || automation.instagramAccount.instagramId !== data.instagramAccountId) return;
@@ -1588,6 +1597,16 @@ async function processJob(job: Job<DmQueueJob>): Promise<void> {
   try {
     await runJob(job);
   } catch (error) {
+    // The channel went off mid-job (disconnected / needs reconnect): nothing
+    // to retry and nothing to alarm about. The DmLog already says why.
+    if (isChannelOffError(error)) {
+      console.log(`[DM Worker] Job ${job.id}: channel off, skipped`);
+      return;
+    }
+    // Meta rejected the token: flag the channel so nothing else tries it.
+    if (job.data.instagramAccountId) {
+      await noteMetaError({ instagramId: job.data.instagramAccountId }, error);
+    }
     // Meta's "unknown error" often comes back for a message it DID deliver.
     // Retrying re-sends it: on 2026-10-02 one person got the same DM 6 times
     // (3 attempts x button + text fallback). Better to miss one DM than spam.

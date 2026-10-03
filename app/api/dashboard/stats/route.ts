@@ -67,6 +67,8 @@ export async function GET(request: NextRequest) {
         instagramId: true,
         tokenExpiresAt: true,
         webhookSubscribed: true,
+        status: true,
+        lastError: true,
       },
     }),
     prisma.instagramAccount.findMany({
@@ -79,6 +81,8 @@ export async function GET(request: NextRequest) {
         name: true,
         tokenExpiresAt: true,
         webhookSubscribed: true,
+        status: true,
+        lastError: true,
       },
     }),
     prisma.automation.count({ where: { workspaceId, ...accountFilter } }),

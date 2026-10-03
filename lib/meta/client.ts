@@ -825,6 +825,49 @@ export async function subscribeInstagramAccountToWebhooks(
   return handleResponse(response);
 }
 
+/**
+ * Stop Meta from sending this account's webhooks to the app
+ * (DELETE /<IG_ID>/subscribed_apps). Used when a channel is disconnected.
+ */
+export async function unsubscribeInstagramAccountFromWebhooks(
+  instagramAccountId: string,
+  accessToken: string
+): Promise<{ success: boolean }> {
+  const response = await fetch(
+    `${instagramGraphBase()}/${instagramAccountId}/subscribed_apps`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+  return handleResponse(response);
+}
+
+/**
+ * Webhook fields this app is subscribed to for the account
+ * (GET /<IG_ID>/subscribed_apps). Empty when not subscribed.
+ */
+export async function getSubscribedWebhookFields(
+  instagramAccountId: string,
+  accessToken: string
+): Promise<string[]> {
+  const url = new URL(`${instagramGraphBase()}/${instagramAccountId}/subscribed_apps`);
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await handleResponse<{
+    data?: { subscribed_fields?: (string | { name?: string })[] }[];
+  }>(response);
+  const fields = new Set<string>();
+  for (const app of data.data ?? []) {
+    for (const field of app.subscribed_fields ?? []) {
+      const name = typeof field === "string" ? field : field?.name;
+      if (name) fields.add(name);
+    }
+  }
+  return [...fields];
+}
+
 export async function debugToken(inputToken: string, accessToken: string) {
   const url = new URL(`${facebookGraphBase()}/debug_token`);
   url.searchParams.set("input_token", inputToken);

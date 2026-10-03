@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentWorkspaceId } from "@/lib/auth";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
+import { ChannelOffError, channelOffCode, isChannelOffError, noteMetaError } from "@/lib/channels/status";
 import { getConversationMessages, MetaApiError } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
 import {
@@ -65,6 +66,10 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
   let apiError: string | null = null;
 
   try {
+    // Channel off: the saved history still shows, Meta is not called.
+    if (account.status !== "ACTIVE" || !account.accessToken) {
+      throw new ChannelOffError(channelOffCode(account.status));
+    }
     const accessToken = decryptToken(account.accessToken);
     const raw = await getConversationMessages(accessToken, conversationId);
     apiMessages = raw.map((m) => ({
@@ -80,8 +85,12 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
       contactId = other?.from?.id ?? raw[0]?.to?.data?.find((p) => p.id !== account.instagramId)?.id ?? "";
     }
   } catch (err) {
-    console.error("[Conversation Messages] API error:", err);
-    apiError = err instanceof MetaApiError ? err.message : "Failed to load messages";
+    if (!isChannelOffError(err)) {
+      console.error("[Conversation Messages] API error:", err);
+      await noteMetaError({ id: account.id }, err);
+    }
+    apiError =
+      err instanceof MetaApiError || isChannelOffError(err) ? err.message : "Failed to load messages";
   }
 
   const saved = contactId

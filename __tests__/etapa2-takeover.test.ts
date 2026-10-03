@@ -11,6 +11,8 @@ const { mockPrisma } = vi.hoisted(() => ({
     contact: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     contactEvent: { createMany: vi.fn() },
     sequenceEnrollment: { updateMany: vi.fn() },
+    // sendTracked only sends through an ACTIVE channel.
+    instagramAccount: { findUnique: vi.fn(async () => ({ status: "ACTIVE" })) },
   },
 }));
 vi.mock("@/lib/db/client", () => ({ prisma: mockPrisma }));

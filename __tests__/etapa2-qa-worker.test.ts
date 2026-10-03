@@ -128,7 +128,7 @@ const automation = {
   followUpMessage: null,
   linkButtonLabel: null,
   openingDmEnabled: false,
-  instagramAccount: { instagramId: "ig_owner", accessToken: "enc" },
+  instagramAccount: { instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
   workspace: { id: "ws" },
   trackedLinks: [],
 };
@@ -222,7 +222,7 @@ describe("takeover blocks every automation (real guard)", () => {
       sequence: {
         isActive: true,
         steps: [{ order: 1, message: "passo 1", delayMinutes: 5 }],
-        automation: { ...automation, instagramAccount: { instagramId: "ig_owner", accessToken: "enc" } },
+        automation: { ...automation, instagramAccount: { instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" } },
       },
     });
     await run({ name: "sequence-step", id: "s1", attemptsMade: 0, data: { instagramAccountId: "ig_owner", enrollmentId: "en_1", order: 1 } });
@@ -317,14 +317,16 @@ describe("ig.me referral (real worker path)", () => {
     expect(h.prisma.conversationLink.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { code: "story1", isActive: true, instagramAccount: { instagramId: "ig_owner" } } })
     );
-    expect(h.prisma.automation.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "auto_1", isActive: true } }));
+    expect(h.prisma.automation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "auto_1", isActive: true, instagramAccount: { status: "ACTIVE" } } })
+    );
     expect(h.mockTrack).toHaveBeenCalledWith(expect.objectContaining({ tags: ["veio:story"] }), { throwOnError: true });
     expect(h.prisma.conversationLink.update).toHaveBeenCalledWith({ where: { id: "l1" }, data: { opens: { increment: 1 } } });
     expect(h.mockSend).toHaveBeenCalledTimes(1);
   });
 
   it("a campaign of another account is never fired by this link", async () => {
-    h.prisma.automation.findFirst.mockResolvedValue({ ...automation, instagramAccount: { instagramId: "ig_other", accessToken: "enc" } });
+    h.prisma.automation.findFirst.mockResolvedValue({ ...automation, instagramAccount: { instagramId: "ig_other", accessToken: "enc", status: "ACTIVE" } });
     await run(refJob());
     expect(h.mockSend).not.toHaveBeenCalled();
   });

@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.redirect(`${getBaseUrl()}/login`);
   }
   if (!canManageWorkspace(context.role)) {
-    return NextResponse.redirect(`${getBaseUrl()}/settings?instagram=forbidden`);
+    return NextResponse.redirect(`${getBaseUrl()}/channels?instagram=forbidden`);
   }
 
   // getAuthorizationUrl and createOAuthState call requireEnv, which throws.
@@ -18,7 +18,7 @@ export async function GET() {
   const missingEnv = getMissingInstagramOAuthEnv();
   if (missingEnv.length > 0) {
     return NextResponse.redirect(
-      `${getBaseUrl()}/settings?instagram=misconfigured&missing=${encodeURIComponent(
+      `${getBaseUrl()}/channels?instagram=misconfigured&missing=${encodeURIComponent(
         missingEnv.join(",")
       )}`
     );

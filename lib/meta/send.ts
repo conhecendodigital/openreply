@@ -11,6 +11,7 @@
  */
 import { prisma } from "@/lib/db/client";
 import type { SendOptions } from "@/lib/meta/client";
+import { assertAccountActive, noteMetaError } from "@/lib/channels/status";
 
 export const OUTBOUND_ORIGINS = [
   "automation",
@@ -54,6 +55,10 @@ export async function sendTracked<T extends { message_id?: string }>(
   ctx: OutboundContext,
   send: (options: SendOptions) => Promise<T>
 ): Promise<T> {
+  // A channel that is not ACTIVE (disconnected / needs reconnect) never sends.
+  // Throws ChannelOffError before anything is written.
+  await assertAccountActive(ctx.instagramAccountId);
+
   let rowId: string | null = null;
   try {
     const row = await prisma.outboundMessage.create({
@@ -77,6 +82,8 @@ export async function sendTracked<T extends { message_id?: string }>(
   try {
     result = await send({ metadata: buildMetadata(ctx.origin, rowId ?? "x") });
   } catch (error) {
+    // Meta rejected the token: flag the channel "needs reconnect".
+    await noteMetaError({ id: ctx.instagramAccountId }, error);
     if (rowId) {
       await prisma.outboundMessage
         .update({

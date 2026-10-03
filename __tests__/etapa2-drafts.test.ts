@@ -80,7 +80,7 @@ function draft(over: Record<string, unknown> = {}) {
     origin: "vendedor",
     status: "PENDING",
     contact: contact(),
-    instagramAccount: { id: "acc_row", instagramId: "ig_owner", accessToken: "enc" },
+    instagramAccount: { id: "acc_row", instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
     ...over,
   };
 }

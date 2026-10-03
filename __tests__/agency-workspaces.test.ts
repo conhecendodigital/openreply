@@ -77,9 +77,10 @@ describe("agency workspace helpers", () => {
     });
 
     await getWorkspaceInstagramAccount("workspace_123", "all");
+    // Without an id: the latest account, a working (ACTIVE) channel first.
     expect(mockPrisma.instagramAccount.findFirst).toHaveBeenLastCalledWith({
       where: { workspaceId: "workspace_123" },
-      orderBy: { connectedAt: "desc" },
+      orderBy: [{ status: "asc" }, { connectedAt: "desc" }],
     });
   });
 

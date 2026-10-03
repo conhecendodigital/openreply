@@ -21,6 +21,8 @@ import { decryptToken } from "@/lib/meta/oauth";
 async function main() {
   const apply = process.argv.includes("--apply");
   const accounts = await prisma.instagramAccount.findMany({
+    // Only working channels: a DISCONNECTED one stays unsubscribed on purpose.
+    where: { status: "ACTIVE", accessToken: { not: "" } },
     select: { id: true, username: true, instagramId: true, accessToken: true },
   });
   console.log(`[resubscribe] ${accounts.length} account(s); fields: ${WEBHOOK_SUBSCRIBED_FIELDS.join(", ")}`);
@@ -38,7 +40,7 @@ async function main() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       console.log(`  @${account.username}: ok`, JSON.stringify(await res.json()));
-      await prisma.instagramAccount.update({ where: { id: account.id }, data: { webhookSubscribed: true } });
+      await prisma.instagramAccount.update({ where: { id: account.id }, data: { webhookSubscribed: true, webhookFields: WEBHOOK_SUBSCRIBED_FIELDS } });
     } catch (error) {
       console.error(`  @${account.username}: FAILED`, error instanceof Error ? error.message : error);
     }

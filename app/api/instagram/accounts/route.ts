@@ -22,14 +22,16 @@ export async function GET() {
   const instagramAccounts = await prisma.instagramAccount.findMany({
     where: { workspaceId },
     orderBy: { connectedAt: "desc" },
-    select: { id: true, username: true, instagramId: true, name: true },
+    select: { id: true, username: true, instagramId: true, name: true, status: true },
   });
 
   return NextResponse.json({
     success: true,
     data: {
       instagramAccounts,
-      selectedInstagramAccountId: instagramAccounts[0]?.id ?? null,
+      // Prefer a working channel; a disconnected one is still listed.
+      selectedInstagramAccountId:
+        (instagramAccounts.find((a) => a.status === "ACTIVE") ?? instagramAccounts[0])?.id ?? null,
     },
   });
 }

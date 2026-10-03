@@ -240,7 +240,7 @@ describe("approve sends exactly what the human saw", () => {
     origin: "vendedor",
     status: "PENDING",
     contact: { id: "ct_1", workspaceId: "ws_A", igUserId: "ig_p", lastInboundAt: new Date(now - 3_600_000) },
-    instagramAccount: { id: "acc_A", instagramId: "ig_owner", accessToken: "enc" },
+    instagramAccount: { id: "acc_A", instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
   });
 
   beforeEach(() => {
@@ -396,7 +396,7 @@ describe("takeover turns on when the owner answers from the Lead Engine Direct",
   beforeEach(() => {
     h.mockContext.mockResolvedValue(CTX_A);
     h.mockSend.mockResolvedValue({ recipient_id: "ig_p", message_id: "mid_manual" });
-    h.prisma.instagramAccount.findFirst.mockResolvedValue({ id: "acc_A", instagramId: "ig_owner", accessToken: "enc", workspaceId: "ws_A" });
+    h.prisma.instagramAccount.findFirst.mockResolvedValue({ id: "acc_A", instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE", workspaceId: "ws_A" });
     h.prisma.contact.upsert.mockResolvedValue({ id: "ct_1", workspaceId: "ws_A", firstSeenAt: new Date(now), lastSeenAt: new Date(now + 60_000) });
     h.prisma.contact.findUnique.mockResolvedValue({
       id: "ct_1",

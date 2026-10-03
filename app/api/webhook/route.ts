@@ -25,6 +25,38 @@ import { Prisma } from "@/app/generated/prisma/client";
 
 const OPENING_DM_READ_FALLBACK_DELAY_MS = 5 * 60 * 1000;
 const REFERRAL_AFTER_MESSAGE_DELAY_MS = 5_000;
+const LAST_WEBHOOK_THROTTLE_MS = 60_000;
+
+/**
+ * Stamps InstagramAccount.lastWebhookAt for every account in the payload
+ * (entry[].id is the account's instagramId), at most once a minute per
+ * account. Recorded whatever the channel status; never throws.
+ */
+async function touchLastWebhook(payload: unknown): Promise<void> {
+  try {
+    const entries = (payload as { entry?: unknown })?.entry;
+    if (!Array.isArray(entries)) return;
+    const ids = [
+      ...new Set(
+        entries
+          .map((e) => (e && typeof e === "object" ? (e as { id?: unknown }).id : null))
+          .filter((id): id is string | number => typeof id === "string" || typeof id === "number")
+          .map(String)
+      ),
+    ];
+    if (ids.length === 0) return;
+    const now = new Date();
+    await prisma.instagramAccount.updateMany({
+      where: {
+        instagramId: { in: ids },
+        OR: [{ lastWebhookAt: null }, { lastWebhookAt: { lt: new Date(now.getTime() - LAST_WEBHOOK_THROTTLE_MS) } }],
+      },
+      data: { lastWebhookAt: now },
+    });
+  } catch (error) {
+    console.warn("[Webhook] lastWebhookAt not updated:", error instanceof Error ? error.message : error);
+  }
+}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -90,6 +122,9 @@ export async function POST(request: NextRequest) {
       status: "PENDING",
     },
   });
+
+  // "Last webhook received" per account, for the Channels page.
+  await touchLastWebhook(payload);
 
   // 2026-10-03: keep every DM (and download its media right away) so the inbox
   // shows the full conversation like the Instagram app. Never blocks the rest.
@@ -280,6 +315,7 @@ export async function POST(request: NextRequest) {
             openingDmEnabled: true,
             instagramAccount: {
               instagramId: event.instagramAccountId,
+              status: "ACTIVE",
             },
           },
         },

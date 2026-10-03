@@ -50,7 +50,7 @@ function account(settings: Record<string, unknown> | null = baseSettings) {
     id: "acc_row",
     workspaceId: "ws_1",
     instagramId: "ig_owner",
-    accessToken: "enc",
+    accessToken: "enc", status: "ACTIVE",
     moderationSettings: settings,
   };
 }
@@ -266,7 +266,7 @@ describe("setModerationHidden", () => {
     commentText: "segue de volta",
     mediaId: "m_1",
     verdict: "spam_link",
-    instagramAccount: { id: "acc_row", workspaceId: "ws_1", instagramId: "ig_owner", accessToken: "enc" },
+    instagramAccount: { id: "acc_row", workspaceId: "ws_1", instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
   };
 
   it("restore calls hide=false and untags the contact", async () => {

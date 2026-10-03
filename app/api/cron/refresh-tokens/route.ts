@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { decryptToken, encryptToken } from "@/lib/meta/oauth";
 import { refreshLongLivedToken } from "@/lib/meta/client";
+import { noteMetaError, TOKEN_EXPIRY_WARNING_DAYS } from "@/lib/channels/status";
 
-const DAYS_BEFORE_EXPIRY = 10;
+const DAYS_BEFORE_EXPIRY = TOKEN_EXPIRY_WARNING_DAYS;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -31,6 +32,9 @@ export async function GET(request: NextRequest) {
 
   const accountsToRefresh = await prisma.instagramAccount.findMany({
     where: {
+      // Only a working channel: a DISCONNECTED or NEEDS_RECONNECT one waits
+      // for a person to connect it again.
+      status: "ACTIVE",
       accessToken: { not: "" },
       tokenExpiresAt: {
         not: null,
@@ -75,6 +79,9 @@ export async function GET(request: NextRequest) {
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      // Token already rejected by Meta: refreshing cannot fix it, a person
+      // has to reconnect. Nothing is deleted.
+      await noteMetaError({ id: account.id }, err);
       await prisma.operationalEvent.create({
         data: {
           workspaceId: account.workspaceId,

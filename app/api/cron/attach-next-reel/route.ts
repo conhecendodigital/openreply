@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { getUserMedia, type InstagramMedia } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
+import { noteMetaError } from "@/lib/channels/status";
 
 /**
  * Binds "next reel" campaigns to a real post.
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
   }
 
   const pending = await prisma.automation.findMany({
-    where: { pendingNextReel: true },
+    where: { pendingNextReel: true, instagramAccount: { status: "ACTIVE" } },
     include: { instagramAccount: true },
   });
 
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
     } catch (err) {
       failures.push(account.id);
       console.error("[attach-next-reel] media fetch failed", account.id, err);
+      await noteMetaError({ id: account.id }, err);
       continue;
     }
 

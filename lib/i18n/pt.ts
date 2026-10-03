@@ -696,4 +696,106 @@ export const pt: Record<string, string> = {
   "Hide at most per hour": "Esconder no máximo por hora",
   "Above this, comments are only recorded as \"would hide\" (rule: cap). Hiding by hand doesn't count.":
     "Acima disso, o comentário só fica registrado como \"esconderia\" (regra: teto). Esconder na mão não conta.",
+
+  // Canais (2026-10-05): desconectar desliga, nunca apaga
+  Channels: "Canais",
+  "Every channel the Lead Engine talks through. Disconnecting turns a channel off and never deletes anything.":
+    "Todos os canais por onde o Lead Engine conversa. Desconectar desliga o canal e nunca apaga nada.",
+  "Could not load the channels. Try again in a moment.": "Não deu pra carregar os canais. Tenta de novo daqui a pouco.",
+  "No Instagram account connected yet": "Nenhuma conta do Instagram conectada ainda",
+  "Coming soon": "Em breve",
+  "Channels we can turn on next, and what each one needs.": "Canais que dá pra ligar em seguida, e o que cada um precisa.",
+  "The test failed.": "O teste falhou.",
+  "Could not disconnect.": "Não deu pra desconectar.",
+  "No token (disconnected)": "Sem token (desconectado)",
+  "Expired on {date}": "Venceu em {date}",
+  "{date} (today)": "{date} (hoje)",
+  "{date} (in {n} days)": "{date} (em {n} dias)",
+  "Disconnected {when}": "Desconectado em {when}",
+  "Connected since {when}": "Conectado desde {when}",
+  "This channel is off. Nothing runs and nothing is sent.": "Este canal está desligado. Nada roda e nada é enviado.",
+  "Everything was kept. Reconnect the same account and campaigns come back as they were.":
+    "Tudo foi guardado. Reconecte a mesma conta e as campanhas voltam do jeito que estavam.",
+  "Last webhook received": "Último aviso recebido",
+  Never: "Nunca",
+  "Stopped for over 24h": "Parado há mais de 24h",
+  "Campaigns on": "Campanhas ligadas",
+  "{a} of {b}": "{a} de {b}",
+  "waiting for the channel": "esperando o canal",
+  "Drafts waiting": "Rascunhos pendentes",
+  "Subscribed webhooks": "Webhooks assinados",
+  "Subscribed (fields not read yet; use Test connection)": "Assinados (campos ainda não lidos; use Testar conexão)",
+  "Last error": "Último erro",
+  "Connection OK": "Conexão OK",
+  "{n} followers": "{n} seguidores",
+  "checked {when}": "testado {when}",
+  "The token was rejected. Reconnect the account.": "O token foi recusado. Reconecte a conta.",
+  "Connection failed": "A conexão falhou",
+  "Disconnected. Nothing was deleted.": "Desconectado. Nada foi apagado.",
+  "Kept: {campaigns} campaigns, {contacts} contacts, {messages} messages, {drafts} drafts, {links} links, {dmLogs} DM logs.":
+    "Guardado: {campaigns} campanhas, {contacts} contatos, {messages} mensagens, {drafts} rascunhos, {links} links, {dmLogs} registros de DM.",
+  Reconnect: "Reconectar",
+  "Test connection": "Testar conexão",
+  "Only owners and admins can change a channel.": "Só donos e admins podem mexer num canal.",
+  "Disconnect @{username}?": "Desconectar @{username}?",
+  "The channel turns off: no campaign runs, no moderation, nothing is sent.":
+    "O canal desliga: nenhuma campanha roda, nenhuma moderação, nada é enviado.",
+  "Nothing is deleted: campaigns, contacts, conversations, drafts, sequences, links, moderation and history all stay.":
+    "Nada é apagado: campanhas, contatos, conversas, rascunhos, sequências, links, moderação e histórico continuam lá.",
+  "Reconnect the same account to turn everything back on.": "Reconecte a mesma conta pra religar tudo.",
+  "Yes, disconnect": "Sim, desconectar",
+  "The @ does not match. Nothing was deleted.": "O @ não confere. Nada foi apagado.",
+  "Disconnect the channel first.": "Desconecte o canal primeiro.",
+  "Only the workspace owner, signed in, can delete a channel.": "Só o dono do espaço, logado, pode excluir um canal.",
+  "Could not delete.": "Não deu pra excluir.",
+  "Delete for real": "Excluir de verdade",
+  "This cannot be undone.": "Isso não tem volta.",
+  "Deletes the channel and everything it holds: campaigns, contacts, conversations and media, drafts, sequences, links, moderation, logs, clicks and follower history.":
+    "Apaga o canal e tudo o que tem nele: campanhas, contatos, conversas e mídias, rascunhos, sequências, links, moderação, registros, cliques e histórico de seguidores.",
+  "Disconnect the channel first. Only a disconnected channel can be deleted.":
+    "Desconecte o canal primeiro. Só um canal desconectado pode ser excluído.",
+  "Type @{username} to confirm": "Digite @{username} pra confirmar",
+  "Deleting...": "Excluindo...",
+  "Delete @{username} for real": "Excluir @{username} de verdade",
+  "What's missing to turn it on": "O que falta pra ligar",
+  "A bot token from @BotFather": "Um token de bot do @BotFather",
+  "WhatsApp Cloud API": "WhatsApp Cloud API",
+  "Business verification on Meta": "Verificação da empresa na Meta",
+  "Same Meta app as Instagram (Facebook Page permission)": "O mesmo app da Meta do Instagram (permissão de Página do Facebook)",
+  "Same Meta app as Instagram (Threads API permission)": "O mesmo app da Meta do Instagram (permissão da API do Threads)",
+  "Disconnect @{username}? The channel turns off: no campaign runs and nothing is sent. Nothing is deleted: campaigns, contacts, conversations and history stay, and reconnecting the same account turns everything back on.":
+    "Desconectar @{username}? O canal desliga: nenhuma campanha roda e nada é enviado. Nada é apagado: campanhas, contatos, conversas e histórico continuam lá, e reconectar a mesma conta religa tudo.",
+  "{n} of {total} Instagram profiles on": "{n} de {total} perfis do Instagram ligados",
+  "Manage on Channels": "Gerenciar em Canais",
+  "Needs reconnect": "Precisa reconectar",
+  Disconnected: "Desconectado",
+  "Channel off. Everything was kept; reconnect to turn it back on.":
+    "Canal desligado. Tudo foi guardado; reconecte pra ligar de novo.",
+  "Disconnecting turns the channel off and never deletes anything. Status, tests and the real delete are on the Channels page.":
+    "Desconectar desliga o canal e nunca apaga nada. Status, testes e a exclusão de verdade ficam na página Canais.",
+  "Open Channels": "Abrir Canais",
+  "@{username} needs to be reconnected": "@{username} precisa ser reconectado",
+  "@{username}: the token expired": "@{username}: o token venceu",
+  "@{username}: the token expires today": "@{username}: o token vence hoje",
+  "@{username}: the token expires in {n} day(s)": "@{username}: o token vence em {n} dia(s)",
+  "@{username}: webhooks are not subscribed": "@{username}: os webhooks não estão assinados",
+  "@{username}: no webhook received in over {h}h": "@{username}: nenhum aviso recebido há mais de {h}h",
+  "A channel needs attention": "Um canal precisa de atenção",
+  "+{n} more": "+{n} outros",
+  "Instagram connected": "Instagram conectado",
+  "The channel is on. If it was connected before, its campaigns, contacts and history came back as they were.":
+    "O canal está ligado. Se já tinha sido conectado antes, campanhas, contatos e histórico voltaram do jeito que estavam.",
+  // Avisos do login com o Instagram
+  "Instagram connection cancelled": "Conexão com o Instagram cancelada",
+  "You declined the permission prompt on Instagram. Start again and accept all requested permissions.":
+    "Você recusou as permissões no Instagram. Comece de novo e aceite todas as permissões pedidas.",
+  "Instagram connection expired": "A conexão com o Instagram expirou",
+  "The login link was missing or older than 10 minutes. Click Connect Instagram to start a fresh attempt.":
+    "O link de login sumiu ou passou de 10 minutos. Clique em Conectar Instagram pra tentar de novo.",
+  "Not permitted": "Sem permissão",
+  "Only workspace owners and admins can connect an Instagram account.":
+    "Só donos e admins do espaço podem conectar uma conta do Instagram.",
+  "Account already connected": "Conta já conectada",
+  "That Instagram account belongs to another workspace (even if it is disconnected there). Delete it for real there first, or connect a different account.":
+    "Essa conta do Instagram pertence a outro espaço (mesmo desconectada lá). Exclua de verdade por lá primeiro, ou conecte outra conta.",
 };

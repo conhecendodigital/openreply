@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentWorkspaceId } from "@/lib/auth";
-import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
+import { requireActiveInstagramAccount } from "@/lib/instagram-accounts";
+import { noteMetaError } from "@/lib/channels/status";
 import { getAllUserMedia, getUserMedia } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
 
@@ -13,20 +14,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const account = await getWorkspaceInstagramAccount(
+  const resolved = await requireActiveInstagramAccount(
     workspaceId,
     request.nextUrl.searchParams.get("instagramAccountId")
   );
-
-  if (!account) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Instagram account not connected. Please connect your account first.",
-      },
-      { status: 400 }
-    );
-  }
+  if (!resolved.ok) return resolved.response;
+  const account = resolved.account;
 
   try {
     const accessToken = decryptToken(account.accessToken);
@@ -49,6 +42,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: posts });
   } catch (err) {
     console.error("[Instagram Posts] Error:", err);
+    await noteMetaError({ id: account.id }, err);
     return NextResponse.json(
       { success: false, error: "Failed to fetch Instagram posts" },
       { status: 500 }

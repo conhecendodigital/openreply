@@ -202,7 +202,7 @@ describe("Etapa 1 routes: workspace scope", () => {
       commentText: "segue de volta",
       mediaId: "m_1",
       verdict: "spam_link",
-      instagramAccount: { id: "acc_1", workspaceId: WS, instagramId: "ig_owner", accessToken: "enc" },
+      instagramAccount: { id: "acc_1", workspaceId: WS, instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
     });
     mockPrisma.commentModeration.update.mockResolvedValue({ id: "mod_1", action: "RESTORED" });
     mockPrisma.contact.upsert.mockResolvedValue({ id: "ct_1", workspaceId: WS, firstSeenAt: new Date(), lastSeenAt: new Date() });

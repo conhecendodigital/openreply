@@ -3,7 +3,13 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
 import { getBaseUrl } from "@/lib/env";
 import { canConnectInstagramAccount } from "@/lib/instagram-accounts";
-import { getLongLivedToken, getUserInfo, subscribeInstagramAccountToWebhooks } from "@/lib/meta/client";
+import {
+  getLongLivedToken,
+  getUserInfo,
+  subscribeInstagramAccountToWebhooks,
+  WEBHOOK_SUBSCRIBED_FIELDS,
+} from "@/lib/meta/client";
+import { clearAccountCache } from "@/lib/contacts/record";
 import {
   encryptToken,
   exchangeCodeForToken,
@@ -18,11 +24,11 @@ export async function GET(request: NextRequest) {
   const baseUrl = getBaseUrl();
 
   if (error) {
-    return NextResponse.redirect(`${baseUrl}/settings?instagram=denied`);
+    return NextResponse.redirect(`${baseUrl}/channels?instagram=denied`);
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(`${baseUrl}/settings?instagram=invalid`);
+    return NextResponse.redirect(`${baseUrl}/channels?instagram=invalid`);
   }
 
   const session = await auth();
@@ -38,7 +44,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (!membership || !canManageWorkspace(membership.role)) {
-    return NextResponse.redirect(`${baseUrl}/settings?instagram=forbidden`);
+    return NextResponse.redirect(`${baseUrl}/channels?instagram=forbidden`);
   }
 
   try {
@@ -62,7 +68,7 @@ export async function GET(request: NextRequest) {
 
     if (!connection.allowed) {
       return NextResponse.redirect(
-        `${baseUrl}/settings?instagram=already_connected`
+        `${baseUrl}/channels?instagram=already_connected`
       );
     }
 
@@ -83,6 +89,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Reconnecting the same account is an upsert on the same row (same id):
+    // campaigns, contacts, conversations, drafts, sequences, links and
+    // settings all come back exactly as they were, each campaign in the
+    // on/off state it had. Only the connection itself is refreshed.
+    const now = new Date();
+    const previous = await prisma.instagramAccount.findUnique({
+      where: { instagramId },
+      select: { id: true, status: true },
+    });
+    const connectionFields = {
+      status: "ACTIVE" as const,
+      accessToken: encryptedToken,
+      tokenExpiresAt,
+      webhookSubscribed,
+      webhookFields: webhookSubscribed ? WEBHOOK_SUBSCRIBED_FIELDS : [],
+      profilePictureUrl: userInfo.profile_picture_url ?? null,
+      disconnectedAt: null,
+      disconnectedBy: null,
+      lastError: webhookSubscribed ? null : "Webhook subscription failed on connect",
+      lastErrorAt: webhookSubscribed ? null : now,
+    };
     await prisma.instagramAccount.upsert({
       where: { instagramId },
       create: {
@@ -90,21 +117,33 @@ export async function GET(request: NextRequest) {
         instagramId,
         username: userInfo.username,
         name: userInfo.name,
-        accessToken: encryptedToken,
-        tokenExpiresAt,
-        webhookSubscribed,
+        ...connectionFields,
       },
       update: {
         workspaceId: state.workspaceId,
         username: userInfo.username,
         name: userInfo.name,
-        accessToken: encryptedToken,
-        tokenExpiresAt,
-        webhookSubscribed,
+        ...connectionFields,
+        reconnectedAt: now,
       },
     });
+    clearAccountCache();
 
-    return NextResponse.redirect(`${baseUrl}/dashboard?connected=true`);
+    if (previous) {
+      await prisma.operationalEvent
+        .create({
+          data: {
+            source: "SYSTEM",
+            level: "INFO",
+            workspaceId: state.workspaceId,
+            message: `Instagram @${userInfo.username} reconnected`,
+            payload: { instagramAccountId: previous.id, previousStatus: previous.status, webhookSubscribed },
+          },
+        })
+        .catch(() => {});
+    }
+
+    return NextResponse.redirect(`${baseUrl}/channels?connected=true`);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[Instagram Callback] Error:", err);
@@ -124,7 +163,7 @@ export async function GET(request: NextRequest) {
       .catch(() => {});
 
     return NextResponse.redirect(
-      `${baseUrl}/settings?instagram=failed&reason=${encodeURIComponent(
+      `${baseUrl}/channels?instagram=failed&reason=${encodeURIComponent(
         message.slice(0, 200)
       )}`
     );

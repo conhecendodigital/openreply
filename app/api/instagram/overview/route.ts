@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentWorkspaceId } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
-import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
+import { requireActiveInstagramAccount } from "@/lib/instagram-accounts";
+import { noteMetaError } from "@/lib/channels/status";
 import {
   getAllUserMedia,
   getMediaInsights,
@@ -105,21 +106,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const account = await getWorkspaceInstagramAccount(
+  const resolved = await requireActiveInstagramAccount(
     workspaceId,
     request.nextUrl.searchParams.get("instagramAccountId")
   );
-
-  if (!account) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Instagram account not connected. Please connect your account first.",
-      },
-      { status: 400 }
-    );
-  }
+  if (!resolved.ok) return resolved.response;
+  const account = resolved.account;
 
   try {
     const accessToken = decryptToken(account.accessToken);
@@ -213,7 +205,7 @@ export async function GET(request: NextRequest) {
     const accounts = await prisma.instagramAccount.findMany({
       where: { workspaceId },
       orderBy: { connectedAt: "desc" },
-      select: { id: true, username: true },
+      select: { id: true, username: true, status: true },
     });
 
     // Followers is a point-in-time figure and deliberately not part of
@@ -249,6 +241,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data });
   } catch (err) {
     console.error("[Instagram Overview] Error:", err);
+    await noteMetaError({ id: account.id }, err);
     return NextResponse.json(
       { success: false, error: "Failed to load Instagram overview" },
       { status: 500 }

@@ -18,6 +18,7 @@ import type {
 import { prisma } from "@/lib/db/client";
 import { hideComment } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
+import { channelOffCode, channelOffMessage, noteMetaError } from "@/lib/channels/status";
 import { matchKeywords } from "@/lib/utils/keyword-matcher";
 import {
   AUTO_TAGS,
@@ -208,10 +209,12 @@ export async function moderateComment(
         workspaceId: true,
         instagramId: true,
         accessToken: true,
+        status: true,
         moderationSettings: true,
       },
     });
-    if (!account) return { action: "OFF" };
+    // Channel off (disconnected / needs reconnect): moderation does nothing.
+    if (!account || account.status !== "ACTIVE") return { action: "OFF" };
 
     const settings: ModerationSettingsValues = account.moderationSettings ?? DEFAULT_MODERATION_SETTINGS;
     if (settings.mode === "OFF") return { action: "OFF" };
@@ -294,6 +297,7 @@ export async function moderateComment(
       if (!account.accessToken) throw new Error("No Instagram access token available");
       await hideComment(decryptToken(account.accessToken), job.commentId, true);
     } catch (error) {
+      await noteMetaError({ id: account.id }, error);
       await prisma.commentModeration.update({
         where: { id: row.id },
         // Give the slot back: nothing was hidden.
@@ -347,11 +351,14 @@ export async function setModerationHidden(input: {
     where: { id: input.moderationId, workspaceId: input.workspaceId },
     include: {
       instagramAccount: {
-        select: { id: true, workspaceId: true, instagramId: true, accessToken: true },
+        select: { id: true, workspaceId: true, instagramId: true, accessToken: true, status: true },
       },
     },
   });
   if (!row) return { ok: false, status: 404, error: "Moderation record not found" };
+  if (row.instagramAccount.status !== "ACTIVE") {
+    return { ok: false, status: 409, error: channelOffMessage(channelOffCode(row.instagramAccount.status)) };
+  }
 
   const allowed: ModerationAction[] = input.hidden
     ? ["WOULD_HIDE", "FAILED", "RESTORED", "SKIPPED_PROTECTED"]
@@ -373,6 +380,7 @@ export async function setModerationHidden(input: {
   try {
     await hideComment(decryptToken(row.instagramAccount.accessToken), row.commentId, input.hidden);
   } catch (error) {
+    await noteMetaError({ id: row.instagramAccount.id }, error);
     if (input.hidden) {
       await prisma.commentModeration
         .update({ where: { id: row.id }, data: { error: errorText(error).slice(0, 500) } })

@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Notice for the ?instagram= / ?connected= codes the OAuth routes redirect
+ * back with. Since 2026-10-05 they land on /channels.
+ */
+
 import { useSearchParams } from "next/navigation";
 
 import { useT } from "@/components/lang-provider";
@@ -34,7 +39,7 @@ const MESSAGES: Record<string, { tone: Tone; title: string; detail: string }> = 
     tone: "warning",
     title: "Account already connected",
     detail:
-      "That Instagram account is connected to another workspace. Disconnect it there first, or connect a different account.",
+      "That Instagram account belongs to another workspace (even if it is disconnected there). Delete it for real there first, or connect a different account.",
   },
 };
 
@@ -42,6 +47,14 @@ export function InstagramConnectNotice() {
   const t = useT();
   const searchParams = useSearchParams();
   const status = searchParams.get("instagram");
+
+  if (!status && searchParams.get("connected") === "true") {
+    return (
+      <Notice tone="success" title={t("Instagram connected")}>
+        <p>{t("The channel is on. If it was connected before, its campaigns, contacts and history came back as they were.")}</p>
+      </Notice>
+    );
+  }
 
   if (!status) return null;
 
@@ -97,8 +110,8 @@ export function InstagramConnectNotice() {
   if (!known) return null;
 
   return (
-    <Notice tone={known.tone} title={known.title}>
-      <p>{known.detail}</p>
+    <Notice tone={known.tone} title={t(known.title)}>
+      <p>{t(known.detail)}</p>
     </Notice>
   );
 }

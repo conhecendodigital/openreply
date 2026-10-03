@@ -8,6 +8,8 @@
  * Contatos (CRM) e Moderação entram logo depois de Campanhas.
  * 2026-10-04: Aprovações (com o número de rascunhos esperando), Sequências e
  * Links de conversa.
+ * 2026-10-05: Canais (status de cada canal ligado, com bolinha quando algum
+ * precisa de atenção).
  */
 
 import { useEffect, useState } from "react";
@@ -50,6 +52,9 @@ const icones: Record<string, Icone> = {
   "/logs": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></svg>
   ),
+  "/channels": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="12" cy="12" r="2" /><path {...traco(ativo)} d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5" /></svg>
+  ),
   "/settings": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 6h18M3 12h18M3 18h18" /></svg>
   ),
@@ -69,6 +74,7 @@ const navItems = [
   { label: "Contacts", href: "/contacts" },
   { label: "Moderation", href: "/moderation" },
   { label: "DM Logs", href: "/logs" },
+  { label: "Channels", href: "/channels" },
   { label: "Settings", href: "/settings" },
   { label: "Diagnostics", href: "/diagnostics" },
 ];
@@ -77,6 +83,8 @@ interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   workspaceName: string;
+  /** True when some channel needs attention: red dot next to "Channels". */
+  channelsNeedAttention?: boolean;
 }
 
 /** Marca: ícone com o gradiente do Instagram + nome. */
@@ -94,7 +102,7 @@ export function LeadEngineLogo({ className = "" }: { className?: string }) {
   );
 }
 
-export default function Sidebar({ isOpen, onClose, workspaceName }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAttention = false }: SidebarProps) {
   const pathname = usePathname();
   const t = useT();
   // How many AI drafts wait for a human, shown next to "Approvals".
@@ -159,6 +167,9 @@ export default function Sidebar({ isOpen, onClose, workspaceName }: SidebarProps
                   >
                     {pendingDrafts > 99 ? "99+" : pendingDrafts}
                   </span>
+                )}
+                {item.href === "/channels" && channelsNeedAttention && (
+                  <span className="h-2.5 w-2.5 rounded-full bg-error" aria-label={t("Needs attention")} />
                 )}
               </Link>
             );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentWorkspaceId } from "@/lib/auth";
-import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
+import { requireActiveInstagramAccount } from "@/lib/instagram-accounts";
+import { noteMetaError } from "@/lib/channels/status";
 import { getUserInfo } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
 
@@ -16,16 +17,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const account = await getWorkspaceInstagramAccount(
+  const resolved = await requireActiveInstagramAccount(
     workspaceId,
     request.nextUrl.searchParams.get("instagramAccountId")
   );
-  if (!account) {
-    return NextResponse.json(
-      { success: false, error: "Instagram account not connected" },
-      { status: 400 }
-    );
-  }
+  if (!resolved.ok) return resolved.response;
+  const account = resolved.account;
 
   try {
     const token = decryptToken(account.accessToken);
@@ -43,6 +40,7 @@ export async function GET(request: NextRequest) {
     );
   } catch (err) {
     console.error("[Instagram Profile] Error:", err);
+    await noteMetaError({ id: account.id }, err);
     return NextResponse.json(
       { success: false, error: "Failed to load profile" },
       { status: 500 }

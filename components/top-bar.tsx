@@ -25,6 +25,7 @@ const pageTitles: Record<string, string> = {
   "/approvals": "Approvals",
   "/sequences": "Sequences",
   "/conversation-links": "Conversation links",
+  "/channels": "Channels",
 };
 
 interface TopBarProps {

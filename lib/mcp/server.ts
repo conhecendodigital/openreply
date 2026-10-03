@@ -808,6 +808,63 @@ export const TOOLS: Tool[] = [
     },
   },
 
+  // ─── Canais ───────────────────────────────────────────────────────────────
+  {
+    name: "ver_canais",
+    description:
+      "Mostra os canais ligados (só leitura): status de cada Instagram (Conectado / Precisa reconectar / Desconectado), token vence em, webhooks assinados, último aviso recebido, campanhas ligadas, modo da moderação, contatos, rascunhos pendentes e alertas. Não liga, não desliga e não apaga nada.",
+    inputSchema: { type: "object", properties: {} },
+    async run(_args, call) {
+      const res = await api(call, "GET", "/api/channels");
+      if (!res.ok) return res.result;
+      const data = res.data as {
+        instagram?: {
+          id: string;
+          username: string;
+          status: string;
+          tokenExpiresAt: string | null;
+          tokenExpiresInDays: number | null;
+          webhookSubscribed: boolean;
+          webhookFields: string[];
+          lastWebhookAt: string | null;
+          webhooksStale: boolean;
+          lastError: string | null;
+          campaigns: { active: number; total: number };
+          moderationMode: string;
+          contacts: number;
+          pendingDrafts: number;
+          alerts: { message: string }[];
+        }[];
+        comingSoon?: { name: string; requirements: string[] }[];
+        needsAttention?: boolean;
+      };
+      const STATUS: Record<string, string> = {
+        ACTIVE: "Conectado",
+        NEEDS_RECONNECT: "Precisa reconectar",
+        DISCONNECTED: "Desconectado",
+      };
+      return text({
+        precisaAtencao: Boolean(data.needsAttention),
+        instagram: (data.instagram ?? []).map((c) => ({
+          id: c.id,
+          conta: `@${c.username}`,
+          status: STATUS[c.status] ?? c.status,
+          tokenVenceEm: c.tokenExpiresAt,
+          diasAteVencer: c.tokenExpiresInDays,
+          webhooksAssinados: c.webhookSubscribed ? c.webhookFields : [],
+          ultimoAviso: c.lastWebhookAt,
+          avisosParados: c.webhooksStale,
+          ultimoErro: c.lastError,
+          campanhas: { ligadas: c.campaigns.active, total: c.campaigns.total },
+          moderacao: c.moderationMode,
+          contatos: c.contacts,
+          rascunhosPendentes: c.pendingDrafts,
+          alertas: c.alerts.map((a) => a.message),
+        })),
+        emBreve: (data.comingSoon ?? []).map((c) => ({ canal: c.name, falta: c.requirements })),
+      });
+    },
+  },
   // ─── Links de conversa (ig.me) ────────────────────────────────────────────
   {
     name: "listar_links_conversa",

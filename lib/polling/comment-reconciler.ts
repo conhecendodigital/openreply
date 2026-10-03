@@ -34,6 +34,7 @@ import {
   type InstagramComment,
 } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
+import { noteMetaError } from "@/lib/channels/status";
 import { matchKeywords } from "@/lib/utils/keyword-matcher";
 
 // Only consider comments from the last few days — older ones are outside
@@ -63,7 +64,8 @@ function errMessage(error: unknown): string {
 /** One reconciliation pass across every active campaign. */
 export async function reconcileComments(): Promise<void> {
   const automations = await prisma.automation.findMany({
-    where: { isActive: true },
+    // A channel that is off (disconnected / needs reconnect) is not swept.
+    where: { isActive: true, instagramAccount: { status: "ACTIVE" } },
     select: {
       id: true,
       name: true,
@@ -146,7 +148,7 @@ async function sweepCampaign(
     tokenCache.set(account.id, accessToken);
   }
   if (!accessToken) {
-    stat.errors.push("Failed to decrypt access token");
+    stat.errors.push("No usable access token (channel needs reconnect)");
     return stat;
   }
 
@@ -162,6 +164,10 @@ async function sweepCampaign(
       mediaIds.push(...media.map((m) => m.id));
     } catch (error) {
       stat.errors.push(`Media list: ${errMessage(error)}`);
+      if (await noteMetaError({ id: account.id }, error)) {
+        tokenCache.set(account.id, null);
+        return stat;
+      }
     }
   }
   if (mediaIds.length === 0) return stat;
@@ -174,6 +180,11 @@ async function sweepCampaign(
       comments = await getRecentMediaComments(accessToken, mediaId, sinceMs);
     } catch (error) {
       stat.errors.push(`Comments ${mediaId}: ${errMessage(error)}`);
+      if (await noteMetaError({ id: account.id }, error)) {
+        // Token rejected: the channel is now NEEDS_RECONNECT, stop calling Meta.
+        tokenCache.set(account.id, null);
+        return stat;
+      }
       continue;
     }
 

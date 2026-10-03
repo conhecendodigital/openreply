@@ -76,7 +76,7 @@ function enrollment(over: Record<string, unknown> = {}, contactOver: Record<stri
         isActive: true,
         workspaceId: "ws",
         instagramAccountId: "acc_row",
-        instagramAccount: { instagramId: "ig_owner", accessToken: "enc" },
+        instagramAccount: { instagramId: "ig_owner", accessToken: "enc", status: "ACTIVE" },
         trackedLinks: [],
       },
     },

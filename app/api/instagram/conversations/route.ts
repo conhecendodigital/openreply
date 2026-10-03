@@ -4,7 +4,8 @@ import { getCurrentWorkspaceContext } from "@/lib/workspace-access";
 import { sendTracked } from "@/lib/meta/send";
 import { startTakeover } from "@/lib/messaging/takeover";
 import { upsertContact } from "@/lib/contacts/record";
-import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
+import { requireActiveInstagramAccount } from "@/lib/instagram-accounts";
+import { isChannelOffError, noteMetaError } from "@/lib/channels/status";
 import {
   getConversations,
   sendDirectMessage,
@@ -39,16 +40,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const account = await getWorkspaceInstagramAccount(
+  const resolved = await requireActiveInstagramAccount(
     workspaceId,
     request.nextUrl.searchParams.get("instagramAccountId")
   );
-  if (!account) {
-    return NextResponse.json(
-      { success: false, error: "Instagram account not connected." },
-      { status: 400 }
-    );
-  }
+  if (!resolved.ok) return resolved.response;
+  const account = resolved.account;
 
   try {
     const accessToken = decryptToken(account.accessToken);
@@ -91,6 +88,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data });
   } catch (err) {
     console.error("[Conversations] Error:", err);
+    await noteMetaError({ id: account.id }, err);
     const message =
       err instanceof MetaApiError
         ? err.message
@@ -143,16 +141,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const account = await getWorkspaceInstagramAccount(
+  const resolved = await requireActiveInstagramAccount(
     workspaceId,
     body.instagramAccountId ?? null
   );
-  if (!account) {
-    return NextResponse.json(
-      { success: false, error: "Instagram account not connected." },
-      { status: 400 }
-    );
-  }
+  if (!resolved.ok) return resolved.response;
+  const account = resolved.account;
 
   const recipientId = body.recipientId;
   try {
@@ -185,6 +179,9 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ success: true, data: { ...result, takeoverUntil } });
   } catch (err) {
+    if (isChannelOffError(err)) {
+      return NextResponse.json({ success: false, error: err.message, code: err.code }, { status: 409 });
+    }
     console.error("[Conversations] Send error:", err);
     // Surface Meta's own message — the common case is the 24-hour messaging
     // window having closed, which the user needs to see explicitly.

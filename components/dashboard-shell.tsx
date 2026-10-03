@@ -3,12 +3,15 @@
 import { useState } from "react";
 import Sidebar from "@/components/sidebar";
 import TopBar from "@/components/top-bar";
+import ChannelAlertBanner, { type BannerAlert } from "@/components/channel-alert-banner";
 
 interface DashboardShellProps {
   children: React.ReactNode;
   workspaceName: string;
   instagramUsername: string | null;
   instagramAccountCount: number;
+  /** Channels that need attention (banner at the top of every page). */
+  channelAlerts?: BannerAlert[];
 }
 
 export default function DashboardShell({
@@ -16,6 +19,7 @@ export default function DashboardShell({
   workspaceName,
   instagramUsername,
   instagramAccountCount,
+  channelAlerts = [],
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -27,6 +31,7 @@ export default function DashboardShell({
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         workspaceName={workspaceName}
+        channelsNeedAttention={channelAlerts.length > 0}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -41,6 +46,7 @@ export default function DashboardShell({
             whole page sideways on a phone. */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="px-4 lg:px-8 py-5 sm:py-6 max-w-7xl mx-auto">
+            <ChannelAlertBanner alerts={channelAlerts} />
             {children}
           </div>
         </main>

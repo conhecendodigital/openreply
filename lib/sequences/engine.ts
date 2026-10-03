@@ -35,7 +35,7 @@ export type EnrollAutomation = {
   id: string;
   workspaceId: string;
   instagramAccountId: string;
-  instagramAccount: { instagramId: string };
+  instagramAccount: { instagramId: string; status?: string };
 };
 
 function stepJobId(enrollmentId: string, order: number, suffix = "") {
@@ -66,6 +66,9 @@ export async function enrollInSequence(input: {
   now?: Date;
 }): Promise<{ enrollmentId: string; waitingReply: boolean } | null> {
   const now = input.now ?? new Date();
+  // Channel off: nobody new is enrolled (nothing could be sent).
+  const status = input.automation.instagramAccount.status;
+  if (status && status !== "ACTIVE") return null;
   try {
     const sequence = await prisma.sequence.findUnique({
       where: { automationId: input.automation.id },
@@ -216,7 +219,14 @@ export async function runSequenceStep(
     return "done";
   }
   const automation = enrollment.sequence.automation;
-  if (!enrollment.sequence.isActive || !automation.isActive || !automation.instagramAccount.accessToken) {
+  // Channel off (disconnected / needs reconnect) stops it like a paused
+  // campaign: the 24h window would not survive a reconnect anyway.
+  if (
+    !enrollment.sequence.isActive ||
+    !automation.isActive ||
+    automation.instagramAccount.status !== "ACTIVE" ||
+    !automation.instagramAccount.accessToken
+  ) {
     await stop(enrollment.id, "STOPPED_OFF", now);
     return "stopped_off";
   }

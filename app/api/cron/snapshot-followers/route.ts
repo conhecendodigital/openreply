@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { decryptToken } from "@/lib/meta/oauth";
 import { getUserInfo } from "@/lib/meta/client";
+import { noteMetaError } from "@/lib/channels/status";
 import {
   backfillFollowerHistory,
   recordFollowerSnapshot,
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
   }
 
   const accounts = await prisma.instagramAccount.findMany({
-    where: { accessToken: { not: "" } },
+    where: { status: "ACTIVE", accessToken: { not: "" } },
     select: {
       id: true,
       workspaceId: true,
@@ -71,6 +72,7 @@ export async function GET(request: NextRequest) {
     } catch (err) {
       const reason = err instanceof Error ? err.message : "Unknown error";
       failures.push({ username: account.username, reason });
+      await noteMetaError({ id: account.id }, err);
       await prisma.operationalEvent
         .create({
           data: {

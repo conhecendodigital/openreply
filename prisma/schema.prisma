@@ -211,6 +211,23 @@ model InstagramAccount {
   webhookSubscribed Boolean   @default(false)
   /// Hours a human takeover pauses every automation for one person.
   takeoverHours     Int       @default(24)
+  /// ACTIVE: automations run. NEEDS_RECONNECT: Meta rejected the token (code
+  /// 190). DISCONNECTED: turned off by a person. Only ACTIVE sends anything;
+  /// the other two keep every campaign, contact and message untouched, and
+  /// connecting the same account again (OAuth upsert) turns it back on.
+  status            InstagramAccountStatus @default(ACTIVE)
+  disconnectedAt    DateTime?
+  /// User id of who turned the channel off.
+  disconnectedBy    String?
+  reconnectedAt     DateTime?
+  lastError         String?
+  lastErrorAt       DateTime?
+  /// CDN url: it expires, refreshed on reconnect and on "test connection".
+  profilePictureUrl String?
+  /// Webhook fields subscribed on the last successful subscribe.
+  webhookFields     String[]  @default([])
+  /// Last webhook Meta delivered for this account (throttled to ~1/min).
+  lastWebhookAt     DateTime?
   connectedAt       DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -227,6 +244,13 @@ model InstagramAccount {
   conversationLinks  ConversationLink[]
 
   @@index([workspaceId])
+  @@index([workspaceId, status])
+}
+
+enum InstagramAccountStatus {
+  ACTIVE
+  NEEDS_RECONNECT
+  DISCONNECTED
 }
 
 /// Daily follower total for one account. Instagram only retains ~30 days of
