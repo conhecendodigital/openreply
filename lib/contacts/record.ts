@@ -32,6 +32,10 @@ export const CONTACT_EVENT_TYPES = [
   "TAKEOVER_ON",
   "TAKEOVER_OFF",
   "SEQUENCE_STEP",
+  // Etapa 3 (flows)
+  "FLOW_STARTED",
+  "FLOW_STEP",
+  "FLOW_DONE",
 ] as const;
 export type ContactEventType = (typeof CONTACT_EVENT_TYPES)[number];
 

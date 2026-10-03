@@ -144,6 +144,27 @@ type CampaignRow = {
 
 const campaignKeys = Object.keys(campaignFields);
 
+type FlowSummaryRow = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  published: boolean;
+  publishedVersion: number;
+  hasUnpublishedChanges: boolean;
+  trigger: { type: string; label: string; keywords: string[] } | null;
+  nodeCount: number;
+  stats?: { entered: number; completed: number; open: number };
+  sourceAutomationId: string | null;
+};
+
+const FLOW_DRAFT_HELP =
+  "Rascunho = { trigger: { type, postId?, matchAnyPost?, storyId?, conversationLinkId?, keywords[], matchAnyWord, wholeWordMatch, next }, nodes: [...] }. " +
+  'Nós: {id, type:"message", text, imageUrl?, buttons:[{id,label,kind:"link",url} | {id,label,kind:"next",next}] (até 3), next?}; ' +
+  '{id, type:"condition", check:{kind:"follows"}|{kind:"has_tag",tag}|{kind:"clicked",nodeId?}, yes, no}; ' +
+  '{id, type:"action", action:{kind:"add_tag"|"remove_tag",tag}|{kind:"notify_owner",note?}|{kind:"propose_draft",text,reason?}|{kind:"handoff",hours?}, next?}; ' +
+  '{id, type:"wait", mode:"delay", minutes, next} | {id, type:"wait", mode:"reply", timeoutMinutes?, next, onTimeout?}; {id, type:"end"}. ' +
+  "Variáveis no texto: {username} e {first_name}. Rascunho de resposta (propose_draft) nunca é enviado sem aprovação humana.";
+
 export const TOOLS: Tool[] = [
   {
     name: "listar_automacoes",
@@ -926,6 +947,139 @@ export const TOOLS: Tool[] = [
       return text(res.data);
     },
   },
+  // ─── Etapa 3: fluxos ───────────────────────────────────────────────────────
+  // Pela chave de API só dá pra ler, criar e editar RASCUNHO. Publicar e
+  // ligar um fluxo é só pela tela, com o Matheus logado (a API responde 403
+  // human_only pra chave).
+  {
+    name: "listar_fluxos",
+    description:
+      "Lista os fluxos (construtor visual) com status (ligado/desligado, publicado), gatilho e quantos entraram/terminaram.",
+    inputSchema: { type: "object", properties: {} },
+    async run(_args, call) {
+      const res = await api(call, "GET", "/api/flows");
+      if (!res.ok) return res.result;
+      const rows = (res.data as FlowSummaryRow[]).map((f) => ({
+        id: f.id,
+        nome: f.name,
+        ligado: f.isActive,
+        publicado: f.published,
+        versao: f.publishedVersion,
+        rascunhoMudou: f.hasUnpublishedChanges,
+        gatilho: f.trigger?.label ?? "sem gatilho",
+        palavras: f.trigger?.keywords ?? [],
+        passos: f.nodeCount,
+        numeros: { entraram: f.stats?.entered ?? 0, terminaram: f.stats?.completed ?? 0, emAndamento: f.stats?.open ?? 0 },
+        copiadoDaCampanha: f.sourceAutomationId,
+      }));
+      return text(rows);
+    },
+  },
+  {
+    name: "ver_fluxo",
+    description:
+      "Mostra um fluxo: rascunho (gatilho e nós), versão publicada, o que falta pra publicar (validação), campanhas que ganham dele e o relatório por nó.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { ...str, description: "ID do fluxo" } },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const res = await api(call, "GET", `/api/flows/${encodeURIComponent(id)}`);
+      if (!res.ok) return res.result;
+      const report = await api(call, "GET", `/api/flows/${encodeURIComponent(id)}/report`);
+      return text({ ...(res.data as Record<string, unknown>), relatorio: report.ok ? report.data : null });
+    },
+  },
+  {
+    name: "criar_fluxo",
+    description:
+      "Cria um fluxo SEMPRE DESLIGADO e só como rascunho. Publicar e ligar é só pela tela do Lead Engine, com o dono da conta. " +
+      FLOW_DRAFT_HELP,
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { ...str, description: "Nome do fluxo" },
+        instagramAccountId: { ...str, description: "Conta (opcional; padrão a conta conectada)" },
+        gatilho: {
+          type: "string",
+          enum: ["COMMENT", "DM", "STORY_REPLY", "STORY_MENTION", "LIVE_COMMENT", "CONVERSATION_LINK"],
+          description: "Tipo do gatilho do rascunho vazio (ignorado quando manda o rascunho)",
+        },
+        rascunho: { type: "object", description: "Definição do fluxo { trigger, nodes } (opcional)" },
+      },
+      required: ["name"],
+    },
+    async run(args, call) {
+      const name = requireString(args, "name");
+      if (!name) return text("Informe o nome.", true);
+      const body: Record<string, unknown> = { name };
+      const account = requireString(args, "instagramAccountId");
+      if (account) body.instagramAccountId = account;
+      if (typeof args.gatilho === "string") body.triggerType = args.gatilho;
+      if (args.rascunho !== undefined) body.draft = args.rascunho;
+      const res = await api(call, "POST", "/api/flows", body);
+      if (!res.ok) return res.result;
+      const created = res.data as { id: string; name: string; validation?: unknown };
+      return text({
+        criado: true,
+        ligado: false,
+        publicado: false,
+        id: created.id,
+        nome: created.name,
+        oQueFaltaPraPublicar: created.validation ?? null,
+        aviso: "Publicar e ligar só pela tela, com o dono da conta.",
+      });
+    },
+  },
+  {
+    name: "editar_fluxo",
+    description:
+      "Altera o nome ou o RASCUNHO de um fluxo (troca a definição inteira). Não publica, não liga, não desliga: o que está rodando não muda até um humano publicar na tela. " +
+      FLOW_DRAFT_HELP,
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { ...str, description: "ID do fluxo" },
+        name: { ...str, description: "Novo nome" },
+        rascunho: { type: "object", description: "Nova definição { trigger, nodes }" },
+      },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const body: Record<string, unknown> = {};
+      const name = requireString(args, "name");
+      if (name) body.name = name;
+      if (args.rascunho !== undefined) body.draft = args.rascunho;
+      if (Object.keys(body).length === 0) return text("Nada pra alterar.", true);
+      const res = await api(call, "PATCH", `/api/flows/${encodeURIComponent(id)}`, body);
+      if (!res.ok) return res.result;
+      const flow = res.data as { validation?: unknown; isActive?: boolean };
+      return text({ editado: true, id, campos: Object.keys(body), ligado: flow.isActive ?? false, oQueFaltaPraPublicar: flow.validation ?? null });
+    },
+  },
+  {
+    name: "abrir_campanha_como_fluxo",
+    description:
+      "Cria um fluxo NOVO e DESLIGADO copiando uma campanha (gatilho, palavras, DM de abertura, link, pedir pra seguir, follow-up, sequência). A campanha continua ligada e intacta.",
+    inputSchema: {
+      type: "object",
+      properties: { automationId: { ...str, description: "ID da campanha" } },
+      required: ["automationId"],
+    },
+    async run(args, call) {
+      const automationId = requireString(args, "automationId");
+      if (!automationId) return text("Informe o automationId.", true);
+      const res = await api(call, "POST", `/api/flows/from-campaign/${encodeURIComponent(automationId)}`);
+      if (!res.ok) return res.result;
+      const flow = res.data as { id: string; name: string; warnings?: unknown };
+      return text({ criado: true, ligado: false, id: flow.id, nome: flow.name, avisos: flow.warnings ?? [] });
+    },
+  },
 ];
 
 function rpcResult(id: JsonRpcId, result: unknown) {
@@ -961,7 +1115,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta.",
       });
     }
     case "ping":

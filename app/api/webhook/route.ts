@@ -268,6 +268,23 @@ export async function POST(request: NextRequest) {
       payload as Parameters<typeof parseMessageEvents>[0]
     );
 
+    // Etapa 3: a DM typed after opening an ig.me link is also that link's
+    // event (the REFERRAL job, delayed). The ref travels with the message so
+    // flows never answer it on top of the link's campaign. Campaigns ignore it.
+    const linkRefByMid = new Map<string, string>();
+    for (const r of parseReferralEvents(payload)) {
+      if (r.kind === "message" && r.mid) linkRefByMid.set(r.mid, r.ref);
+    }
+
+    // Etapa 3: mids whose message job decides the flows (text DM, not a
+    // mention). Their REFERRAL job then leaves flows alone, because a DM
+    // campaign may have answered that same message (never two answers).
+    const flowMidsViaMessage = new Set(
+      messageEvents
+        .filter((e) => e.storyKind !== "mention" && Boolean(e.messageText?.trim()))
+        .map((e) => e.messageId)
+    );
+
     for (const event of messageEvents) {
       const account = await prisma.instagramAccount.findUnique({
         where: { instagramId: event.instagramAccountId },
@@ -286,6 +303,7 @@ export async function POST(request: NextRequest) {
           ...(event.storyId ? { storyId: event.storyId } : {}),
           ...(event.storyUrl ? { storyUrl: event.storyUrl } : {}),
           ...(event.timestamp ? { timestamp: event.timestamp } : {}),
+          ...(linkRefByMid.has(event.messageId) ? { linkRef: linkRefByMid.get(event.messageId) } : {}),
         },
         {
           // Message ids can contain characters BullMQ rejects in a job id (":"
@@ -316,6 +334,7 @@ export async function POST(request: NextRequest) {
           ref: event.ref,
           kind: event.kind,
           ...(event.mid ? { mid: event.mid } : {}),
+          ...(event.kind === "message" && event.mid && flowMidsViaMessage.has(event.mid) ? { flowsViaMessage: true } : {}),
           timestamp: event.timestamp,
         },
         {

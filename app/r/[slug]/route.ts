@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { getRequestIp, hashClickIp } from "@/lib/tracking/server";
 import { RECIPIENT_PARAM, verifyRecipientToken } from "@/lib/tracking/recipient";
 import { AUTO_TAGS, trackInteraction } from "@/lib/contacts/record";
+import { recordFlowLinkClick } from "@/lib/flows/links";
 
 type RedirectRouteProps = {
   params: Promise<{ slug: string }>;
@@ -26,6 +27,14 @@ export async function GET(request: NextRequest, { params }: RedirectRouteProps) 
   });
 
   if (!trackedLink) {
+    // Etapa 3: not a campaign link; maybe a flow button's link. Campaign
+    // links above are untouched (slugs are unique across both tables).
+    const flowDestination = await recordFlowLinkClick({
+      slug,
+      request,
+      contactIgUserId: verifyRecipientToken(slug, new URL(request.url).searchParams.get(RECIPIENT_PARAM)),
+    });
+    if (flowDestination) return NextResponse.redirect(flowDestination, { status: 302 });
     return NextResponse.redirect(new URL("/", request.url), { status: 302 });
   }
 

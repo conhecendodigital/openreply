@@ -10,6 +10,7 @@
  * Links de conversa.
  * 2026-10-05: Canais (status de cada canal ligado, com bolinha quando algum
  * precisa de atenção).
+ * 2026-10-07: Fluxos (Etapa 3), logo depois de Campanhas em Automações.
  */
 
 import { useEffect, useState } from "react";
@@ -33,6 +34,9 @@ const icones: Record<string, Icone> = {
   ),
   "/campaigns": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M12 21s-7-4.4-9.3-9C1.1 8.6 3 4.5 6.9 4.5c2.3 0 3.8 1.4 5.1 3.2 1.3-1.8 2.8-3.2 5.1-3.2 3.9 0 5.8 4.1 4.2 7.5C19 16.6 12 21 12 21z" /></svg>
+  ),
+  "/flows": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="2.5" y="3.5" width="7" height="5" rx="1.5" /><rect {...traco(ativo)} x="14.5" y="9.5" width="7" height="5" rx="1.5" /><rect {...traco(ativo)} x="2.5" y="15.5" width="7" height="5" rx="1.5" /><path {...traco(ativo)} d="M9.5 6H12v12H9.5M12 12h2.5" /></svg>
   ),
   "/approvals": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M21 11.5a8.4 8.4 0 0 1-12.3 7.5L3 21l2-5.5A8.4 8.4 0 1 1 21 11.5z" /><path {...traco(ativo)} d="m8.5 11.5 2.5 2.5 4.5-4.5" /></svg>
@@ -87,6 +91,7 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
     title: "Automations",
     items: [
       { label: "Campaigns", href: "/campaigns" },
+      { label: "Flows", href: "/flows" },
       { label: "Sequences", href: "/sequences" },
       { label: "Conversation links", href: "/conversation-links" },
       { label: "Moderation", href: "/moderation" },

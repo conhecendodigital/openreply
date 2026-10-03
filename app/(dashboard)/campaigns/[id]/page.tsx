@@ -6,6 +6,8 @@
  * Clicking a campaign opens this read-only view: a summary of the automation
  * on the left, and Insights / Preview tabs on the right. Edit and Stop/Resume
  * live in the top bar.
+ * 2026-10-07: "Open as flow" copies the campaign into a NEW flow that is
+ * off. The campaign is only read: it stays on and untouched.
  */
 
 import { useEffect, useState } from "react";
@@ -74,6 +76,8 @@ export default function CampaignDetailPage() {
   const [tab, setTab] = useState<Tab>("insights");
   const [previewTab, setPreviewTab] = useState<PreviewTab>("dm");
   const [busy, setBusy] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/automations", { cache: "no-store" })
@@ -128,6 +132,32 @@ export default function CampaignDetailPage() {
       setCampaign({ ...campaign, isActive: !campaign.isActive });
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function openAsFlow() {
+    if (!campaign || converting) return;
+    setConverting(true);
+    setConvertError(null);
+    try {
+      const res = await fetch(`/api/flows/from-campaign/${encodeURIComponent(campaign.id)}`, { method: "POST" });
+      const payload = await res.json().catch(() => null);
+      if (!payload?.success) {
+        setConvertError(payload?.error ? t(payload.error) : t("Could not open the campaign as a flow"));
+        return;
+      }
+      const flowId = payload.data.id as string;
+      try {
+        const codes = ((payload.data.warnings ?? []) as { code: string }[]).map((w) => w.code);
+        window.sessionStorage.setItem(`flow-convert:${flowId}`, JSON.stringify(codes));
+      } catch {
+        // storage blocked: the flow opens without the list of notes
+      }
+      router.push(`/flows/${flowId}`);
+    } catch {
+      setConvertError(t("Could not open the campaign as a flow"));
+    } finally {
+      setConverting(false);
     }
   }
 
@@ -324,7 +354,16 @@ export default function CampaignDetailPage() {
               {t("Preview")}
             </TabButton>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={openAsFlow}
+              disabled={converting}
+              title={t("Creates a new flow, off, copied from this campaign. The campaign stays on and untouched.")}
+              className="rounded border border-border px-3 py-1.5 text-sm text-muted hover:text-foreground disabled:opacity-50"
+            >
+              {converting ? t("Opening…") : t("Open as flow")}
+            </button>
             <Link
               href={`/campaigns/${campaign.id}/edit`}
               className="rounded border border-border px-3 py-1.5 text-sm text-muted hover:text-foreground"
@@ -344,6 +383,8 @@ export default function CampaignDetailPage() {
             </button>
           </div>
         </div>
+
+        {convertError && <p className="text-sm text-error">{convertError}</p>}
 
         {tab === "insights" && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

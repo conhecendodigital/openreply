@@ -14,7 +14,7 @@ import { recordEvent } from "@/lib/contacts/record";
 export const DEFAULT_TAKEOVER_HOURS = 24;
 export const MAX_TAKEOVER_HOURS = 24 * 7;
 
-export type TakeoverReason = "inbox_send" | "phone_echo" | "manual";
+export type TakeoverReason = "inbox_send" | "phone_echo" | "manual" | "flow";
 
 export type TakeoverFields = {
   humanTakeover: boolean;
@@ -90,6 +90,17 @@ export async function startTakeover(input: {
       where: { contactId: contact.id, status: "ACTIVE" },
       data: { status: "STOPPED_TAKEOVER", stoppedAt: now },
     });
+    // Etapa 3: the person's open flow runs stop too (every flow step also
+    // re-checks takeover, so a failure here only delays the stop). Own catch:
+    // a flow problem never undoes the takeover above.
+    try {
+      await prisma.flowRun.updateMany({
+        where: { contactId: contact.id, status: { in: ["ACTIVE", "WAITING_DELAY", "WAITING_REPLY", "WAITING_TAP"] } },
+        data: { status: "STOPPED_TAKEOVER", stopReason: "takeover", finishedAt: now },
+      });
+    } catch (error) {
+      console.warn("[Takeover] Could not stop flow runs:", error instanceof Error ? error.message : error);
+    }
     return { until };
   } catch (error) {
     console.warn("[Takeover] Could not start:", error instanceof Error ? error.message : error);

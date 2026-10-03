@@ -189,6 +189,34 @@ export async function reserveDMSlot(
 }
 
 /**
+ * Etapa 3: hourly ceiling for flow DMs (inside an open conversation), per
+ * account, in its own bucket (rate:flow:<instagramId>) so a busy flow never
+ * eats the campaigns' private-reply slots. A flow's private reply to a comment
+ * uses reserveDMSlot like a campaign (that is Meta's real ceiling).
+ * FLOW_DM_PER_HOUR overrides the default.
+ */
+export const FLOW_DM_PER_HOUR_DEFAULT = 200;
+
+export function flowDmPerHour(): number {
+  const n = Number.parseInt(process.env.FLOW_DM_PER_HOUR ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : FLOW_DM_PER_HOUR_DEFAULT;
+}
+
+export async function reserveFlowSlot(
+  instagramAccountId: string
+): Promise<{ allowed: boolean; currentCount: number }> {
+  const result = await getRedis().eval(
+    RESERVE_DM_SLOT_SCRIPT,
+    1,
+    `rate:flow:${instagramAccountId}`,
+    flowDmPerHour(),
+    RATE_LIMIT_WINDOW
+  );
+  const values = Array.isArray(result) ? result : [];
+  return { allowed: toScriptNumber(values[0]) === 1, currentCount: toScriptNumber(values[1]) };
+}
+
+/**
  * Backwards-compatible helper for tests and admin scripts.
  * Prefer reserveDMSlot in workers.
  */

@@ -92,6 +92,7 @@ model Workspace {
   outboundMessages   OutboundMessage[]
   sequences          Sequence[]
   conversationLinks  ConversationLink[]
+  flows              Flow[]
 
   @@index([ownerId])
 }
@@ -246,6 +247,7 @@ model InstagramAccount {
   draftReplies       DraftReply[]
   outboundMessages   OutboundMessage[]
   conversationLinks  ConversationLink[]
+  flows              Flow[]
 
   @@index([workspaceId])
   @@index([workspaceId, status])
@@ -618,6 +620,7 @@ model Contact {
   draftReplies        DraftReply[]
   sequenceEnrollments SequenceEnrollment[]
   linkOpens           ConversationLinkOpen[]
+  flowRuns            FlowRun[]
 
   @@unique([instagramAccountId, igUserId])
   @@index([workspaceId, lastSeenAt])
@@ -896,4 +899,157 @@ model ConversationLinkOpen {
 
   @@unique([linkId, eventKey])
   @@index([contactId])
+}
+
+// ─── Etapa 3: flows (visual builder) ─────────────────────────────────────────
+//
+// A NEW, optional layer next to campaigns. Campaigns (Automation) keep running
+// exactly as before in lib/queue/dm-worker.ts; a flow only gets an event that
+// no active campaign matched. Flows are born off (isActive=false), and only a
+// signed-in human publishes or turns one on.
+
+enum FlowRunStatus {
+  ACTIVE
+  WAITING_DELAY
+  WAITING_REPLY
+  WAITING_TAP
+  DONE
+  HANDED_OFF
+  STOPPED_WINDOW
+  STOPPED_TAKEOVER
+  STOPPED_OFF
+  STOPPED_LIMIT
+  FAILED
+}
+
+model Flow {
+  id                  String    @id @default(cuid())
+  workspaceId         String
+  /// Internal InstagramAccount.id.
+  instagramAccountId  String
+  name                String
+  isActive            Boolean   @default(false)
+  /// Definition being edited (lib/flows/schema.ts, validated with zod).
+  draft               Json
+  /// Definition the worker runs (copy of the draft at the last publish).
+  published           Json?
+  publishedVersion    Int       @default(0)
+  publishedAt         DateTime?
+  publishedBy         String?
+  /// Copy of the PUBLISHED trigger, so the worker lookup is an indexed query.
+  triggerType         String?
+  triggerPostId       String?
+  triggerMatchAnyPost Boolean   @default(false)
+  triggerStoryId      String?
+  conversationLinkId  String?
+  keywords            String[]  @default([])
+  matchAnyWord        Boolean   @default(false)
+  wholeWordMatch      Boolean   @default(true)
+  /// Campaign this flow was copied from ("Abrir como fluxo"). No FK: the
+  /// campaign is never touched by a flow.
+  sourceAutomationId  String?
+  enteredCount        Int       @default(0)
+  completedCount      Int       @default(0)
+  createdBy           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  runs             FlowRun[]
+  links            FlowLink[]
+
+  @@index([instagramAccountId, isActive, triggerType])
+  @@index([workspaceId])
+  @@index([conversationLinkId])
+}
+
+/// One person going through one flow. Unique per (flow, trigger event), and at
+/// most one open run per (flow, contact) (partial unique index in SQL).
+model FlowRun {
+  id               String        @id @default(cuid())
+  workspaceId      String
+  flowId           String
+  flowVersion      Int
+  contactId        String
+  igUserId         String
+  status           FlowRunStatus @default(ACTIVE)
+  currentNodeId    String?
+  /// comment:<id> | live:<id> | dm:<mid> | mention:<mid> | ref:<eventKey>
+  triggerKey       String
+  /// The comment, for COMMENT / LIVE_COMMENT (the one private reply).
+  triggerCommentId String?
+  privateReplyUsed Boolean       @default(false)
+  waitingUntil     DateTime?
+  stepCount        Int           @default(0)
+  stopReason       String?
+  startedAt        DateTime      @default(now())
+  finishedAt       DateTime?
+  updatedAt        DateTime      @updatedAt
+
+  flow    Flow       @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  contact Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  steps   FlowStep[]
+
+  @@unique([flowId, triggerKey])
+  @@index([contactId, status])
+  @@index([flowId, status, currentNodeId])
+  @@index([triggerCommentId])
+}
+
+model FlowStep {
+  id         String   @id @default(cuid())
+  runId      String
+  flowId     String
+  nodeId     String
+  nodeType   String
+  /// entered | sent | skipped | yes | no | waiting | tapped | replied | timeout | clicked | tagged | notified
+  /// | proposed | done | handed_off | stopped | error | maybe_sent
+  outcome    String
+  detail     String?
+  mid        String?
+  occurredAt DateTime @default(now())
+
+  run FlowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, occurredAt])
+  @@index([flowId, nodeId, outcome])
+}
+
+/// Tracked link of a flow's link button (/r/<slug>), separate from campaign
+/// TrackedLink so nothing in the campaign tables changes.
+model FlowLink {
+  id             String          @id @default(cuid())
+  workspaceId    String
+  flowId         String
+  nodeId         String
+  buttonId       String
+  slug           String          @unique
+  label          String?
+  destinationUrl String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  flow   Flow            @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  clicks FlowLinkClick[]
+
+  @@unique([flowId, nodeId, buttonId])
+}
+
+model FlowLinkClick {
+  id              String   @id @default(cuid())
+  flowLinkId      String
+  flowId          String
+  nodeId          String
+  runId           String?
+  contactIgUserId String?
+  ipHash          String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+
+  flowLink FlowLink @relation(fields: [flowLinkId], references: [id], onDelete: Cascade)
+
+  @@index([flowId, nodeId])
+  @@index([runId])
+  @@index([contactIgUserId])
 }

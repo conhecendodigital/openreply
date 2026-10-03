@@ -66,6 +66,24 @@ import {
 } from "@/lib/contacts/record";
 import { moderateComment } from "@/lib/moderation/moderate";
 import { lookupContactProfile } from "@/lib/contacts/profile";
+// Etapa 3 (flows): a NEW optional layer. Campaigns below run exactly as
+// before; flows only get what no active campaign matched (lib/flows/dispatch).
+import {
+  activeFlowKeywordGuards,
+  dispatchFlowEvent,
+  resumeFlowOnReply,
+  routeFlowTap,
+} from "@/lib/flows/dispatch";
+import { runFlowStepJob, runReplyTimeout, startFlowRun } from "@/lib/flows/engine";
+import {
+  FLOW_PAYLOAD_PREFIX,
+  FLOW_REPLY_TIMEOUT_JOB_NAME,
+  FLOW_START_JOB_NAME,
+  FLOW_STEP_JOB_NAME,
+  type FlowReplyTimeoutJob,
+  type FlowStartJob,
+  type FlowStepJob,
+} from "@/lib/flows/jobs";
 
 const BACKOFF_DELAYS = [5 * 60 * 1000, 15 * 60 * 1000, 45 * 60 * 1000];
 
@@ -341,16 +359,24 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
   // moderated (they scroll away and cannot be hidden like a post comment).
   if (!isLive) {
     const moderation = await moderateComment(job.data, {
-      campaigns: automations.map((a) => ({
-        keywords: a.keywords,
-        wholeWordMatch: a.wholeWordMatch,
-        matchAnyWord: a.matchAnyWord,
-      })),
+      campaigns: [
+        ...automations.map((a) => ({
+          keywords: a.keywords,
+          wholeWordMatch: a.wholeWordMatch,
+          matchAnyWord: a.matchAnyWord,
+        })),
+        // Etapa 3: words of active comment flows are protected too (only
+        // widens the protection; [] when there are no flows).
+        ...(await activeFlowKeywordGuards(instagramAccountId)),
+      ],
     });
     // A hidden comment is spam: don't let an "any word" campaign DM it.
     if (moderation?.action === "HIDDEN") return;
   }
 
+  // Etapa 3: did ANY active campaign match? (Even one that then skips for
+  // takeover / dedupe / limits.) Only when none did, flows get the comment.
+  let campaignMatched = false;
   for (const automation of automations) {
     // "Any word" campaigns fire on every comment; otherwise require a keyword hit.
     const matchResult = automation.matchAnyWord
@@ -364,6 +390,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     if (!matchResult.matched) {
       continue;
     }
+    campaignMatched = true;
 
     // No public reply on a live: only the private reply (DM) goes out.
     const publicReplyEnabled = !isLive && automation.publicReplyEnabled;
@@ -883,6 +910,22 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
       throw error;
     }
   }
+
+  // Etapa 3: nobody (no campaign) took this comment: offer it to the flows.
+  // Never throws, and queues nothing when no active flow matches.
+  if (!campaignMatched) {
+    await dispatchFlowEvent({
+      kinds: [isLive ? "LIVE_COMMENT" : "COMMENT"],
+      instagramId: instagramAccountId,
+      igUserId: commenterId,
+      username: commenterName ?? null,
+      text: commentText,
+      mediaId,
+      originalMediaId: originalMediaId ?? null,
+      triggerKey: `${isLive ? "live" : "comment"}:${commentId}`,
+      triggerRef: commentId,
+    });
+  }
 }
 
 /**
@@ -907,6 +950,15 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
         text: payload.slice(0, 200),
       },
     });
+  }
+
+  // Etapa 3: a flow button (flow:<runId>:<nodeId>). Campaign payloads
+  // (reveal: / followcheck:) never start with it.
+  if (payload.startsWith(FLOW_PAYLOAD_PREFIX)) {
+    if (!fallback) {
+      await routeFlowTap({ instagramId: instagramAccountId, igUserId: userId, payload, at: tappedAt });
+    }
+    return;
   }
 
   const isFollowCheck = payload.startsWith("followcheck:");
@@ -1491,6 +1543,20 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
       include: CAMPAIGN_INCLUDE,
       orderBy: { createdAt: "asc" },
     });
+    // Etapa 3: any active mention campaign "matches" every mention; only
+    // without one does a mention flow get it.
+    if (mentionCampaigns.length === 0) {
+      await dispatchFlowEvent({
+        kinds: ["STORY_MENTION"],
+        instagramId: instagramAccountId,
+        igUserId: senderId,
+        text: messageText || null,
+        triggerKey: `mention:${messageId}`,
+        triggerRef: messageId,
+        inboundAt: receivedAt,
+      });
+      return;
+    }
     for (const automation of mentionCampaigns) {
       // Someone who mentions us in every story gets the campaign once.
       const already = await prisma.dmLog.findFirst({
@@ -1522,6 +1588,8 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
 
   const dedupeId = `dm:${messageId}`;
   if (!messageText.trim()) return;
+  // Etapa 3: did any active campaign (story or DM words) match this message?
+  let campaignMatched = false;
 
   if (storyKind === "reply") {
     const storyCampaigns = await prisma.automation.findMany({
@@ -1544,6 +1612,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
         ? { matched: true, matchedKeyword: null }
         : matchKeywords(messageText, automation.keywords, automation.wholeWordMatch);
       if (!matchResult.matched) continue;
+      campaignMatched = true;
       const outcome = await deliverCampaignToDm({
         automation,
         senderId,
@@ -1584,6 +1653,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
         );
 
     if (!matchResult.matched) continue;
+    campaignMatched = true;
 
     await deliverCampaignToDm({
       automation,
@@ -1595,6 +1665,59 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
       inboundAt: receivedAt,
       context: "message trigger",
     });
+  }
+
+  // Etapa 3: no campaign matched. First a run waiting for this person's
+  // reply moves on; otherwise a story-reply / DM flow may start. Never throws.
+  if (!campaignMatched) {
+    // A DM that opened an ig.me link: the link's own campaign (REFERRAL job)
+    // wins, so flows stay out; without one, the link's flow goes first.
+    const link = job.data.linkRef ? await flowLinkContext(instagramAccountId, job.data.linkRef) : null;
+    if (link?.campaignActive) return;
+    const resumed = await resumeFlowOnReply({ instagramId: instagramAccountId, igUserId: senderId, at: receivedAt });
+    if (!resumed) {
+      await dispatchFlowEvent({
+        kinds: link
+          ? ["CONVERSATION_LINK", "DM"]
+          : storyKind === "reply"
+            ? ["STORY_REPLY", "DM"]
+            : ["DM"],
+        instagramId: instagramAccountId,
+        igUserId: senderId,
+        text: messageText,
+        storyId: storyId ?? null,
+        conversationLinkId: link?.id ?? null,
+        triggerKey: dedupeId,
+        triggerRef: messageId,
+        inboundAt: receivedAt,
+      });
+    }
+  }
+}
+
+/**
+ * Etapa 3: the conversation link a DM opened, for the flows only. Never
+ * throws: on an error flows treat it as "the link's campaign may answer" and
+ * stay out (fail-closed: never two answers).
+ */
+async function flowLinkContext(
+  instagramId: string,
+  ref: string
+): Promise<{ id: string; campaignActive: boolean } | null> {
+  try {
+    const link = await prisma.conversationLink.findFirst({
+      where: { code: ref, isActive: true, instagramAccount: { instagramId } },
+      select: { id: true, automationId: true },
+    });
+    if (!link) return null;
+    if (!link.automationId) return { id: link.id, campaignActive: false };
+    const campaign = await prisma.automation.findFirst({
+      where: { id: link.automationId, isActive: true, instagramAccount: { instagramId, status: "ACTIVE" } },
+      select: { id: true },
+    });
+    return { id: link.id, campaignActive: Boolean(campaign) };
+  } catch {
+    return { id: "", campaignActive: true };
   }
 }
 
@@ -1685,14 +1808,37 @@ async function processReferral(job: Job<ReferralJob>): Promise<void> {
     await prisma.conversationLink.update({ where: { id: link.id }, data: { opens: { increment: 1 } } });
   }
 
-  if (!link.automationId) return;
+  // Etapa 3: a link whose campaign is missing or off may start a flow bound
+  // to this link. A link with an active campaign stays exactly as before.
+  // A typed DM's message job already decided the flows for it (after the DM
+  // campaigns had their turn): never a second answer from here.
+  const toFlow = async () => {
+    if (data.flowsViaMessage) return;
+    await dispatchFlowEvent({
+      kinds: ["CONVERSATION_LINK"],
+      instagramId: data.instagramAccountId,
+      igUserId: data.igUserId,
+      conversationLinkId: link.id,
+      triggerKey: data.kind === "message" && data.mid ? `dm:${data.mid}` : `ref:${eventKey}`,
+      triggerRef: data.mid ?? eventKey,
+      inboundAt: occurredAt,
+    });
+  };
+
+  if (!link.automationId) {
+    await toFlow();
+    return;
+  }
   // The open is counted above even with the channel off (history); only the
   // campaign delivery needs an ACTIVE channel.
   const automation = await prisma.automation.findFirst({
     where: { id: link.automationId, isActive: true, instagramAccount: { status: "ACTIVE" } },
     include: CAMPAIGN_INCLUDE,
   });
-  if (!automation || automation.instagramAccount.instagramId !== data.instagramAccountId) return;
+  if (!automation || automation.instagramAccount.instagramId !== data.instagramAccountId) {
+    await toFlow();
+    return;
+  }
 
   await deliverCampaignToDm({
     automation,
@@ -1741,6 +1887,20 @@ async function runJob(job: Job<DmQueueJob>): Promise<void> {
   }
   if (job.name === PROFILE_JOB_NAME) {
     return processProfile(job as Job<ProfileJob>);
+  }
+  // Etapa 3: flow jobs (lib/flows/jobs.ts). None carries "commentId", so an
+  // older worker skips them in the fallback below instead of answering.
+  if (job.name === FLOW_START_JOB_NAME) {
+    await startFlowRun(job.data as FlowStartJob);
+    return;
+  }
+  if (job.name === FLOW_STEP_JOB_NAME) {
+    await runFlowStepJob(job.data as FlowStepJob);
+    return;
+  }
+  if (job.name === FLOW_REPLY_TIMEOUT_JOB_NAME) {
+    await runReplyTimeout(job.data as FlowReplyTimeoutJob);
+    return;
   }
   // Only comment jobs may reach processComment: a job of a name this worker
   // does not know (a newer web deploy than the worker) must not be treated as

@@ -6,6 +6,7 @@
 
 import { Queue } from "bullmq";
 import Redis from "ioredis";
+import type { FlowJob } from "@/lib/flows/jobs";
 
 let connection: Redis | null = null;
 
@@ -74,6 +75,8 @@ export interface ProcessMessageJob {
   storyUrl?: string;
   /** Event time in ms (opens the 24 h window). */
   timestamp?: number;
+  /** Etapa 3: the ig.me ref when this DM opened a conversation link (flows only). */
+  linkRef?: string;
 }
 
 // Download a DM photo/video/audio as soon as it arrives (Meta links expire).
@@ -110,6 +113,11 @@ export interface ReferralJob {
   ref: string;
   kind: "referral" | "postback" | "message";
   mid?: string;
+  /**
+   * Etapa 3: the typed DM's own message job already offered this event to
+   * the flows (after the DM campaigns), so this job must not (flows only).
+   */
+  flowsViaMessage?: boolean;
   /** Milliseconds. */
   timestamp: number;
 }
@@ -140,7 +148,9 @@ export type DmQueueJob =
   | CrmDmJob
   | ReferralJob
   | SequenceStepJob
-  | ProfileJob;
+  | ProfileJob
+  // Etapa 3: names and shapes in lib/flows/jobs.ts.
+  | FlowJob;
 
 export const SAVE_MEDIA_JOB_NAME = "save-media";
 export const POSTBACK_JOB_NAME = "process-postback";

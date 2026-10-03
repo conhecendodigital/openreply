@@ -446,6 +446,66 @@ export async function sendDirectMessageWithLinkButton(
   );
 }
 
+/**
+ * Etapa 3 (flows): a button that either opens a link (web_url) or comes back
+ * to us as a postback (payload). Up to 3 per message, title up to 20 chars.
+ */
+export type FlowMessageButton =
+  | { kind: "link"; title: string; url: string }
+  | { kind: "postback"; title: string; payload: string };
+
+/** Who gets it: a person (IGSID) or the one private reply to a comment. */
+export type FlowRecipient = { id: string } | { comment_id: string };
+
+/**
+ * Send one flow message: plain text, or a button template with mixed buttons
+ * (web_url + postback). Text is capped at 640 chars with buttons (Meta) and
+ * 1000 without.
+ */
+export async function sendFlowMessage(
+  accessToken: string,
+  instagramAccountId: string,
+  recipient: FlowRecipient,
+  text: string,
+  buttons: FlowMessageButton[],
+  options?: SendOptions
+): Promise<{ recipient_id: string; message_id: string }> {
+  if (buttons.length === 0) {
+    return postMessage(accessToken, instagramAccountId, recipient, { text: text.slice(0, 1000) }, options);
+  }
+  return postMessage(
+    accessToken,
+    instagramAccountId,
+    recipient,
+    buttonTemplate(
+      text,
+      buttons.slice(0, 3).map((b) =>
+        b.kind === "link"
+          ? { type: "web_url", url: b.url, title: b.title.slice(0, 20) }
+          : { type: "postback", title: b.title.slice(0, 20), payload: b.payload.slice(0, 1000) }
+      )
+    ),
+    options
+  );
+}
+
+/** Send an image by public https URL (flows; never as a private reply). */
+export async function sendImageMessage(
+  accessToken: string,
+  instagramAccountId: string,
+  userId: string,
+  imageUrl: string,
+  options?: SendOptions
+): Promise<{ recipient_id: string; message_id: string }> {
+  return postMessage(
+    accessToken,
+    instagramAccountId,
+    { id: userId },
+    { attachment: { type: "image", payload: { url: imageUrl } } },
+    options
+  );
+}
+
 export async function sendCommentReply(
   accessToken: string,
   commentId: string,

@@ -107,4 +107,34 @@ describe("webhook: CRM out of the request", () => {
     expect(ref?.[1]).toMatchObject({ igUserId: "ig_person", ref: "story1", kind: "referral" });
     expect(ref?.[2].jobId).not.toContain(":");
   });
+  it("Etapa 3 QA: a DM typed after opening an ig.me link carries the ref (flows stay out of the link's campaign)", async () => {
+    await POST(
+      signed({
+        object: "instagram",
+        entry: [
+          {
+            id: "ig_owner",
+            time: 1,
+            messaging: [
+              {
+                sender: { id: "ig_person" },
+                recipient: { id: "ig_owner" },
+                timestamp: 1_700_000_000_000,
+                message: { mid: "mid_link", text: "oi", referral: { ref: "bio", source: "SHORTLINKS", type: "OPEN_THREAD" } },
+              },
+              { sender: { id: "ig_person" }, recipient: { id: "ig_owner" }, timestamp: 1_700_000_000_100, message: { mid: "mid_plain", text: "tudo bem?" } },
+            ],
+          },
+        ],
+      })
+    );
+    const messages = mockAdd.mock.calls.filter((c) => c[0] === "process-message");
+    expect(messages.find((c) => c[1].messageId === "mid_link")?.[1]).toMatchObject({ linkRef: "bio" });
+    expect(messages.find((c) => c[1].messageId === "mid_plain")?.[1]).not.toHaveProperty("linkRef");
+    expect(mockAdd.mock.calls.some((c) => c[0] === "process-referral")).toBe(true);
+    // Review: the typed DM's message job decides the flows, so its REFERRAL
+    // job is marked to leave them alone (a DM campaign may have answered it).
+    const ref = mockAdd.mock.calls.find((c) => c[0] === "process-referral");
+    expect(ref?.[1]).toMatchObject({ kind: "message", mid: "mid_link", flowsViaMessage: true });
+  });
 });

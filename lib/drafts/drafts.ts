@@ -22,8 +22,9 @@ import { channelOffCode, channelOffMessage, isChannelOffError, type ChannelOffCo
 
 export const MAX_DRAFT_TEXT = 1000;
 export const MAX_DRAFT_REASON = 1000;
+/** Origins the API accepts. "flow" (a flow's "propose draft" step) is internal only. */
 export const DRAFT_ORIGINS = ["vendedor", "manual"] as const;
-export type DraftOrigin = (typeof DRAFT_ORIGINS)[number];
+export type DraftOrigin = (typeof DRAFT_ORIGINS)[number] | "flow";
 
 export type DraftFailure = {
   ok: false;
@@ -82,8 +83,8 @@ export async function createDraft(input: {
   });
   if (!contact) return { ok: false, status: 404, code: "not_found", error: "Contact not found" };
 
-  // The AI stays out of a conversation a human took over.
-  if (input.origin === "vendedor" && isTakeoverActive(contact, now)) {
+  // The AI (and a flow) stays out of a conversation a human took over.
+  if ((input.origin === "vendedor" || input.origin === "flow") && isTakeoverActive(contact, now)) {
     return {
       ok: false,
       status: 409,

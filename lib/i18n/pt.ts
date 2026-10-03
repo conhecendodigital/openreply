@@ -3,6 +3,8 @@
  * Texto sem tradução aqui aparece em inglês (nada quebra). Termos técnicos
  * (dm_message, {link}, ENCRYPTION_KEY...) ficam iguais de propósito.
  */
+import { ptFlows } from "@/lib/i18n/pt-flows";
+
 export const pt: Record<string, string> = {
   // Menu e topo
   Dashboard: "Início",
@@ -862,4 +864,6 @@ export const pt: Record<string, string> = {
   "live_comments brings comments made during your lives (Comment on a live campaigns). Tick it in the Meta app (Webhooks > Instagram) and reconnect the channel to subscribe again.":
     "live_comments traz os comentários feitos durante suas lives (campanhas de Comentário em live). Marque no app da Meta (Webhooks > Instagram) e reconecte o canal pra assinar de novo.",
   "Reconnect the channel to subscribe again.": "Reconecte o canal pra assinar de novo.",
+  // 2026-10-07: Fluxos (Etapa 3), em lib/i18n/pt-flows.ts
+  ...ptFlows,
 };

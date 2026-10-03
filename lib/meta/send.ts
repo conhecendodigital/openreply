@@ -20,6 +20,8 @@ export const OUTBOUND_ORIGINS = [
   "draft",
   "inbox",
   "private_reply",
+  // Etapa 3: a flow message (refId = FlowRun.id).
+  "flow",
 ] as const;
 export type OutboundOrigin = (typeof OUTBOUND_ORIGINS)[number];
 
