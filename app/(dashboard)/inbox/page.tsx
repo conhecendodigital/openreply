@@ -35,17 +35,17 @@ function MessageMediaList({
 }) {
   const linkClass = `underline ${fromMe ? "text-white" : "text-accent"}`;
   return (
-    <div className="mb-1 space-y-2">
+    <div className={`flex flex-col gap-1.5 ${fromMe ? "items-end" : "items-start"}`}>
       {media.map((item, index) => {
         const key = `${item.url}-${index}`;
         if (item.type === "image") {
           return (
             <a key={key} href={item.url} target="_blank" rel="noreferrer">
-              {/* eslint-disable-next-line @next/next/no-img-element -- Meta CDN URL, not optimizable */}
+              {/* eslint-disable-next-line @next/next/no-img-element -- saved DM media / Meta CDN, not optimizable */}
               <img
                 src={item.url}
-                alt="Photo sent in the conversation"
-                className="max-h-72 w-auto rounded-md"
+                alt="Foto enviada na conversa"
+                className="max-h-80 w-auto max-w-[260px] rounded-2xl border border-border object-cover"
                 loading="lazy"
               />
             </a>
@@ -58,16 +58,23 @@ function MessageMediaList({
               src={item.url}
               poster={item.previewUrl}
               controls
+              playsInline
               preload="metadata"
-              className="max-h-72 w-full rounded-md"
+              className="max-h-96 w-[240px] rounded-2xl border border-border bg-black"
             />
           );
         }
         if (item.type === "audio") {
-          return <audio key={key} src={item.url} controls className="w-full" />;
+          return (
+            <div key={key} className={`rounded-full px-2 py-1 ${fromMe ? "bg-accent" : "bg-surface border border-border"}`}>
+              <audio src={item.url} controls preload="metadata" className="h-9 w-56" />
+            </div>
+          );
         }
-        const label =
-          item.type === "share" ? "Shared post" : item.type === "story" ? "Story" : "Attachment";
+        if (item.type === "story") {
+          return <StoryMedia key={key} url={item.url} />;
+        }
+        const label = item.type === "share" ? "Post compartilhado" : "Arquivo";
         return (
           <a key={key} href={item.url} target="_blank" rel="noreferrer" className={linkClass}>
             {label} ↗
@@ -75,6 +82,41 @@ function MessageMediaList({
         );
       })}
     </div>
+  );
+}
+
+// A story can be a photo or a video and the payload does not say which: try
+// as an image, fall back to video, then to a plain link (expired story).
+function StoryMedia({ url }: { url: string }) {
+  const [modo, setModo] = useState<"img" | "video" | "link">("img");
+  if (modo === "link") {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="text-xs text-accent underline">
+        Story (pode ter expirado) ↗
+      </a>
+    );
+  }
+  if (modo === "video") {
+    return (
+      <video
+        src={url}
+        controls
+        playsInline
+        preload="metadata"
+        onError={() => setModo("link")}
+        className="max-h-80 w-[180px] rounded-2xl border border-border bg-black"
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- saved DM media / Meta CDN, not optimizable
+    <img
+      src={url}
+      alt="Story"
+      onError={() => setModo("video")}
+      className="max-h-80 w-[180px] rounded-2xl border border-border object-cover"
+      loading="lazy"
+    />
   );
 }
 
@@ -113,6 +155,11 @@ export default function InboxPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
+  // conversation id → the other person's id, so the thread can load the saved history
+  const contactsRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    for (const c of conversations) if (c.contact.id) contactsRef.current[c.id] = c.contact.id;
+  }, [conversations]);
 
   // Accounts for the selector; default to the first connected account. Uses the
   // lightweight accounts endpoint (one query) rather than the heavy dashboard
@@ -199,7 +246,7 @@ export default function InboxPage() {
       if (!silent) setThreadLoading(true);
       try {
         const res = await fetch(
-          `/api/instagram/conversations/${conversationId}?instagramAccountId=${selectedAccountId}`,
+          `/api/instagram/conversations/${conversationId}?instagramAccountId=${selectedAccountId}&contactId=${encodeURIComponent(contactsRef.current[conversationId] ?? "")}`,
           { cache: "no-store" }
         );
         const data = await res.json();
@@ -406,34 +453,69 @@ export default function InboxPage() {
                 ) : messages.length === 0 ? (
                   <p className="text-sm text-muted">No messages.</p>
                 ) : (
-                  messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}
-                    >
+                  messages.map((m) => {
+                    const midias = (m.media ?? []).filter((x) => x.type !== "share");
+                    const links = (m.media ?? []).filter((x) => x.type === "share");
+                    const vazia = !m.text && !m.template && midias.length === 0 && links.length === 0;
+                    return (
                       <div
-                        className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-                          m.fromMe
-                            ? "bg-accent text-white"
-                            : "bg-surface text-foreground border border-border"
-                        }`}
+                        key={m.id}
+                        className={`flex flex-col gap-1 ${m.fromMe ? "items-end" : "items-start"}`}
                       >
-                        {m.media && m.media.length > 0 && (
-                          <MessageMediaList media={m.media} fromMe={m.fromMe} />
+                        {m.storyReply && (
+                          <p className="px-1 text-[11px] text-zinc-500">
+                            {m.fromMe ? "Você respondeu ao story" : "Respondeu ao seu story"}
+                          </p>
                         )}
-                        {m.text && (
-                          <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                        {/* Like the Instagram app: photos/videos/audio sit outside the bubble */}
+                        {midias.length > 0 && <MessageMediaList media={midias} fromMe={m.fromMe} />}
+                        {m.template && (
+                          <div className="w-64 max-w-[75%] overflow-hidden rounded-2xl border border-border bg-surface text-sm">
+                            <p className="whitespace-pre-wrap break-words px-3 py-2 text-foreground">
+                              {m.template.title}
+                            </p>
+                            {m.template.subtitle && (
+                              <p className="px-3 pb-2 text-xs text-muted">{m.template.subtitle}</p>
+                            )}
+                            {m.template.buttons.map((b, i) =>
+                              b.url ? (
+                                <a
+                                  key={i}
+                                  href={b.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block border-t border-border px-3 py-2 text-center font-semibold text-accent hover:bg-accent/10"
+                                >
+                                  {b.title}
+                                </a>
+                              ) : (
+                                <p key={i} className="border-t border-border px-3 py-2 text-center font-semibold text-accent">
+                                  {b.title}
+                                </p>
+                              )
+                            )}
+                          </div>
                         )}
-                        <p
-                          className={`mt-1 text-[10px] ${
-                            m.fromMe ? "text-white/70" : "text-zinc-500"
-                          }`}
-                        >
-                          {formatTime(m.createdTime)}
-                        </p>
+                        {(m.text || links.length > 0 || vazia) && (
+                          <div
+                            className={`max-w-[75%] rounded-3xl px-4 py-2 text-sm ${
+                              m.fromMe ? "bg-accent text-white" : "bg-surface text-foreground border border-border"
+                            }`}
+                          >
+                            {m.deleted ? (
+                              <p className="italic opacity-70">Mensagem apagada</p>
+                            ) : m.text ? (
+                              <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                            ) : vazia ? (
+                              <p className="italic opacity-70">Mensagem sem texto (sticker, reação ou formato que a Meta não entrega)</p>
+                            ) : null}
+                            {links.length > 0 && <MessageMediaList media={links} fromMe={m.fromMe} />}
+                          </div>
+                        )}
+                        <p className="px-1 text-[10px] text-zinc-500">{formatTime(m.createdTime)}</p>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 

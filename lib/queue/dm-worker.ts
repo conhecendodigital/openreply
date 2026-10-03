@@ -5,13 +5,16 @@ import {
   MESSAGE_JOB_NAME,
   POSTBACK_JOB_NAME,
   FOLLOWUP_JOB_NAME,
+  SAVE_MEDIA_JOB_NAME,
   type DmQueueJob,
+  type SaveMediaJob,
   type ProcessCommentJob,
   type ProcessMessageJob,
   type ProcessPostbackJob,
   type ProcessFollowUpJob,
 } from "./client";
 import { prisma } from "@/lib/db/client";
+import { downloadDirectMedia } from "@/lib/messages/store";
 import {
   MetaApiError,
   RateLimitError,
@@ -1232,6 +1235,10 @@ async function runJob(job: Job<DmQueueJob>): Promise<void> {
   }
   if (job.name === MESSAGE_JOB_NAME) {
     return processMessage(job as Job<ProcessMessageJob>);
+  }
+  if (job.name === SAVE_MEDIA_JOB_NAME) {
+    await downloadDirectMedia((job.data as SaveMediaJob).mediaId);
+    return;
   }
   return processComment(job as Job<ProcessCommentJob>);
 }

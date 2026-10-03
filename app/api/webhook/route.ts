@@ -8,7 +8,8 @@ import {
   parseReadEvents,
   verifyWebhookSignature,
 } from "@/lib/meta/webhook";
-import { MESSAGE_JOB_NAME, POSTBACK_JOB_NAME } from "@/lib/queue/client";
+import { MESSAGE_JOB_NAME, POSTBACK_JOB_NAME, SAVE_MEDIA_JOB_NAME } from "@/lib/queue/client";
+import { storeDirectMessages } from "@/lib/messages/store";
 import { Prisma } from "@/app/generated/prisma/client";
 
 const OPENING_DM_READ_FALLBACK_DELAY_MS = 5 * 60 * 1000;
@@ -77,6 +78,18 @@ export async function POST(request: NextRequest) {
       status: "PENDING",
     },
   });
+
+  // 2026-10-03: keep every DM (and download its media right away) so the inbox
+  // shows the full conversation like the Instagram app. Never blocks the rest.
+  try {
+    const mediaIds = await storeDirectMessages(payload);
+    const q = getDMQueue();
+    for (const id of mediaIds) {
+      await q.add(SAVE_MEDIA_JOB_NAME, { instagramAccountId: "", mediaId: id }, { jobId: `media_${id}` });
+    }
+  } catch (err) {
+    console.error("[Webhook] Could not store DM:", err);
+  }
 
   try {
     const commentEvents = parseCommentEvents(

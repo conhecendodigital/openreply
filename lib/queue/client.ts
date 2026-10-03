@@ -66,12 +66,20 @@ export interface ProcessMessageJob {
   senderId: string;
 }
 
+// Download a DM photo/video/audio as soon as it arrives (Meta links expire).
+export interface SaveMediaJob {
+  instagramAccountId: string;
+  mediaId: string;
+}
+
 export type DmQueueJob =
   | ProcessCommentJob
   | ProcessPostbackJob
   | ProcessFollowUpJob
-  | ProcessMessageJob;
+  | ProcessMessageJob
+  | SaveMediaJob;
 
+export const SAVE_MEDIA_JOB_NAME = "save-media";
 export const POSTBACK_JOB_NAME = "process-postback";
 export const FOLLOWUP_JOB_NAME = "process-followup";
 export const MESSAGE_JOB_NAME = "process-message";

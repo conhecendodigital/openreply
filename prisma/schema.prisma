@@ -89,6 +89,51 @@ model Workspace {
   @@index([ownerId])
 }
 
+/// Every DM seen by the webhook (inbound and our own echoes), so the inbox keeps
+/// the full history: the Conversations API only returns the latest 20 messages.
+model DirectMessage {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  /// Our connected Instagram account (instagramId).
+  accountId   String
+  /// The other person in the conversation (IGSID).
+  contactId   String
+  mid         String   @unique
+  fromMe      Boolean
+  text        String?
+  /// Campaign/button DM: {title, subtitle, buttons:[{title,url}]}.
+  template    Json?
+  storyReply  Boolean  @default(false)
+  deleted     Boolean  @default(false)
+  sentAt      DateTime
+  createdAt   DateTime @default(now())
+
+  media DirectMedia[]
+
+  @@index([accountId, contactId, sentAt])
+}
+
+/// Photo, video, audio or file attached to a DM, downloaded when it arrives so
+/// it survives Meta's expiring CDN links.
+model DirectMedia {
+  id          String    @id @default(cuid())
+  messageId   String
+  position    Int       @default(0)
+  type        String
+  originalUrl String
+  mime        String?
+  size        Int?
+  data        Bytes?
+  /// pending | saved | expired | too_big | error | link
+  status      String    @default("pending")
+  savedAt     DateTime?
+  createdAt   DateTime  @default(now())
+
+  message DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, position])
+}
+
 /// Workspace API key for scripts and the MCP endpoint. Only a SHA-256 hash is
 /// stored; the key itself is shown once when created.
 model ApiToken {
