@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { fail, ok, readJson, requireContext } from "@/lib/api-helpers";
+import { getApiCaller } from "@/lib/auth";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import { CODE_PATTERN, normalizeOrigin, randomCode } from "@/lib/conversation-links/links";
 import { LINK_INCLUDE, presentLinks } from "@/lib/conversation-links/present";
@@ -53,9 +54,14 @@ export async function POST(request: NextRequest) {
   if (input.automationId) {
     const automation = await prisma.automation.findFirst({
       where: { id: input.automationId, workspaceId, instagramAccountId: account.id },
-      select: { id: true },
+      select: { id: true, isActive: true },
     });
     if (!automation) return fail("Campaign not found on this account", 404);
+    // A link pointed at a campaign that is ON answers everyone who opens it.
+    // An API key may only point a link at a campaign that is off.
+    if (automation.isActive && (await getApiCaller()).kind === "token") {
+      return fail("Turn the campaign off before linking it with an API key", 409, { code: "campaign_on" });
+    }
   }
 
   const code = input.code ?? randomCode();

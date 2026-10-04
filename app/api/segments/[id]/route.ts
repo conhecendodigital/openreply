@@ -4,7 +4,7 @@ import type { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { fail, ok, readJson, requireContext } from "@/lib/api-helpers";
 import { countSegment, segmentFiltersSchema } from "@/lib/segments/filters";
-import { callerVia, findSegment, presentSegment, SEGMENT_SELECT, workspaceAccountId } from "@/lib/segments/api";
+import { callerVia, findSegment, humanOnly, presentSegment, SEGMENT_SELECT, workspaceAccountId } from "@/lib/segments/api";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +78,8 @@ export async function PATCH(request: NextRequest, { params }: RouteProps) {
 export async function DELETE(_request: NextRequest, { params }: RouteProps) {
   const auth = await requireContext({ manage: true });
   if ("response" in auth) return auth.response;
+  const blocked = await humanOnly("delete segments");
+  if (blocked) return blocked;
   const { id } = await params;
   const segment = await findSegment(id, auth.context.workspaceId);
   if (!segment) return fail("Segment not found", 404);

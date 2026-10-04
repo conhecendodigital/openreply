@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { getDMQueue, getRedisConnection } from "@/lib/queue/client";
 import { getWorkerHealth } from "@/lib/ops/worker-health";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 // Health must reflect live state (worker heartbeat, queue depth), never a
@@ -56,7 +57,7 @@ async function checkQueue(): Promise<HealthCheck & { counts?: unknown }> {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const [database, redis, queue, worker] = await Promise.all([
     checkDatabase(),
     checkRedis(),
@@ -75,16 +76,23 @@ export async function GET() {
     queue.status === "ok" &&
     worker.healthy;
 
+  // The public answer says only ok/error per part. Error messages (database
+  // host, user), queue counts and the worker's host/pid need the cron secret:
+  // `Authorization: Bearer <CRON_SECRET>`.
+  const detailed = isCronAuthorized(request.headers.get("authorization"));
+
   return NextResponse.json(
     {
       status: healthy ? "ok" : "degraded",
-      checks: {
-        database,
-        redis,
-        queue,
-        worker,
-      },
+      checks: detailed
+        ? { database, redis, queue, worker }
+        : {
+            database: { status: database.status },
+            redis: { status: redis.status },
+            queue: { status: queue.status },
+            worker: { healthy: Boolean(worker.healthy) },
+          },
     },
-    { status: healthy ? 200 : 503 }
+    { status: healthy ? 200 : 503, headers: { "Cache-Control": "no-store" } }
   );
 }

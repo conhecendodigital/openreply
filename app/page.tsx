@@ -2,507 +2,422 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { DemoNotice } from "@/components/demo-notice";
+import PublicSiteHeader from "@/components/public-site-header";
+import { LeadEngineLogo } from "@/components/sidebar";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n";
 
-export const metadata: Metadata = {
-  title: "Lead Engine - Open source Instagram comment-to-DM automation",
-  description:
-    "A free, self-hosted ManyChat alternative. Turn Instagram keyword comments into automatic private replies using the official Meta API.",
+/**
+ * Página inicial (2026-10-04): visual do instagram.com (fundo #fafafa, cartões
+ * brancos com borda #dbdbdb, botão azul arredondado, pilha de fonte do site),
+ * em português por padrão. Conteúdo honesto: diz o que o Lead Engine faz, sem
+ * prometer resultado. Nenhum logo da Meta ou do Instagram, só o nome em texto.
+ */
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t("Lead Engine: Instagram comments turned into Direct conversations"),
+    description: t(
+      "Reply to comments with an automatic DM through the official Meta API, see the photos and audio people send in the Direct, and keep every contact organized."
+    ),
+  };
+}
+
+/* Ícones de linha próprios (24x24), no traço fino do app. */
+function Icon({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-6 w-6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+const icons = {
+  comment: (
+    <Icon>
+      <path d="M20.5 11.5a8.5 8.5 0 0 1-12.4 7.6L3.5 20.5l1.4-4.6A8.5 8.5 0 1 1 20.5 11.5z" />
+    </Icon>
+  ),
+  direct: (
+    <Icon>
+      <path d="M21.5 3 10.2 10.6" />
+      <path d="M21.5 3 15 21l-4.8-10.4L2.5 7.9z" />
+    </Icon>
+  ),
+  contacts: (
+    <Icon>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.5a6.5 6.5 0 0 1 3 5.5" />
+    </Icon>
+  ),
+  shield: (
+    <Icon>
+      <path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.5 7.5 10 4.4-1.5 7.5-5.4 7.5-10V5.6z" />
+      <path d="m8.8 12 2.3 2.3 4.3-4.6" />
+    </Icon>
+  ),
+  flow: (
+    <Icon>
+      <rect x="3" y="3" width="7" height="5.5" rx="1.5" />
+      <rect x="14" y="15.5" width="7" height="5.5" rx="1.5" />
+      <path d="M6.5 8.5v4a2.5 2.5 0 0 0 2.5 2.5h8.5v.5" />
+    </Icon>
+  ),
+  clock: (
+    <Icon>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.2 2" />
+    </Icon>
+  ),
+  chart: (
+    <Icon>
+      <path d="M3.5 20.5h17" />
+      <rect x="5" y="11" width="3" height="6.5" rx="0.8" />
+      <rect x="10.5" y="6.5" width="3" height="11" rx="0.8" />
+      <rect x="16" y="13.5" width="3" height="4" rx="0.8" />
+    </Icon>
+  ),
+  unlink: (
+    <Icon>
+      <path d="M9.5 14.5 7.3 16.7a3.3 3.3 0 0 1-4.6-4.6l2.9-2.9a3.3 3.3 0 0 1 4.6 0" />
+      <path d="m14.5 9.5 2.2-2.2a3.3 3.3 0 0 1 4.6 4.6l-2.9 2.9a3.3 3.3 0 0 1-4.6 0" />
+    </Icon>
+  ),
+  check: (
+    <Icon>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12.2 2.7 2.7L16.2 9.4" />
+    </Icon>
+  ),
+  lock: (
+    <Icon>
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
+      <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+    </Icon>
+  ),
 };
 
-const GITHUB_URL = "https://github.com/diwenne/openreply";
-const SETUP_DOCS_URL =
-  "https://github.com/diwenne/openreply/blob/main/docs/setup.md";
-
-function formatStars(count: number): string {
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}K`;
-  }
-  return count.toLocaleString();
-}
-
-const githubIconPath =
-  "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z";
-
-const heroStats = [
-  { value: "24/7", label: "Comment monitoring" },
-  { value: "1", label: "DM per matched comment" },
-  { value: "0", label: "Scraping required" },
-];
-
-const flowSteps = [
+const features: Array<{ icon: keyof typeof icons; title: string; body: string }> = [
   {
-    eyebrow: "Connect",
-    title: "Link your Instagram professional account",
-    description:
-      "Sign in by email and connect Instagram once. No password sharing, no browser automation.",
+    icon: "comment",
+    title: "Comment to DM",
+    body: "Pick a post, the keyword and the message. Whoever comments gets the DM automatically, with a public reply if you want one.",
   },
   {
-    eyebrow: "Build",
-    title: "Pick a post, keywords, and the DM",
-    description:
-      "Create a campaign for a reel or post: the keyword to watch, the public reply, and the DM to send.",
+    icon: "direct",
+    title: "Direct with photos and audio",
+    body: "Answer every conversation in one inbox and see the photos, videos and audio the person sent, like in the app.",
   },
   {
-    eyebrow: "Deliver",
-    title: "Replies go out through the official API",
-    description:
-      "Webhooks catch comments instantly and a polling sweep catches the ones Instagram never pushes, so nothing is missed. Every send is queued, rate-limited, and logged.",
+    icon: "contacts",
+    title: "Contacts CRM",
+    body: "Each person who talks to you becomes a contact with history, tags and notes, so nobody gets lost.",
+  },
+  {
+    icon: "shield",
+    title: "Comment moderation",
+    body: "Hide offensive comments and spam with rules you set, and review what was hidden.",
+  },
+  {
+    icon: "flow",
+    title: "Visual flows",
+    body: "Draw the conversation in blocks: message, button, wait, condition. You see the whole path before turning it on.",
+  },
+  {
+    icon: "clock",
+    title: "Broadcasts within 24 hours",
+    body: "Send a message to a group of contacts, only to people who talked to you in the last 24 hours, as Meta requires.",
+  },
+  {
+    icon: "chart",
+    title: "Reports",
+    body: "See what was sent, clicked and replied, by campaign and by period, with A/B tests to compare messages.",
   },
 ];
 
-const features = [
-  "Email magic-link sign-in",
-  "Multiple Instagram accounts",
-  "Encrypted tokens at rest",
-  "Webhook + polling reconciliation",
-  "Queue-backed delivery worker",
-  "Per-account rate limiting",
-  "Tracked links with click stats",
-  "DM logs with full status",
-  "No plan limits, fully self-hosted",
+const steps = [
+  {
+    title: "Connect",
+    body: "Link your Instagram professional account through the official Meta login. Lead Engine never asks for your password.",
+  },
+  {
+    title: "Set up",
+    body: "Choose the post, the keyword and the message, or build a flow. Everything is created turned off.",
+  },
+  {
+    title: "Follow",
+    body: "Turn it on when you are ready and follow each send in the history: sent, skipped or failed, with the reason.",
+  },
 ];
 
-/* Static, faithful copies of the real Overview and Dashboard screens, built in
-   the app's own design tokens so what visitors see is what the app looks like. */
-
-function AppWindow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-background shadow-2xl shadow-black/50">
-      <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-3">
-        <span className="h-2.5 w-2.5 rounded-full bg-border" />
-        <span className="h-2.5 w-2.5 rounded-full bg-border" />
-        <span className="h-2.5 w-2.5 rounded-full bg-border" />
-        <span className="ml-2 text-xs text-muted">{label}</span>
-      </div>
-      <div className="p-5">{children}</div>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-border bg-surface p-4">
-      <p className="text-sm text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-    </div>
-  );
-}
-
-const overviewStats = [
-  ["Views", "847.2K"],
-  ["Reach", "612.4K"],
-  ["Likes", "38.1K"],
-  ["Comments", "4,204"],
-  ["Saved", "9,712"],
-  ["Shares", "2,340"],
+const controls: Array<{ icon: keyof typeof icons; title: string; body: string }> = [
+  {
+    icon: "unlink",
+    title: "Disconnecting never deletes anything",
+    body: "Your campaigns, contacts and history stay saved. Connect again and pick up where you left off.",
+  },
+  {
+    icon: "check",
+    title: "AI suggests, a person approves",
+    body: "AI drafts replies, but no DM goes out and no campaign is turned on without a human approving it.",
+  },
+  {
+    icon: "shield",
+    title: "Inside Meta's rules",
+    body: "Only the official API, with Meta's sending limits and the 24 hour window respected on every message.",
+  },
+  {
+    icon: "lock",
+    title: "Encrypted access",
+    body: "Instagram access keys are stored encrypted and you can revoke them at any time.",
+  },
 ];
 
-const overviewPosts = [
-  ["Spring drop reel", "214.8K", "9.1K", "Apr 3"],
-  ["Restock haul", "88.4K", "5.2K", "Mar 28"],
-  ["Behind the studio", "51.3K", "3.4K", "Mar 21"],
-];
-
-function OverviewPreview() {
+/* Celular de exemplo com uma conversa no Direct, só em CSS. */
+function PhoneMock({ t }: { t: TFunction }) {
   return (
-    <AppWindow label="app / overview">
-      <div className="flex items-end justify-between">
-        <div>
-          <h3 className="text-base font-semibold text-foreground">Overview</h3>
-          <p className="mt-1 text-xs text-muted">
-            Recent — 24 posts from @studio.store
-          </p>
+    <div
+      role="img"
+      aria-label={t("Example of a Direct conversation")}
+      className="relative mx-auto w-full max-w-[300px] rounded-[44px] border border-border bg-white p-2.5 shadow-[0_20px_60px_-25px_rgba(0,0,0,0.35)]"
+    >
+      <div className="overflow-hidden rounded-[36px] border border-border bg-white" aria-hidden="true">
+        {/* Barra de status */}
+        <div className="flex items-center justify-between px-6 pb-1 pt-3 text-[11px] font-semibold text-foreground">
+          <span>9:41</span>
+          <span className="h-5 w-20 rounded-full bg-foreground" />
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-3 rounded-[2px] bg-foreground" />
+            <span className="h-2.5 w-5 rounded-[3px] border border-foreground" />
+          </span>
         </div>
-        <span className="rounded border border-border px-2 py-1 text-xs text-muted">
-          Last 50
-        </span>
-      </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        {overviewStats.map(([label, value]) => (
-          <Stat key={label} label={label} value={value} />
-        ))}
-      </div>
-
-      <div className="mt-4 rounded border border-border bg-surface p-4">
-        <div className="flex items-baseline justify-between">
-          <p className="text-sm font-semibold text-foreground">
-            Followers over time
-          </p>
-          <p className="text-xs text-muted">
-            48,210 <span className="text-success">+1,240</span> · 30d
-          </p>
+        {/* Topo da conversa */}
+        <div className="flex items-center gap-3 border-b border-border px-4 py-2.5">
+          <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m15 5-7 7 7 7" />
+          </svg>
+          <span className="ig-gradient grid h-8 w-8 shrink-0 place-items-center rounded-full p-[2px]">
+            <span className="grid h-full w-full place-items-center rounded-full bg-white text-[11px] font-semibold text-foreground">
+              M
+            </span>
+          </span>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-[13px] font-semibold text-foreground">maria.flores</p>
+            <p className="text-[11px] text-muted">{t("Active now")}</p>
+          </div>
         </div>
-        <svg
-          viewBox="0 0 300 64"
-          preserveAspectRatio="none"
-          className="mt-3 h-16 w-full"
-          aria-hidden="true"
-        >
-          <polyline
-            points="0,54 43,49 86,51 129,40 171,36 214,26 257,20 300,9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-            className="text-accent"
-          />
-        </svg>
-      </div>
 
-      <div className="mt-4 rounded border border-border bg-surface p-4">
-        <p className="text-sm font-semibold text-foreground">Posts</p>
-        <table className="mt-3 w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-zinc-500">
-              <th className="pb-2 pr-3 font-medium">Post</th>
-              <th className="pb-2 px-3 text-right font-medium">Views</th>
-              <th className="pb-2 px-3 text-right font-medium">Likes</th>
-              <th className="pb-2 pl-3 text-right font-medium">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {overviewPosts.map(([post, views, likes, date]) => (
-              <tr key={post} className="border-b border-border last:border-0">
-                <td className="py-2 pr-3 text-foreground">{post}</td>
-                <td className="py-2 px-3 text-right text-muted">{views}</td>
-                <td className="py-2 px-3 text-right text-muted">{likes}</td>
-                <td className="py-2 pl-3 text-right text-zinc-500">{date}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </AppWindow>
-  );
-}
+        {/* Mensagens */}
+        <div className="space-y-2 px-3 pb-3 pt-3 text-[13px] leading-snug">
+          <p className="text-center text-[11px] text-muted">{t("Commented FLOWERS on your reel")}</p>
 
-function MatchedCommentCard() {
-  return (
-    <div className="w-64 rounded-lg border border-border bg-surface p-4 shadow-2xl shadow-black/50">
-      <p className="text-xs text-muted">New comment</p>
-      <p className="mt-1 text-sm font-semibold text-foreground">@maya.co</p>
-      <p className="mt-1 text-sm text-muted">LINK please</p>
-      <div className="mt-3 border-t border-border pt-3">
-        <p className="text-xs text-muted">
-          Matched <span className="text-accent">GUIDE</span>
-        </p>
-        <p className="mt-1 text-sm font-medium text-success">
-          Queued private reply
-        </p>
-      </div>
-    </div>
-  );
-}
+          <div className="ml-auto max-w-[80%] rounded-[18px] bg-accent px-3.5 py-2 text-white">
+            {t("Hi Maria! Here is the price list you asked for. Want me to set one aside?")}
+          </div>
+          <div className="ml-auto max-w-[80%] rounded-[14px] border border-border px-3.5 py-2 text-center text-[13px] font-semibold text-accent">
+            {t("See price list")}
+          </div>
 
-const dashboardStats = [
-  ["Active Campaigns", "8"],
-  ["DMs Sent", "1,284"],
-  ["Skipped", "42"],
-  ["Failed", "3"],
-  ["Clicks", "356"],
-  ["CTR", "27.7%"],
-];
-
-const dashboardChart: [string, number][] = [
-  ["Mon", 42],
-  ["Tue", 68],
-  ["Wed", 51],
-  ["Thu", 94],
-  ["Fri", 120],
-  ["Sat", 86],
-  ["Sun", 73],
-];
-
-const dashboardActivity = [
-  ["@maya.co", "Product guide reply", "Sent", "text-success"],
-  ["@founder.ray", "Price request", "Sent", "text-success"],
-  ["@shop.ava", "Lead magnet", "Queued", "text-warning"],
-];
-
-function DashboardPreview() {
-  const maxDM = Math.max(...dashboardChart.map(([, n]) => n));
-  return (
-    <AppWindow label="app / dashboard">
-      <h3 className="text-base font-semibold text-foreground">Hello, Maya!</h3>
-      <p className="mt-1 text-xs text-muted">2 connected accounts · 340 contacts</p>
-
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        {dashboardStats.map(([label, value]) => (
-          <Stat key={label} label={label} value={value} />
-        ))}
-      </div>
-
-      <div className="mt-4 rounded border border-border bg-surface p-4">
-        <p className="text-sm font-semibold text-foreground">DMs — Last 7 Days</p>
-        <div className="mt-4 flex h-32 items-end gap-2">
-          {dashboardChart.map(([day, n]) => (
-            <div key={day} className="flex flex-1 flex-col items-center gap-2">
-              <span className="text-[10px] text-muted">{n}</span>
-              <div
-                className="w-full rounded-sm bg-accent"
-                style={{ height: `${Math.max((n / maxDM) * 100, 4)}%` }}
-              />
-              <span className="text-[10px] text-zinc-500">{day}</span>
+          <div className="flex items-end gap-2">
+            <span className="h-6 w-6 shrink-0 rounded-full bg-[#efefef]" />
+            <div className="max-w-[75%] rounded-[18px] bg-[#efefef] px-3.5 py-2 text-foreground">
+              {t("I do! Do you deliver on Saturday?")}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <div className="mt-4 rounded border border-border bg-surface p-4">
-        <p className="text-sm font-semibold text-foreground">Recent Activity</p>
-        <div className="mt-3 space-y-2">
-          {dashboardActivity.map(([user, automation, status, color]) => (
-            <div
-              key={user}
-              className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0"
-            >
-              <span className="truncate text-foreground">{user}</span>
-              <span className="truncate text-muted">{automation}</span>
-              <span className={`text-sm ${color}`}>{status}</span>
+          <div className="flex items-end gap-2">
+            <span className="h-6 w-6 shrink-0" />
+            <div className="h-28 w-[62%] rounded-[18px] bg-[linear-gradient(135deg,#ffd1dc_0%,#fbe3c4_45%,#c9e7cf_100%)]">
+              <span className="sr-only">{t("Photo of the arrangement")}</span>
             </div>
-          ))}
+          </div>
+
+          <div className="flex items-end gap-2">
+            <span className="h-6 w-6 shrink-0 rounded-full bg-[#efefef]" />
+            <div className="flex items-center gap-2 rounded-[18px] bg-[#efefef] px-3 py-2">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 text-foreground" fill="currentColor">
+                <path d="M8 5.5v13l10.5-6.5z" />
+              </svg>
+              <span className="flex h-5 items-center gap-[3px]">
+                {[6, 12, 9, 16, 10, 14, 7, 12, 8, 5, 10, 6].map((h, i) => (
+                  <span key={i} className="w-[3px] rounded-full bg-foreground/70" style={{ height: `${h}px` }} />
+                ))}
+              </span>
+              <span className="text-[11px] text-muted">0:12</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Campo de mensagem */}
+        <div className="px-3 pb-4">
+          <div className="flex items-center gap-2 rounded-full border border-border px-3 py-2">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-accent text-white">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="4" y="7" width="16" height="12" rx="2" />
+                <circle cx="12" cy="13" r="3" />
+              </svg>
+            </span>
+            <span className="text-[13px] text-muted">{t("Message...")}</span>
+          </div>
         </div>
       </div>
-    </AppWindow>
+    </div>
   );
-}
-
-async function getGitHubStars(): Promise<number | null> {
-  try {
-    const res = await fetch("https://api.github.com/repos/diwenne/openreply", {
-      headers: { Accept: "application/vnd.github+json" },
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { stargazers_count?: number };
-    return typeof data.stargazers_count === "number" ? data.stargazers_count : null;
-  } catch {
-    return null;
-  }
 }
 
 export default async function Home() {
-  const stars = await getGitHubStars();
+  const t = await getT();
   return (
-    <main className="min-h-screen bg-white text-zinc-900">
+    <div className="min-h-screen bg-[#fafafa] text-foreground">
       <DemoNotice variant="banner" />
+      <PublicSiteHeader variant="home" />
 
-      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-3" aria-label="Lead Engine home">
-            <span className="text-lg font-bold text-zinc-900">Lead Engine</span>
-          </Link>
-
-          <div className="flex items-center gap-4">
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-600 transition hover:text-zinc-900"
-              aria-label="View Lead Engine on GitHub"
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4 fill-current">
-                <path d={githubIconPath} />
-              </svg>
-              {stars !== null && <span>{formatStars(stars)}</span>}
-            </a>
-            <Link
-              href="/login"
-              className="inline-flex items-center justify-center gap-2 bg-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600"
-            >
-              Get started
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-5 pb-16 pt-12 sm:px-6 sm:pt-18 lg:grid-cols-[0.95fr_1.05fr] lg:px-8 lg:pb-24">
-        <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-600">
-            Open source · Official Meta API
-          </div>
-
-          <h1 className="mt-7 text-balance text-5xl font-black leading-[1.02] text-zinc-900 sm:text-6xl lg:text-7xl">
-            Make every comment start the right DM
-          </h1>
-
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-600">
-            Open-sourced ManyChat. When someone comments your keyword on a post
-            or reel, they get your DM a second later. Free, self-hosted, and
-            built on the official Instagram API.
-          </p>
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/login"
-              className="inline-flex items-center justify-center gap-2 bg-orange-500 px-6 py-3 text-sm font-bold text-white transition hover:bg-orange-600"
-            >
-              Get started
-            </Link>
-            <a
-              href="#how"
-              className="inline-flex items-center justify-center border border-zinc-200 bg-white px-6 py-3 text-sm font-bold text-zinc-900 transition hover:border-zinc-300 hover:bg-zinc-100"
-            >
-              See how it works
-            </a>
-          </div>
-
-          <dl className="mt-10 grid max-w-xl grid-cols-3 gap-3">
-            {heroStats.map((stat) => (
-              <div key={stat.label} className="border border-zinc-200 bg-zinc-50 p-4">
-                <dt className="text-2xl font-black text-zinc-900">{stat.value}</dt>
-                <dd className="mt-1 text-xs leading-5 text-zinc-500">{stat.label}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-
-        <div className="relative">
-          <OverviewPreview />
-          <div className="absolute -bottom-8 -left-6 hidden lg:block">
-            <MatchedCommentCard />
-          </div>
-        </div>
-      </section>
-
-      <section id="how" className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-6 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-[0.82fr_1.18fr] lg:items-center">
-          <div>
-            <p className="text-sm font-bold uppercase text-orange-600">How it works</p>
-            <h2 className="mt-3 text-4xl font-black leading-tight text-zinc-900 sm:text-5xl">
-              A comment in, a DM out
-            </h2>
-            <p className="mt-5 text-base leading-8 text-zinc-600">
-              Three steps. Connect an account, build a campaign, and let it run.
-              The webhook handles it live and the poll sweeps up whatever the
-              webhook misses.
+      <main>
+        {/* Topo */}
+        <section className="mx-auto grid w-full max-w-5xl items-center gap-10 px-4 pb-14 pt-10 sm:px-6 md:grid-cols-[1fr_1fr] md:gap-12 md:pb-20 md:pt-16">
+          <div className="md:order-2">
+            <p className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-muted">
+              <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
+              {t("Official Meta API")}
             </p>
-          </div>
-
-          <div className="grid gap-4">
-            {flowSteps.map((step) => (
-              <article
-                key={step.title}
-                className="grid gap-4 border border-zinc-200 bg-zinc-50 p-5 sm:grid-cols-[120px_1fr]"
+            <h1 className="mt-5 text-balance text-[32px] font-bold leading-[1.15] tracking-tight sm:text-[42px]">
+              {t("Every comment can start a conversation in the Direct")}
+            </h1>
+            <p className="mt-4 max-w-xl text-base leading-7 text-muted">
+              {t(
+                "Someone comments your keyword on a post or reel and gets your message in the Direct right after, through the official Meta API. No shared password, no bot clicking around in a browser."
+              )}
+            </p>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/login"
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
               >
-                <p className="text-sm font-bold text-orange-600">{step.eyebrow}</p>
-                <div>
-                  <h3 className="text-xl font-bold text-zinc-900">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-zinc-600">{step.description}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="border-y border-zinc-200 bg-zinc-50 py-20">
-        <div className="mx-auto grid w-full max-w-6xl gap-10 px-5 sm:px-6 lg:grid-cols-[1.08fr_0.92fr] lg:px-8 lg:items-center">
-          <DashboardPreview />
-
-          <div>
-            <p className="text-sm font-bold uppercase text-orange-600">The dashboard</p>
-            <h2 className="mt-3 text-4xl font-black leading-tight text-zinc-900 sm:text-5xl">
-              See exactly what happened
-            </h2>
-            <p className="mt-5 text-base leading-8 text-zinc-600">
-              Every comment event is traceable: queued, matched, sent, skipped,
-              failed, or rate-limited. No black box.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="features" className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-6 lg:px-8">
-        <div className="max-w-2xl">
-          <p className="text-sm font-bold uppercase text-orange-600">What&rsquo;s included</p>
-          <h2 className="mt-3 text-4xl font-black leading-tight text-zinc-900 sm:text-5xl">
-            Everything, no tiers
-          </h2>
-          <p className="mt-5 text-base leading-8 text-zinc-600">
-            It is self-hosted and open source, so there is nothing to unlock. You
-            run it, you own it.
-          </p>
-        </div>
-
-        <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature) => (
-            <div
-              key={feature}
-              className="border border-zinc-200 bg-zinc-50 p-4 text-sm font-semibold text-zinc-700"
-            >
-              {feature}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto w-full max-w-6xl px-5 pb-20 sm:px-6 lg:px-8">
-        <div className="grid gap-8 border border-orange-200 bg-orange-50 p-6 sm:p-10 lg:grid-cols-[1fr_auto] lg:items-center">
-          <div>
-            <h2 className="max-w-3xl text-4xl font-black leading-tight text-zinc-900 sm:text-5xl">
-              Turn your next reel&rsquo;s comments into DMs
-            </h2>
-            <p className="mt-4 text-base text-zinc-600">
-              Free and open source. Star it if it saves you a subscription.
-            </p>
-            <p className="mt-3 text-sm leading-6 text-zinc-600">
-              <span className="font-bold text-zinc-900">
-                On your own deployment, not this one.
-              </span>{" "}
-              Clone the repo and follow the{" "}
+                {t("Sign in")}
+              </Link>
               <a
-                href={SETUP_DOCS_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="font-bold text-orange-700 underline underline-offset-2 transition hover:text-orange-800"
+                href="#como-funciona"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-white px-6 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
               >
-                setup guide
-              </a>{" "}
-              — a Meta app and a domain of your own are required before anything
-              sends.
-            </p>
+                {t("See how it works")}
+              </a>
+            </div>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-            <Link
-              href="/login"
-              className="inline-flex items-center justify-center gap-2 bg-orange-500 px-6 py-3 text-sm font-bold text-white transition hover:bg-orange-600"
-            >
-              Get started
-            </Link>
-            <a
-              href={GITHUB_URL}
-              className="inline-flex items-center justify-center border border-zinc-200 bg-white px-6 py-3 text-sm font-bold text-zinc-900 transition hover:border-zinc-300 hover:bg-zinc-100"
-            >
-              View on GitHub
-            </a>
-          </div>
-        </div>
-      </section>
 
-      <footer className="border-t border-zinc-200 py-8">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 text-sm text-zinc-500 sm:px-6 lg:px-8">
-          <span className="font-semibold text-zinc-600">Lead Engine</span>
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 transition hover:text-zinc-900"
-          >
-            <svg
-              viewBox="0 0 16 16"
-              aria-hidden="true"
-              className="h-4 w-4 fill-current"
-            >
-              <path d={githubIconPath} />
-            </svg>
-            {stars !== null && <span>{formatStars(stars)}</span>}
-          </a>
+          <div className="md:order-1">
+            <PhoneMock t={t} />
+          </div>
+        </section>
+
+        {/* Recursos */}
+        <section id="recursos" className="scroll-mt-20 border-t border-border bg-white py-14 md:py-20">
+          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("What Lead Engine does")}</h2>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-muted">
+              {t(
+                "Tools for the conversations that already happen on your profile, without making you leave Instagram's rules."
+              )}
+            </p>
+            <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {features.map((f) => (
+                <li key={f.title} className="rounded-xl border border-border bg-white p-5">
+                  <span className="grid h-11 w-11 place-items-center rounded-full border border-border text-foreground">
+                    {icons[f.icon]}
+                  </span>
+                  <h3 className="mt-4 text-base font-semibold">{t(f.title)}</h3>
+                  <p className="mt-1.5 text-sm leading-6 text-muted">{t(f.body)}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* Como funciona */}
+        <section id="como-funciona" className="scroll-mt-20 border-t border-border py-14 md:py-20">
+          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("Three steps, no secret")}</h2>
+            <ol className="mt-8 grid gap-3 md:grid-cols-3">
+              {steps.map((s, i) => (
+                <li key={s.title} className="rounded-xl border border-border bg-white p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+                    {t("Step {n}", { n: i + 1 })}
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold">{t(s.title)}</h3>
+                  <p className="mt-1.5 text-sm leading-6 text-muted">{t(s.body)}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* Controle */}
+        <section id="controle" className="scroll-mt-20 border-t border-border bg-white py-14 md:py-20">
+          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("Automation helps, you decide")}</h2>
+            <ul className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+              {controls.map((c) => (
+                <li key={c.title} className="flex gap-4">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-foreground">
+                    {icons[c.icon]}
+                  </span>
+                  <div>
+                    <h3 className="text-base font-semibold">{t(c.title)}</h3>
+                    <p className="mt-1 text-sm leading-6 text-muted">{t(c.body)}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* Chamada final */}
+        <section className="border-t border-border py-14 md:py-20">
+          <div className="mx-auto w-full max-w-md px-4 sm:px-6">
+            <div className="rounded-xl border border-border bg-white px-6 py-10 text-center sm:px-10">
+              <div className="flex justify-center">
+                <LeadEngineLogo />
+              </div>
+              <h2 className="mt-5 text-xl font-semibold leading-snug">
+                {t("Ready to look at your comments with other eyes?")}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                {t("Sign in with your email and connect your Instagram professional account.")}
+              </p>
+              <Link
+                href="/login"
+                className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
+              >
+                {t("Sign in")}
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-border py-8">
+        <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 px-4 text-center text-xs text-muted sm:px-6">
+          <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2" aria-label={t("Lead Engine")}>
+            <Link href="/privacy" className="hover:underline">{t("Privacy")}</Link>
+            <Link href="/terms" className="hover:underline">{t("Terms")}</Link>
+            <Link href="/data-deletion" className="hover:underline">{t("Data deletion")}</Link>
+            <Link href="/templates" className="hover:underline">{t("Templates")}</Link>
+          </nav>
+          <p>{t("Uses the official Meta API. Not affiliated with Meta or Instagram.")}</p>
+          <p>© 2026 Lead Engine</p>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }

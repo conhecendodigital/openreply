@@ -3,6 +3,7 @@ import { expireTakeovers } from "@/lib/messaging/takeover";
 import { expireDrafts } from "@/lib/drafts/drafts";
 import { expireWaitingEnrollments } from "@/lib/sequences/engine";
 import { sweepBroadcasts } from "@/lib/broadcasts/engine";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 /**
  * Every 5 minutes (scripts/cron.sh): takeovers past their deadline go off
@@ -13,8 +14,7 @@ import { sweepBroadcasts } from "@/lib/broadcasts/engine";
  * recipient stuck in SENDING becomes MAYBE_SENT (never resent). Idempotent.
  */
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET || process.env.NEXTAUTH_SECRET;
-  if (!cronSecret || request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  if (!isCronAuthorized(request.headers.get("authorization"))) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 

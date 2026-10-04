@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
+import {
+  MAX_WEBHOOK_BODY_BYTES,
+  shouldRecordSignatureFailure,
+  verifyTokenMatches,
+} from "@/lib/meta/webhook-guards";
 import { getDMQueue } from "@/lib/queue/client";
 import {
   parseCommentEvents,
@@ -65,7 +70,7 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  if (mode === "subscribe" && token === process.env.WEBHOOK_VERIFY_TOKEN) {
+  if (mode === "subscribe" && verifyTokenMatches(token, process.env.WEBHOOK_VERIFY_TOKEN)) {
     return new NextResponse(challenge, { status: 200 });
   }
 
@@ -76,13 +81,27 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_WEBHOOK_BODY_BYTES) {
+    return NextResponse.json({ success: false, error: "Payload too large" }, { status: 413 });
+  }
   const rawBody = await request.text();
+  if (Buffer.byteLength(rawBody) > MAX_WEBHOOK_BODY_BYTES) {
+    return NextResponse.json({ success: false, error: "Payload too large" }, { status: 413 });
+  }
   const signature = request.headers.get("x-hub-signature-256");
 
   if (!verifyWebhookSignature(rawBody, signature)) {
     // Record the attempt so a signature mismatch is visible rather than a
     // silent 401. This is the common symptom of FACEBOOK_APP_SECRET being
-    // set to the wrong app's secret for the webhook's signing key.
+    // set to the wrong app's secret for the webhook's signing key. At most
+    // one row a minute, so a flood of bad requests cannot fill the table.
+    if (!shouldRecordSignatureFailure()) {
+      return NextResponse.json(
+        { success: false, error: "Invalid signature" },
+        { status: 401 }
+      );
+    }
     await prisma.operationalEvent
       .create({
         data: {

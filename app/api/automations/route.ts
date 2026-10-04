@@ -137,6 +137,27 @@ const updateAutomationSchema = z.object({
   secondaryButtonLabel: z.string().max(20).optional().nullable(),
 });
 
+/** Fields an API key may still change while the campaign is ON. */
+const KEY_EDITABLE_WHILE_ON = new Set(["name", "goal", "isActive"]);
+
+/**
+ * Fields of a PATCH body that would change the stored campaign. Tracked link
+ * URLs live in their own table, so any value sent for them counts as a change.
+ */
+function editedCampaignFields(
+  body: Record<string, unknown>,
+  existing: Record<string, unknown>
+): string[] {
+  const linkFields = new Set(["trackedDestinationUrl", "secondaryDestinationUrl", "secondaryButtonLabel"]);
+  return Object.entries(body)
+    .filter(([field, value]) => {
+      if (value === undefined) return false;
+      if (linkFields.has(field)) return value !== null;
+      return JSON.stringify(value) !== JSON.stringify(existing[field] ?? null);
+    })
+    .map(([field]) => field);
+}
+
 export async function GET(request: NextRequest) {
   const workspaceId = await getCurrentWorkspaceId();
   if (!workspaceId) {
@@ -308,6 +329,9 @@ export async function POST(request: NextRequest) {
   }
 
   const workspaceId = context.workspaceId;
+  // Owner's rule: an API key (the AI's MCP key, scripts) never turns a
+  // campaign on. Whatever the body says, a campaign made by a key starts OFF.
+  const byApiKey = await isApiTokenRequest();
 
   const body = await request.json();
   const parsed = createAutomationSchema.safeParse(body);
@@ -447,7 +471,7 @@ export async function POST(request: NextRequest) {
       publicReplyMessage: parsed.data.publicReplyEnabled
         ? publicReplyList[0] ?? parsed.data.publicReplyMessage ?? null
         : null,
-      isActive: parsed.data.isActive,
+      isActive: byApiKey ? false : parsed.data.isActive,
       wholeWordMatch: parsed.data.wholeWordMatch,
       workspaceId,
       instagramAccountId: instagramAccount.id,
@@ -525,34 +549,53 @@ export async function PATCH(request: NextRequest) {
     ...automationData
   } = parsed.data;
 
-  // The trigger decides which fields apply (switching it, or editing a
-  // story/live/DM campaign). A switch to a post comment needs a post.
-  const trigger = automationData.trigger ?? existing.trigger ?? "COMMENT";
-  // An API key (MCP) cannot swap what fires a campaign that is ON: that would
-  // start answering new people (e.g. every story mention) without the owner
-  // seeing it. Turn it off first, edit, then the owner turns it back on.
-  // Same for who it answers: keywords, "any word", "any post", Direct trigger.
-  const widens = (["keywords", "matchAnyWord", "matchAnyPost", "dmTriggerEnabled"] as const).some(
-    (field) =>
-      automationData[field] !== undefined &&
-      JSON.stringify(automationData[field]) !==
-        JSON.stringify((existing as Record<string, unknown>)[field])
-  );
-  if (
-    existing.isActive &&
-    ((automationData.trigger !== undefined &&
-      automationData.trigger !== existing.trigger) ||
-      widens) &&
-    (await isApiTokenRequest())
-  ) {
+  const byApiKey = await isApiTokenRequest();
+  // Owner's rule: an API key never turns a campaign on (turning it OFF is
+  // fine) and never publishes its report page. A human does it in the app.
+  if (byApiKey && automationData.isActive === true && !existing.isActive) {
     return NextResponse.json(
       {
         success: false,
-        error: "Turn the campaign off before changing its trigger",
+        error: "API keys cannot turn a campaign on. Do it in the Lead Engine.",
+        code: "human_only",
       },
-      { status: 409 }
+      { status: 403 }
     );
   }
+  if (byApiKey && automationData.reportShareEnabled === true && !existing.reportShareEnabled) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "API keys cannot publish a campaign report. Do it in the Lead Engine.",
+        code: "human_only",
+      },
+      { status: 403 }
+    );
+  }
+  // A campaign that is ON answers real people right now. A key may only
+  // rename it, change its goal or turn it off. Texts, links and who it
+  // answers wait until it is off, so a human sees them before it goes back on.
+  if (byApiKey && existing.isActive) {
+    const blocked = editedCampaignFields(
+      parsed.data as Record<string, unknown>,
+      existing as unknown as Record<string, unknown>
+    ).filter((field) => !KEY_EDITABLE_WHILE_ON.has(field));
+    if (blocked.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Turn the campaign off before changing its trigger, texts or links",
+          code: "campaign_on",
+          details: { fields: blocked },
+        },
+        { status: 409 }
+      );
+    }
+  }
+
+  // The trigger decides which fields apply (switching it, or editing a
+  // story/live/DM campaign). A switch to a post comment needs a post.
+  const trigger = automationData.trigger ?? existing.trigger ?? "COMMENT";
   if (
     automationData.trigger &&
     automationData.trigger !== existing.trigger &&
@@ -697,6 +740,18 @@ export async function DELETE(request: NextRequest) {
   if (!canManageWorkspace(context.role)) {
     return NextResponse.json(
       { success: false, error: "Only owners and admins can delete campaigns" },
+      { status: 403 }
+    );
+  }
+
+  // Deleting a campaign is a human decision: an API key cannot do it.
+  if (await isApiTokenRequest()) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "API keys cannot delete campaigns. Do it in the Lead Engine.",
+        code: "human_only",
+      },
       { status: 403 }
     );
   }

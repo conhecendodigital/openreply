@@ -5,11 +5,14 @@
  */
 import { ptFlows } from "@/lib/i18n/pt-flows";
 import { ptEscala } from "@/lib/i18n/pt-escala";
+import { ptSite } from "@/lib/i18n/pt-site";
 
 export const pt: Record<string, string> = {
   // 2026-10-08: Etapa 5 (Segmentos, Disparos, A/B, Relatórios), em
   // lib/i18n/pt-escala.ts. Vem primeiro: uma chave que já existia aqui embaixo vence.
   ...ptEscala,
+  // 2026-10-04: site público (página inicial, cabeçalho, login) em lib/i18n/pt-site.ts.
+  ...ptSite,
   // Menu e topo
   Dashboard: "Início",
   Overview: "Visão geral",
@@ -311,8 +314,8 @@ export const pt: Record<string, string> = {
   "API & MCP": "API e MCP",
   "Keys for scripts and AI agents (MCP). Send them as": "Chaves para scripts e agentes de IA (MCP). Envie como",
   "Authorization: Bearer <key>": "Authorization: Bearer <chave>",
-  ". A key can do everything an owner can, except manage keys.":
-    ". Uma chave faz tudo que o dono faz, menos gerenciar chaves.",
+  ". A key reads, creates things turned off and proposes drafts. Turning on, sending, deleting and managing members or keys stay with a person.":
+    ". Uma chave lê, cria tudo desligado e propõe rascunhos. Ligar, enviar, apagar e cuidar de membros ou chaves fica com uma pessoa.",
   "MCP endpoint": "Endereço do MCP",
   "Copy your new key now. It will not be shown again.": "Copie sua chave nova agora. Ela não aparece de novo.",
   "Copy key": "Copiar chave",

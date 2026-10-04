@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { resolveApiToken, resolveApiTokenUserId } from "@/lib/api-token-auth";
 import { prisma } from "@/lib/db/client";
 import { ensureWorkspaceForUser, getPrimaryWorkspace } from "@/lib/workspace";
-import { isEmailAllowedToSignIn } from "@/lib/env";
+import { allowSignIn } from "@/lib/auth-signin";
 
 type AdapterPrismaClient = Parameters<typeof PrismaAdapter>[0];
 
@@ -34,9 +34,10 @@ export const authConfig = {
   ],
   callbacks: {
     // Runs before the magic link is sent, so a blocked address never receives
-    // one, and again when the link is verified.
-    async signIn({ user }) {
-      return isEmailAllowedToSignIn(user?.email);
+    // one, and again when the link is verified. Also limits magic links per
+    // address (lib/auth-signin.ts).
+    async signIn({ user, email }) {
+      return allowSignIn({ user, email });
     },
     async session({ session, user }) {
       if (session.user) {

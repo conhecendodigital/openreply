@@ -3,7 +3,7 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { fail, ok, readJson, requireContext } from "@/lib/api-helpers";
 import { parseFilters } from "@/lib/segments/filters";
-import { findSegment } from "@/lib/segments/api";
+import { findSegment, humanOnly } from "@/lib/segments/api";
 import { updateBroadcastSchema } from "@/lib/broadcasts/schema";
 import {
   BROADCAST_SELECT,
@@ -95,6 +95,8 @@ export async function PATCH(request: NextRequest, { params }: RouteProps) {
 export async function DELETE(_request: NextRequest, { params }: RouteProps) {
   const auth = await requireContext({ manage: true });
   if ("response" in auth) return auth.response;
+  const blocked = await humanOnly("delete broadcasts");
+  if (blocked) return blocked;
   const { id } = await params;
   const broadcast = await findBroadcast(id, auth.context.workspaceId);
   if (!broadcast) return fail("Broadcast not found", 404);

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentWorkspaceId } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
+import { isMetaUrl } from "@/lib/messages/store";
+import { mediaHeaders } from "@/lib/messages/media-headers";
 
 type RouteProps = { params: Promise<{ id: string }> };
 
@@ -37,12 +39,12 @@ export async function GET(_request: NextRequest, { params }: RouteProps) {
 
   if (media.status === "saved" && media.data) {
     return new NextResponse(new Uint8Array(media.data), {
-      headers: {
-        "Content-Type": media.mime || "application/octet-stream",
-        "Cache-Control": "private, max-age=86400",
-        "Content-Length": String(media.data.length),
-      },
+      headers: { ...mediaHeaders(media.mime), "Content-Length": String(media.data.length) },
     });
+  }
+  // Only ever send the viewer back to Meta's CDN, never to any other site.
+  if (!isMetaUrl(media.originalUrl)) {
+    return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
   }
   return NextResponse.redirect(media.originalUrl, 302);
 }

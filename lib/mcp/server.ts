@@ -41,8 +41,8 @@ const bool = { type: "boolean" };
 const strList = { type: "array", items: { type: "string" } };
 
 // Campaign fields accepted by POST/PATCH /api/automations. `isActive` is left
-// out on purpose: campaigns are created paused and only turned on through
-// ativar_automacao, so a human always sees that step.
+// out on purpose: campaigns are created paused and only a human turns them on
+// in the app (the API answers 403 human_only to any key).
 const campaignFields: Record<string, unknown> = {
   name: { ...str, description: "Nome interno da automação" },
   goal: { ...str, description: "Objetivo, em uma frase" },
@@ -217,7 +217,7 @@ export const TOOLS: Tool[] = [
   {
     name: "criar_automacao",
     description:
-      "Cria uma automação SEMPRE DESLIGADA. Depois de revisar os textos, ligue com ativar_automacao.",
+      "Cria uma automação SEMPRE DESLIGADA. Quem liga é o dono, no Lead Engine.",
     inputSchema: {
       type: "object",
       properties: campaignFields,
@@ -237,7 +237,7 @@ export const TOOLS: Tool[] = [
   {
     name: "editar_automacao",
     description:
-      "Altera campos ou textos de uma automação. Não liga nem desliga (use ativar_automacao/desativar_automacao).",
+      "Altera campos ou textos de uma automação DESLIGADA (ligada, só nome e objetivo). Não liga nem desliga (desligar: desativar_automacao).",
     inputSchema: {
       type: "object",
       properties: { id: { ...str, description: "ID da automação" }, ...campaignFields },
@@ -256,20 +256,26 @@ export const TOOLS: Tool[] = [
   {
     name: "ativar_automacao",
     description:
-      "LIGA uma automação: a partir daí ela responde pessoas reais sozinha. Só use com o ok do dono da conta.",
+      "Não liga nada: ligar uma automação é sempre do dono, no Lead Engine. Devolve o caminho pra ele ligar.",
     inputSchema: {
       type: "object",
       properties: { id: { ...str, description: "ID da automação" } },
       required: ["id"],
     },
-    async run(args, call) {
+    // Owner's rule: the AI never turns a campaign on. The API refuses it for
+    // any key (403 human_only); this tool only tells where a human does it.
+    async run(args) {
       const id = requireString(args, "id");
       if (!id) return text("Informe o id.", true);
-      const res = await api(call, "PATCH", `/api/automations?id=${encodeURIComponent(id)}`, {
-        isActive: true,
-      });
-      if (!res.ok) return res.result;
-      return text({ id, ligada: true });
+      return text(
+        {
+          id,
+          ligada: false,
+          aviso: "Chave de API não liga automação. Peça pro dono ligar no Lead Engine.",
+          caminho: `/campaigns/${encodeURIComponent(id)}`,
+        },
+        true
+      );
     },
   },
   {

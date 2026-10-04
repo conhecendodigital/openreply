@@ -1,31 +1,47 @@
 import Link from "next/link";
+import { LeadEngineLogo } from "@/components/sidebar";
+import { LangSwitch } from "@/components/lang-provider";
+import { getT } from "@/lib/i18n/server";
 
+/**
+ * Cabeçalho do site público (2026-10-04): visual do instagram.com, branco com
+ * borda fina, logo Lead Engine, troca PT | EN e botão azul Entrar.
+ */
 interface PublicSiteHeaderProps {
   active?: "home" | "templates";
+  /** Links da página inicial (âncoras). Nas outras páginas mostra Modelos e Agências. */
+  variant?: "home" | "pages";
 }
 
-const navLinks = [
-  { label: "Templates", href: "/templates", key: "templates" },
-  { label: "Agencies", href: "/instagram-dm-automation-agencies", key: "agencies" },
-  { label: "Pricing", href: "/#pricing", key: "pricing" },
-  { label: "Security", href: "/#security", key: "security" },
-];
+export default async function PublicSiteHeader({ active, variant = "pages" }: PublicSiteHeaderProps) {
+  const t = await getT();
+  const navLinks =
+    variant === "home"
+      ? [
+          { label: t("Features"), href: "#recursos", key: "features" },
+          { label: t("How it works"), href: "#como-funciona", key: "how" },
+          { label: t("You in control"), href: "#controle", key: "control" },
+        ]
+      : [
+          { label: t("Templates"), href: "/templates", key: "templates" },
+          { label: t("Agencies"), href: "/instagram-dm-automation-agencies", key: "agencies" },
+        ];
 
-export default function PublicSiteHeader({ active }: PublicSiteHeaderProps) {
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-background/85">
-      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3" aria-label="Lead Engine home">
-          <span className="text-lg font-bold text-white">Lead Engine</span>
+    <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur">
+      <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
+        <Link href="/" className="rounded-lg text-foreground" aria-label={t("Lead Engine home")}>
+          <LeadEngineLogo />
         </Link>
 
-        <nav className="hidden items-center gap-7 md:flex">
+        <nav className="hidden items-center gap-6 md:flex" aria-label={t("Main menu")}>
           {navLinks.map((link) => (
             <Link
               key={link.key}
               href={link.href}
-              className={`text-sm font-medium transition ${
-                active === link.key ? "text-white" : "text-zinc-400 hover:text-white"
+              aria-current={active === link.key ? "page" : undefined}
+              className={`text-sm transition-colors ${
+                active === link.key ? "font-semibold text-foreground" : "text-muted hover:text-foreground"
               }`}
             >
               {link.label}
@@ -33,18 +49,13 @@ export default function PublicSiteHeader({ active }: PublicSiteHeaderProps) {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <LangSwitch />
           <Link
             href="/login"
-            className="hidden px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:text-white sm:inline-flex"
+            className="inline-flex h-9 items-center justify-center rounded-lg bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
           >
-            Sign in
-          </Link>
-          <Link
-            href="/login"
-            className="inline-flex items-center justify-center bg-cyan-300 px-4 py-2 text-sm font-bold text-zinc-950 transition hover:bg-cyan-200"
-          >
-            Start free
+            {t("Sign in")}
           </Link>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { decryptToken } from "@/lib/meta/oauth";
 import { getUserInfo } from "@/lib/meta/client";
 import { noteMetaError } from "@/lib/channels/status";
+import { isCronAuthorized } from "@/lib/cron-auth";
 import {
   backfillFollowerHistory,
   recordFollowerSnapshot,
@@ -16,10 +17,7 @@ import {
  * permanently — there is no way to backfill beyond the insights window.
  */
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET || process.env.NEXTAUTH_SECRET;
-
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!isCronAuthorized(request.headers.get("authorization"))) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
       { status: 401 }

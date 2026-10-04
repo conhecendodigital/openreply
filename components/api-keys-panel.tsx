@@ -88,7 +88,7 @@ export function ApiKeysPanel() {
       <h2 className="text-base font-semibold mb-2">{t("API & MCP")}</h2>
       <p className="mb-6 text-sm text-muted">
         {t("Keys for scripts and AI agents (MCP). Send them as")}{" "}
-        <code className="text-foreground">{t("Authorization: Bearer <key>")}</code>{t(". A key can do everything an owner can, except manage keys.")}
+        <code className="text-foreground">{t("Authorization: Bearer <key>")}</code>{t(". A key reads, creates things turned off and proposes drafts. Turning on, sending, deleting and managing members or keys stay with a person.")}
       </p>
 
       {data && (

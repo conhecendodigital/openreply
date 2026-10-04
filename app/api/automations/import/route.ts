@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
+import { isApiTokenRequest } from "@/lib/auth";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import { generateReportShareSlug } from "@/lib/reports/share";
 import { generateTrackedLinkSlug } from "@/lib/tracking/server";
@@ -41,6 +42,10 @@ export async function POST(request: NextRequest) {
       { status: 403 }
     );
   }
+
+  // Owner's rule: an API key never turns a campaign on, so everything it
+  // imports starts OFF whatever the file says.
+  const byApiKey = await isApiTokenRequest();
 
   const body = await request.json();
   const parsed = importSchema.safeParse(body);
@@ -98,7 +103,7 @@ export async function POST(request: NextRequest) {
         dmMessage: campaign.dmMessage.slice(0, 1000),
         publicReplyEnabled: Boolean(publicReply),
         publicReplyMessage: publicReply ? publicReply.slice(0, 1000) : null,
-        isActive: campaign.isActive,
+        isActive: byApiKey ? false : campaign.isActive,
         wholeWordMatch: campaign.wholeWordMatch,
         workspaceId: context.workspaceId,
         instagramAccountId: account.id,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
+import { isApiTokenRequest } from "@/lib/auth";
 import {
   buildInvitationUrl,
   generateInvitationToken,
@@ -27,9 +28,23 @@ const deleteSchema = z.object({
   invitationId: z.string().min(1).optional(),
 });
 
+// Members are managed from a signed-in session only. An API key acts as the
+// owner, so if it could invite people it would turn itself into a human
+// admin and get past every "only a human does this" rule.
+async function blockApiKey() {
+  if (await isApiTokenRequest()) {
+    return NextResponse.json(
+      { success: false, error: "API keys cannot manage members", code: "human_only" },
+      { status: 403 }
+    );
+  }
+  return null;
+}
+
 async function getMemberPayload(
   workspaceId: string,
-  currentUserRole?: "OWNER" | "ADMIN" | "MEMBER"
+  currentUserRole?: "OWNER" | "ADMIN" | "MEMBER",
+  options: { hideInviteLinks?: boolean } = {}
 ) {
   const [members, invitations] = await Promise.all([
     prisma.workspaceMember.findMany({
@@ -65,10 +80,12 @@ async function getMemberPayload(
   return {
     ...(currentUserRole ? { currentUserRole } : {}),
     members,
-    invitations: invitations.map((invitation) => ({
-      ...invitation,
-      inviteUrl: buildInvitationUrl(invitation.token),
-    })),
+    invitations: invitations.map(({ token, ...invitation }) =>
+      // The invite link lets anyone join: never hand it to an API key.
+      options.hideInviteLinks
+        ? invitation
+        : { ...invitation, token, inviteUrl: buildInvitationUrl(token) }
+    ),
   };
 }
 
@@ -84,12 +101,16 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     data: {
-      ...(await getMemberPayload(context.workspaceId, context.role)),
+      ...(await getMemberPayload(context.workspaceId, context.role, {
+        hideInviteLinks: await isApiTokenRequest(),
+      })),
     },
   });
 }
 
 export async function POST(request: NextRequest) {
+  const blocked = await blockApiKey();
+  if (blocked) return blocked;
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(
@@ -120,6 +141,25 @@ export async function POST(request: NextRequest) {
   });
 
   if (existingUser) {
+    // Re-inviting someone who is already in can change their role, but never
+    // the owner's (or the caller's own): that would let an admin demote the
+    // owner. Role changes of other members go through PATCH, which has the
+    // same rule.
+    const current = await prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: context.workspaceId,
+          userId: existingUser.id,
+        },
+      },
+      select: { role: true },
+    });
+    if (current?.role === "OWNER" || existingUser.id === context.userId) {
+      return NextResponse.json(
+        { success: false, error: "Member cannot be updated" },
+        { status: 400 }
+      );
+    }
     await prisma.workspaceMember.upsert({
       where: {
         workspaceId_userId: {
@@ -169,6 +209,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const blocked = await blockApiKey();
+  if (blocked) return blocked;
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(
@@ -213,6 +255,8 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const blocked = await blockApiKey();
+  if (blocked) return blocked;
   const context = await getCurrentWorkspaceContext();
   if (!context) {
     return NextResponse.json(

@@ -6,6 +6,7 @@ import {
   type JsonRpcMessage,
 } from "@/lib/mcp/server";
 import { resolveHandler } from "@/lib/mcp/routes";
+import { hitRateLimit, MCP_LIMIT } from "@/lib/http-rate-limit";
 
 // MCP over Streamable HTTP, stateless: every POST carries one JSON-RPC message
 // (or a batch) and gets a JSON answer. Auth is the same bearer token that the
@@ -23,6 +24,14 @@ export async function POST(request: NextRequest) {
   const authorization = request.headers.get("authorization");
   if (!(await resolveApiTokenUserId(authorization))) {
     return unauthorized();
+  }
+  // Per-key ceiling against a runaway script; fails open if Redis is down.
+  const limited = await hitRateLimit("mcp", authorization ?? "", MCP_LIMIT.limit, MCP_LIMIT.windowSeconds);
+  if (!limited.allowed) {
+    return NextResponse.json(
+      { jsonrpc: "2.0", id: null, error: { code: -32029, message: "Too many requests, try again in a minute" } },
+      { status: 429, headers: { "Retry-After": "60" } }
+    );
   }
 
   let payload: unknown;
