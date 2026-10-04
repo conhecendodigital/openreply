@@ -28,6 +28,11 @@ const pageTitles: Record<string, string> = {
   "/channels": "Channels",
   "/flows": "Flows",
   "/flows/new": "New flow",
+  // Etapa 5
+  "/reports": "Reports",
+  "/broadcasts": "Broadcasts",
+  "/broadcasts/new": "New broadcast",
+  "/segments": "Segments",
 };
 
 interface TopBarProps {
@@ -43,7 +48,7 @@ export default function TopBar({
 }: TopBarProps) {
   const pathname = usePathname();
   const t = useT();
-  const title = t(pageTitles[pathname] ?? (pathname.startsWith("/campaigns/") ? "Campaign" : pathname.startsWith("/contacts/") ? "Contact" : pathname.startsWith("/flows/") ? "Flow" : "Dashboard"));
+  const title = t(pageTitles[pathname] ?? (pathname.startsWith("/campaigns/") ? "Campaign" : pathname.startsWith("/contacts/") ? "Contact" : pathname.startsWith("/flows/") ? "Flow" : pathname.startsWith("/broadcasts/") ? "Broadcast" : "Dashboard"));
 
   return (
     <header

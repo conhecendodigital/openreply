@@ -7,6 +7,7 @@
 import { Queue } from "bullmq";
 import Redis from "ioredis";
 import type { FlowJob } from "@/lib/flows/jobs";
+import type { BroadcastJob } from "@/lib/broadcasts/jobs";
 
 let connection: Redis | null = null;
 
@@ -150,7 +151,9 @@ export type DmQueueJob =
   | SequenceStepJob
   | ProfileJob
   // Etapa 3: names and shapes in lib/flows/jobs.ts.
-  | FlowJob;
+  | FlowJob
+  // Etapa 5: names and shapes in lib/broadcasts/jobs.ts.
+  | BroadcastJob;
 
 export const SAVE_MEDIA_JOB_NAME = "save-media";
 export const POSTBACK_JOB_NAME = "process-postback";

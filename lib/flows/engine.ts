@@ -51,6 +51,7 @@ import {
   type MessageNode,
 } from "@/lib/flows/schema";
 import { renderFlowText } from "@/lib/flows/render";
+import { noteFollowStatus } from "@/lib/contacts/follows";
 import {
   FLOW_REPLY_TIMEOUT_JOB_NAME,
   FLOW_STEP_JOB_NAME,
@@ -229,7 +230,10 @@ export async function startFlowRun(data: FlowStartJob, now: Date = new Date()): 
     if (before) return "duplicate";
   }
 
-  const isComment = triggerIsComment(def.trigger.type);
+  // Etapa 5: a flow started by a broadcast button runs inside the window the
+  // tap opened. Even when the flow's own trigger is a comment there is no
+  // comment here: never a private reply (triggerRef is the recipient id).
+  const isComment = data.kind !== "BROADCAST" && triggerIsComment(def.trigger.type);
   let runId: string;
   try {
     const created = await prisma.flowRun.create({
@@ -500,6 +504,7 @@ async function runCondition(input: NodeInput): Promise<NodeResult> {
       // null (Meta could not tell, e.g. no open conversation) counts as no:
       // fail-closed, like the campaigns' first contact.
       const follows = await getUserFollowStatus(token(run), run.igUserId);
+      noteFollowStatus(run.flow.instagramAccountId, run.igUserId, follows);
       yes = follows === true;
       detail = follows === null ? "unknown" : null;
       break;
@@ -596,7 +601,8 @@ async function runWait(input: NodeInput): Promise<NodeResult> {
     const lastInboundAt = latest(run.contact.lastInboundAt, input.inboundAt);
     // Before the comment's private reply no window is needed yet; after it
     // (or on any other trigger) the wait has to end inside the window.
-    const privateReplyPending = triggerIsComment(def.trigger.type) && !run.privateReplyUsed;
+    const privateReplyPending =
+      triggerIsComment(def.trigger.type) && !run.privateReplyUsed && Boolean(run.triggerCommentId);
     if (!privateReplyPending && windowRemainingMs({ lastInboundAt }, now) < delayMs) {
       return { kind: "finish", status: "STOPPED_WINDOW", reason: "wait_beyond_window" };
     }

@@ -20,6 +20,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CampaignAbPanel } from "@/components/ab-test";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import PostPicker from "@/components/post-picker";
 import CampaignPreview, { previewTabsFor, type PreviewTab, type PreviewTrigger } from "@/components/campaign-preview";
@@ -1184,6 +1185,17 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
               </div>
             )}
           </div>
+        </Section>
+
+        {/* 2026-10-08 (Etapa 5): optional A/B test, saved by its own route.
+            "Save changes" above never touches it, and with it off the
+            campaign sends exactly its own texts. */}
+        <Section title={t("A/B test (optional)")}>
+          {mode === "edit" && campaignId ? (
+            <CampaignAbPanel campaignId={campaignId} />
+          ) : (
+            <p className="text-xs text-muted">{t("Save the campaign first, then test variants of its messages here.")}</p>
+          )}
         </Section>
       </div>
 

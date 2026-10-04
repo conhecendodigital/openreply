@@ -22,6 +22,8 @@ export const OUTBOUND_ORIGINS = [
   "private_reply",
   // Etapa 3: a flow message (refId = FlowRun.id).
   "flow",
+  // Etapa 5: a broadcast (refId = BroadcastRecipient.id). Never a message tag.
+  "broadcast",
 ] as const;
 export type OutboundOrigin = (typeof OUTBOUND_ORIGINS)[number];
 

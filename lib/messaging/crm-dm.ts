@@ -17,6 +17,7 @@ import { onDirectMessage, resolveAccountByInstagramId } from "@/lib/contacts/rec
 import { classifyEcho, ECHO_RECHECK_DELAY_MS } from "@/lib/messaging/echo";
 import { startTakeover } from "@/lib/messaging/takeover";
 import { onPersonReplied } from "@/lib/sequences/engine";
+import { isOptOutText, recordOptOut } from "@/lib/broadcasts/optout";
 import { CRM_DM_JOB_NAME, getDMQueue, safeJobKey, type CrmDmJob } from "@/lib/queue/client";
 
 export type CrmDmOutcome = "no_account" | "no_contact" | "inbound" | "ours" | "recheck" | "takeover";
@@ -53,6 +54,11 @@ export async function handleCrmDm(
   if (!contactId) return "no_contact";
 
   if (!data.fromMe) {
+    // Etapa 5: PARAR / SAIR / STOP = out of future broadcasts (only that;
+    // campaigns and flows still answer the word). Never throws.
+    if (tracked?.contact && isOptOutText(data.text)) {
+      await recordOptOut(tracked.contact, { text: data.text, mid: data.mid, at: sentAt });
+    }
     await onPersonReplied({ contactId, instagramId: account.instagramId, at: sentAt });
     // A new DM extends the window of the pending draft too.
     const expiresAt = new Date(sentAt.getTime() + 24 * 3_600_000);

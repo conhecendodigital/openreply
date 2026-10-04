@@ -15,6 +15,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import CampaignPreview, { type PreviewTab, type PreviewTrigger } from "@/components/campaign-preview";
 import { triggerText } from "@/components/trigger-ui";
+import { CampaignAbPanel } from "@/components/ab-test";
 
 import { useT } from "@/components/lang-provider";
 interface Campaign {
@@ -387,6 +388,7 @@ export default function CampaignDetailPage() {
         {convertError && <p className="text-sm text-error">{convertError}</p>}
 
         {tab === "insights" && (
+          <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {metrics.map((m) => (
               <div key={m.label} className="panel rounded p-4">
@@ -396,6 +398,9 @@ export default function CampaignDetailPage() {
                 </p>
               </div>
             ))}
+          </div>
+          {/* Etapa 5: A/B results and "declare winner"; variants are edited in Edit. */}
+          <CampaignAbPanel campaignId={campaign.id} compact />
           </div>
         )}
 

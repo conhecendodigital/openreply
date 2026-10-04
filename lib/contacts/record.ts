@@ -36,6 +36,9 @@ export const CONTACT_EVENT_TYPES = [
   "FLOW_STARTED",
   "FLOW_STEP",
   "FLOW_DONE",
+  // Etapa 5 (escala)
+  "BROADCAST_SENT",
+  "OPT_OUT",
 ] as const;
 export type ContactEventType = (typeof CONTACT_EVENT_TYPES)[number];
 
@@ -82,6 +85,8 @@ export const AUTO_TAGS = {
   sentDm: "mandou DM",
   moderated: (verdict: string) => `moderado:${verdict}`,
   cameFrom: (origin: string) => `veio:${origin.trim() || "link"}`,
+  // Etapa 5: wrote PARAR / SAIR / STOP (out of future broadcasts).
+  optedOut: "saiu:disparos",
 };
 
 export function normalizeTagName(name: string): string {

@@ -25,14 +25,16 @@ export type FlowEventKind =
   | "DM"
   | "STORY_REPLY"
   | "STORY_MENTION"
-  | "CONVERSATION_LINK";
+  | "CONVERSATION_LINK"
+  // Etapa 5: a broadcast button (lib/broadcasts/tap.ts). Never a comment.
+  | "BROADCAST";
 
 export interface FlowStartJob {
   /** Our account's instagramId (webhook entry.id), like every other job. */
   instagramAccountId: string;
   flowId: string;
   kind: FlowEventKind;
-  /** comment:<id> | live:<id> | dm:<mid> | mention:<mid> | ref:<eventKey> */
+  /** comment:<id> | live:<id> | dm:<mid> | mention:<mid> | ref:<eventKey> | bc:<recipientId>:<buttonId> */
   triggerKey: string;
   /** The comment id (COMMENT / LIVE_COMMENT) or mid. Never named commentId. */
   triggerRef: string;

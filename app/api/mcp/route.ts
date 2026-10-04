@@ -5,83 +5,18 @@ import {
   type InternalCall,
   type JsonRpcMessage,
 } from "@/lib/mcp/server";
-import * as automationsRoute from "@/app/api/automations/route";
-import * as logsRoute from "@/app/api/logs/route";
-import * as conversationsRoute from "@/app/api/instagram/conversations/route";
-import * as conversationRoute from "@/app/api/instagram/conversations/[id]/route";
-import * as overviewRoute from "@/app/api/instagram/overview/route";
-import * as postsRoute from "@/app/api/instagram/posts/route";
-import * as moderationSettingsRoute from "@/app/api/moderation/settings/route";
-import * as moderationLogRoute from "@/app/api/moderation/log/route";
-import * as moderationRestoreRoute from "@/app/api/moderation/log/[id]/restore/route";
-import * as moderationHideRoute from "@/app/api/moderation/log/[id]/hide/route";
-import * as moderationTestRoute from "@/app/api/moderation/test/route";
-import * as contactsRoute from "@/app/api/contacts/route";
-import * as contactTagsListRoute from "@/app/api/contacts/tags/route";
-import * as contactRoute from "@/app/api/contacts/[id]/route";
-import * as contactTagsRoute from "@/app/api/contacts/[id]/tags/route";
-import * as contactTakeoverRoute from "@/app/api/contacts/[id]/takeover/route";
-import * as draftsRoute from "@/app/api/drafts/route";
-import * as draftRoute from "@/app/api/drafts/[id]/route";
-import * as draftApproveRoute from "@/app/api/drafts/[id]/approve/route";
-import * as draftRejectRoute from "@/app/api/drafts/[id]/reject/route";
-import * as unansweredRoute from "@/app/api/inbox/unanswered/route";
-import * as conversationLinksRoute from "@/app/api/conversation-links/route";
-import * as conversationLinkRoute from "@/app/api/conversation-links/[id]/route";
+import { resolveHandler } from "@/lib/mcp/routes";
 
 // MCP over Streamable HTTP, stateless: every POST carries one JSON-RPC message
 // (or a batch) and gets a JSON answer. Auth is the same bearer token that the
 // session-guarded routes accept (OPENREPLY_API_TOKEN).
 export const dynamic = "force-dynamic";
 
-type Handler = (
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) => Promise<Response>;
-
 function unauthorized() {
   return NextResponse.json(
     { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Unauthorized" } },
     { status: 401, headers: { "WWW-Authenticate": "Bearer" } }
   );
-}
-
-function resolveHandler(method: string, pathname: string): { handler: Handler; id: string } | null {
-  const routes: [RegExp, Record<string, unknown>][] = [
-    [/^\/api\/automations$/, automationsRoute],
-    [/^\/api\/logs$/, logsRoute],
-    [/^\/api\/instagram\/conversations$/, conversationsRoute],
-    [/^\/api\/instagram\/overview$/, overviewRoute],
-    [/^\/api\/instagram\/posts$/, postsRoute],
-    [/^\/api\/instagram\/conversations\/([^/]+)$/, conversationRoute],
-    [/^\/api\/moderation\/settings$/, moderationSettingsRoute],
-    [/^\/api\/moderation\/log$/, moderationLogRoute],
-    [/^\/api\/moderation\/test$/, moderationTestRoute],
-    [/^\/api\/moderation\/log\/([^/]+)\/restore$/, moderationRestoreRoute],
-    [/^\/api\/moderation\/log\/([^/]+)\/hide$/, moderationHideRoute],
-    // Static paths before the [id] patterns that would also match them.
-    [/^\/api\/contacts$/, contactsRoute],
-    [/^\/api\/contacts\/tags$/, contactTagsListRoute],
-    [/^\/api\/contacts\/([^/]+)\/tags$/, contactTagsRoute],
-    [/^\/api\/contacts\/([^/]+)\/takeover$/, contactTakeoverRoute],
-    [/^\/api\/contacts\/([^/]+)$/, contactRoute],
-    // Etapa 2. Static paths before the [id] patterns.
-    [/^\/api\/drafts$/, draftsRoute],
-    [/^\/api\/drafts\/([^/]+)\/approve$/, draftApproveRoute],
-    [/^\/api\/drafts\/([^/]+)\/reject$/, draftRejectRoute],
-    [/^\/api\/drafts\/([^/]+)$/, draftRoute],
-    [/^\/api\/inbox\/unanswered$/, unansweredRoute],
-    [/^\/api\/conversation-links$/, conversationLinksRoute],
-    [/^\/api\/conversation-links\/([^/]+)$/, conversationLinkRoute],
-  ];
-  for (const [pattern, mod] of routes) {
-    const match = pattern.exec(pathname);
-    const handler = mod[method];
-    if (match && typeof handler === "function") {
-      return { handler: handler as Handler, id: decodeURIComponent(match[1] ?? "") };
-    }
-  }
-  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -116,7 +51,7 @@ export async function POST(request: NextRequest) {
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     const response = await resolved.handler(internal, {
-      params: Promise.resolve({ id: resolved.id }),
+      params: Promise.resolve({ [resolved.param]: resolved.id }),
     });
     const json = await response.json().catch(() => null);
     return { status: response.status, json };

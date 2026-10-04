@@ -588,3 +588,46 @@ describe("QA: gatilho -> mensagem -> botão -> condição -> etiqueta -> espera 
     expect(h.sendFlowMessage).not.toHaveBeenCalled();
   });
 });
+
+// ─── Etapa 5: a flow started by a broadcast button ──────────────────────────
+
+describe("Etapa 5: flow started by a broadcast button (kind BROADCAST)", () => {
+  const commentFlow = (nodes: FlowNode[]) => setFlow({ type: "COMMENT", matchAnyPost: true, keywords: ["FOTO"], next: nodes[0].id }, nodes);
+  const bc = (over: Record<string, unknown> = {}) =>
+    start({ kind: "BROADCAST", triggerKey: "bc:rcp_1:b1", triggerRef: "rcp_1", inboundAt: NOW, ...over });
+
+  it("never private-replies, even when the flow's own trigger is a comment", async () => {
+    commentFlow([msg("m1", "Oi {first_name}!", { next: "fim" }), { id: "fim", type: "end" } as FlowNode]);
+    expect(await bc()).toBe("DONE");
+    expect(run().triggerCommentId).toBeNull();
+    expect(h.sendFlowMessage).toHaveBeenCalledWith("token", "ig_1", { id: "u_1" }, "Oi Maria!", [], expect.anything());
+    // The DM bucket of the flows, not Meta's private-reply bucket.
+    expect(h.flowSlot).toHaveBeenCalledWith("ig_1");
+    expect(h.dmSlot).not.toHaveBeenCalled();
+  });
+
+  it("a delay wait still has to fit inside the window the tap opened", async () => {
+    h.state.contact.lastInboundAt = new Date(NOW - 23 * 3_600_000);
+    commentFlow([
+      { id: "w", type: "wait", mode: "delay", minutes: 120, next: "m1" } as FlowNode,
+      msg("m1", "Depois"),
+    ]);
+    expect(await bc({ inboundAt: NOW - 23 * 3_600_000 })).toBe("STOPPED_WINDOW");
+    expect(run()).toMatchObject({ stopReason: "wait_beyond_window" });
+    expect(h.sendFlowMessage).not.toHaveBeenCalled();
+  });
+
+  it("with the window closed nothing goes out", async () => {
+    h.state.contact.lastInboundAt = new Date(NOW - 25 * 3_600_000);
+    commentFlow([msg("m1", "Oi")]);
+    expect(await bc({ inboundAt: null })).toBe("STOPPED_WINDOW");
+    expect(h.sendFlowMessage).not.toHaveBeenCalled();
+  });
+
+  it("the same broadcast button twice starts the flow once", async () => {
+    setFlow({ type: "DM", next: "m1" }, [msg("m1", "Oi", { buttons: [{ id: "x", kind: "next", label: "Ok", next: "m2" }] }), msg("m2", "Fim")]);
+    expect(await bc()).toBe("paused");
+    expect(await bc()).toBe("duplicate");
+    expect(h.sendFlowMessage).toHaveBeenCalledTimes(1);
+  });
+});

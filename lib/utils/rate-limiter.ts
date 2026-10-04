@@ -217,6 +217,35 @@ export async function reserveFlowSlot(
 }
 
 /**
+ * Etapa 5: hourly ceiling for broadcast DMs, per account, in its own bucket
+ * (rate:broadcast:<instagramId>) so a big broadcast never eats the slots of
+ * the campaigns (rate:dm) or the flows (rate:flow). Note the three buckets
+ * add up: lower BROADCAST_DM_PER_HOUR if Meta ever throttles the account.
+ * When it says no, retryInMs is when the bucket frees (the batch re-queues
+ * itself for then instead of skipping anyone).
+ */
+export const BROADCAST_DM_PER_HOUR_DEFAULT = 200;
+
+export function broadcastDmPerHour(): number {
+  const n = Number.parseInt(process.env.BROADCAST_DM_PER_HOUR ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : BROADCAST_DM_PER_HOUR_DEFAULT;
+}
+
+export async function reserveBroadcastSlot(
+  instagramAccountId: string
+): Promise<{ allowed: boolean; count: number; retryInMs: number }> {
+  const client = getRedis();
+  const key = `rate:broadcast:${instagramAccountId}`;
+  const result = await client.eval(RESERVE_DM_SLOT_SCRIPT, 1, key, broadcastDmPerHour(), RATE_LIMIT_WINDOW);
+  const values = Array.isArray(result) ? result : [];
+  const allowed = toScriptNumber(values[0]) === 1;
+  const count = toScriptNumber(values[1]);
+  if (allowed) return { allowed, count, retryInMs: 0 };
+  const ttl = await client.pttl(key).catch(() => -1);
+  return { allowed, count, retryInMs: ttl > 0 ? ttl + 1_000 : 15 * 60_000 };
+}
+
+/**
  * Backwards-compatible helper for tests and admin scripts.
  * Prefer reserveDMSlot in workers.
  */

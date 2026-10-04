@@ -75,6 +75,18 @@ import {
   routeFlowTap,
 } from "@/lib/flows/dispatch";
 import { runFlowStepJob, runReplyTimeout, startFlowRun } from "@/lib/flows/engine";
+// Etapa 5: A/B (off by default: no lookup, same objects) and broadcasts.
+import { applyVariant, campaignVariantFor, variantData } from "@/lib/ab/variant";
+import {
+  BROADCAST_BATCH_JOB_NAME,
+  BROADCAST_PAYLOAD_PREFIX,
+  BROADCAST_START_JOB_NAME,
+  type BroadcastBatchJob,
+  type BroadcastStartJob,
+} from "@/lib/broadcasts/jobs";
+import { runBroadcastBatch, runBroadcastStart } from "@/lib/broadcasts/engine";
+import { routeBroadcastTap } from "@/lib/broadcasts/tap";
+import { noteFollowStatus } from "@/lib/contacts/follows";
 import {
   FLOW_PAYLOAD_PREFIX,
   FLOW_REPLY_TIMEOUT_JOB_NAME,
@@ -725,15 +737,20 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     let sendFollowPrompt = false;
     if (automation.requireFollow && !useOpeningDm) {
       const alreadyFollows = await getUserFollowStatus(accessToken, commenterId);
+      noteFollowStatus(automation.instagramAccountId, commenterId, alreadyFollows);
       sendFollowPrompt = alreadyFollows !== true;
     }
 
     const ledger = ledgerFor(automation, commenterId, "private_reply", commentId);
+    // A/B (Etapa 5): only with abTestEnabled; otherwise null and `copy` IS
+    // `automation`, so the texts below are exactly the campaign's.
+    const variant = await campaignVariantFor(automation, commenterId);
+    const copy = applyVariant(automation, variant);
 
     try {
       if (useOpeningDm) {
         const openingText = renderMessageWithTracking({
-          message: automation.openingDmMessage as string,
+          message: copy.openingDmMessage as string,
           commenterName,
           trackedLinks: [],
         });
@@ -772,7 +789,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         // Try button template first; if Meta rejects it, fall back to inline links.
         const bodyText =
           renderMessageWithoutLink({
-            message: automation.dmMessage,
+            message: copy.dmMessage,
             commenterName,
           }) || "Here's your link:";
         const buttons = buildLinkButtons(
@@ -803,7 +820,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             formatError(buttonError)
           );
           const fallbackMessage = buildInlineLinkFallback(
-            automation.dmMessage,
+            copy.dmMessage,
             commenterName,
             automation.trackedLinks,
             bodyText,
@@ -828,7 +845,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         }
       } else {
         const dmMessage = renderMessageWithTracking({
-          message: automation.dmMessage,
+          message: copy.dmMessage,
           commenterName,
           trackedLinks: automation.trackedLinks,
         });
@@ -854,6 +871,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           status: "SENT",
           dmSentAt: new Date(),
           errorMessage: null,
+          ...variantData(variant),
         },
       });
       if (sentLog?.id) await onDmLogSent(sentLog, automation);
@@ -950,6 +968,15 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
         text: payload.slice(0, 200),
       },
     });
+  }
+
+  // Etapa 5: a broadcast button that starts a flow (bc:<recipientId>:<buttonId>).
+  // Campaign and flow payloads never start with it.
+  if (payload.startsWith(BROADCAST_PAYLOAD_PREFIX)) {
+    if (!fallback) {
+      await routeBroadcastTap({ instagramId: instagramAccountId, igUserId: userId, payload, at: tappedAt });
+    }
+    return;
   }
 
   // Etapa 3: a flow button (flow:<runId>:<nodeId>). Campaign payloads
@@ -1056,6 +1083,7 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
   // real follower is never trapped.
   if ((isFollowCheck || fallback) && automation.requireFollow) {
     const follows = await getUserFollowStatus(accessToken, userId);
+    noteFollowStatus(automation.instagramAccountId, userId, follows);
     if (follows === false) {
       if (fallback) return;
       const promptText = renderMessageWithoutLink({
@@ -1108,10 +1136,13 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
     return;
   }
 
+  // A/B (Etapa 5): same seed as the opening DM, so the same letter.
+  const variant = await campaignVariantFor(automation, userId);
+
   try {
     await sendRevealDirectMessage(
       accessToken,
-      automation,
+      applyVariant(automation, variant),
       userId,
       commenterName,
       "postback",
@@ -1152,8 +1183,9 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
         commentId: dedupeId,
         status: "SENT",
         dmSentAt: new Date(),
+        ...variantData(variant),
       },
-      update: { status: "SENT", dmSentAt: new Date(), errorMessage: null },
+      update: { status: "SENT", dmSentAt: new Date(), errorMessage: null, ...variantData(variant) },
     });
     if (sentLog?.id) await onDmLogSent(sentLog, automation);
     await enrollInSequence({
@@ -1393,6 +1425,7 @@ async function deliverCampaignToDm(input: {
   let sendFollowPrompt = false;
   if (automation.requireFollow) {
     const follows = await getUserFollowStatus(accessToken, senderId);
+    noteFollowStatus(automation.instagramAccountId, senderId, follows);
     sendFollowPrompt = follows !== true;
   }
 
@@ -1414,6 +1447,8 @@ async function deliverCampaignToDm(input: {
   }
 
   const ledger = ledgerFor(automation, senderId, "automation", dedupeId);
+  // A/B (Etapa 5): null (and the campaign's own text) unless it is on.
+  const variant = sendFollowPrompt ? null : await campaignVariantFor(automation, senderId);
 
   try {
     if (sendFollowPrompt) {
@@ -1437,7 +1472,7 @@ async function deliverCampaignToDm(input: {
     } else {
       await sendRevealDirectMessage(
         accessToken,
-        automation,
+        applyVariant(automation, variant),
         senderId,
         commenterName,
         input.context,
@@ -1471,11 +1506,13 @@ async function deliverCampaignToDm(input: {
         commenterName,
         status: "SENT",
         dmSentAt: new Date(),
+        ...variantData(variant),
       },
       update: {
         status: "SENT",
         dmSentAt: new Date(),
         errorMessage: null,
+        ...variantData(variant),
       },
     });
     // The follow prompt is not the campaign yet; only the reveal counts.
@@ -1900,6 +1937,15 @@ async function runJob(job: Job<DmQueueJob>): Promise<void> {
   }
   if (job.name === FLOW_REPLY_TIMEOUT_JOB_NAME) {
     await runReplyTimeout(job.data as FlowReplyTimeoutJob);
+    return;
+  }
+  // Etapa 5: broadcasts (lib/broadcasts/jobs.ts). No "commentId" either.
+  if (job.name === BROADCAST_START_JOB_NAME) {
+    await runBroadcastStart(job.data as BroadcastStartJob);
+    return;
+  }
+  if (job.name === BROADCAST_BATCH_JOB_NAME) {
+    await runBroadcastBatch(job.data as BroadcastBatchJob);
     return;
   }
   // Only comment jobs may reach processComment: a job of a name this worker

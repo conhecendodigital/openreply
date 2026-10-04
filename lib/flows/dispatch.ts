@@ -85,6 +85,10 @@ export function flowMatchesEvent(flow: FlowTriggerRow, kind: FlowEventKind, even
       return true;
     case "CONVERSATION_LINK":
       return Boolean(flow.conversationLinkId) && flow.conversationLinkId === event.conversationLinkId;
+    case "BROADCAST":
+      // Etapa 5: a broadcast button names its flow directly (lib/broadcasts/tap.ts);
+      // no flow trigger is ever "BROADCAST", so no event matches by trigger.
+      return false;
   }
 }
 

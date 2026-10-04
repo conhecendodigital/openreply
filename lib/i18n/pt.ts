@@ -4,8 +4,12 @@
  * (dm_message, {link}, ENCRYPTION_KEY...) ficam iguais de propósito.
  */
 import { ptFlows } from "@/lib/i18n/pt-flows";
+import { ptEscala } from "@/lib/i18n/pt-escala";
 
 export const pt: Record<string, string> = {
+  // 2026-10-08: Etapa 5 (Segmentos, Disparos, A/B, Relatórios), em
+  // lib/i18n/pt-escala.ts. Vem primeiro: uma chave que já existia aqui embaixo vence.
+  ...ptEscala,
   // Menu e topo
   Dashboard: "Início",
   Overview: "Visão geral",

@@ -11,6 +11,7 @@
  * 2026-10-05: Canais (status de cada canal ligado, com bolinha quando algum
  * precisa de atenção).
  * 2026-10-07: Fluxos (Etapa 3), logo depois de Campanhas em Automações.
+ * 2026-10-08: Etapa 5. Disparos e Segmentos em Automações, Relatórios em Início.
  */
 
 import { useEffect, useState } from "react";
@@ -37,6 +38,15 @@ const icones: Record<string, Icone> = {
   ),
   "/flows": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="2.5" y="3.5" width="7" height="5" rx="1.5" /><rect {...traco(ativo)} x="14.5" y="9.5" width="7" height="5" rx="1.5" /><rect {...traco(ativo)} x="2.5" y="15.5" width="7" height="5" rx="1.5" /><path {...traco(ativo)} d="M9.5 6H12v12H9.5M12 12h2.5" /></svg>
+  ),
+  "/reports": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M4 4v16h16" /><path {...traco(ativo)} d="m7.5 14.5 3.5-4 3 2.5 5-6" /></svg>
+  ),
+  "/broadcasts": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 10.5v3a1.5 1.5 0 0 0 1.5 1.5H7l7 4.5v-15L7 9H4.5A1.5 1.5 0 0 0 3 10.5z" /><path {...traco(ativo)} d="M17.5 8.5a5 5 0 0 1 0 7M20 6a8.5 8.5 0 0 1 0 12" /></svg>
+  ),
+  "/segments": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 4.5h18l-7 8.5v6l-4 1.5v-7.5z" /></svg>
   ),
   "/approvals": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M21 11.5a8.4 8.4 0 0 1-12.3 7.5L3 21l2-5.5A8.4 8.4 0 1 1 21 11.5z" /><path {...traco(ativo)} d="m8.5 11.5 2.5 2.5 4.5-4.5" /></svg>
@@ -77,6 +87,7 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
     items: [
       { label: "Dashboard", href: "/dashboard" },
       { label: "Overview", href: "/overview" },
+      { label: "Reports", href: "/reports" },
     ],
   },
   {
@@ -92,6 +103,8 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
     items: [
       { label: "Campaigns", href: "/campaigns" },
       { label: "Flows", href: "/flows" },
+      { label: "Broadcasts", href: "/broadcasts" },
+      { label: "Segments", href: "/segments" },
       { label: "Sequences", href: "/sequences" },
       { label: "Conversation links", href: "/conversation-links" },
       { label: "Moderation", href: "/moderation" },

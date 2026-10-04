@@ -1080,7 +1080,156 @@ export const TOOLS: Tool[] = [
       return text({ criado: true, ligado: false, id: flow.id, nome: flow.name, avisos: flow.warnings ?? [] });
     },
   },
+
+  // ─── Etapa 5: escala ───────────────────────────────────────────────────────
+  // Pela chave: relatório (só leitura), segmentos (ler) e RASCUNHO de disparo.
+  // Enviar ou agendar um disparo é só pela tela, com o Matheus logado.
+  {
+    name: "ver_relatorio",
+    description:
+      "Relatório do período (7, 30 ou 90 dias), só leitura: DMs enviadas por origem (campanha, fluxo, disparo, inbox, rascunho aprovado), cliques e CTR por campanha/fluxo/disparo, novos contatos por dia, etiquetas que mais cresceram, posts que mais geraram DM, moderação (escondidos) e o funil comentou → recebeu → clicou.",
+    inputSchema: {
+      type: "object",
+      properties: { dias: { type: "integer", enum: [7, 30, 90], description: "Período em dias (padrão 30)" } },
+    },
+    async run(args, call) {
+      const days = [7, 30, 90].includes(Number(args.dias)) ? Number(args.dias) : 30;
+      const res = await api(call, "GET", `/api/reports?days=${days}`);
+      if (!res.ok) return res.result;
+      const r = res.data as ReportData;
+      return text({
+        periodo: `${r.days} dias`,
+        fusoHorario: r.timezone,
+        dmsEnviadas: {
+          total: r.dms?.total ?? 0,
+          campanha: r.dms?.groups?.campaign ?? 0,
+          fluxo: r.dms?.groups?.flow ?? 0,
+          disparo: r.dms?.groups?.broadcast ?? 0,
+          inbox: r.dms?.groups?.inbox ?? 0,
+          rascunhoAprovado: r.dms?.groups?.draft ?? 0,
+          aviso: `O registro por origem existe desde ${r.dms?.ledgerSince ?? "2026-10-04"}; antes disso só as campanhas (DmLog: ${r.dms?.campaignsFromDmLog ?? 0} no período).`,
+        },
+        ctr: {
+          campanhas: (r.ctr?.campaigns ?? []).map(ctrRow),
+          fluxos: (r.ctr?.flows ?? []).map(ctrRow),
+          disparos: (r.ctr?.broadcasts ?? []).map(ctrRow),
+        },
+        novosContatos: { total: r.newContacts?.total ?? 0, porDia: r.newContacts?.byDay ?? [] },
+        etiquetasQueMaisCresceram: (r.topTags ?? []).map((t) => ({ etiqueta: t.tag, saldo: t.net, adicionadas: t.added, removidas: t.removed })),
+        postsQueMaisGeraramDm: (r.topPosts ?? []).map((p) => ({ mediaId: p.mediaId, dms: p.dms, pessoas: p.people })),
+        moderacao: { escondidos: r.moderation?.hidden ?? 0, esconderia: r.moderation?.wouldHide ?? 0, restaurados: r.moderation?.restored ?? 0 },
+        funil: {
+          comentou: r.funnel?.commented ?? 0,
+          recebeu: r.funnel?.received ?? 0,
+          clicou: r.funnel?.clicked ?? 0,
+          recebeuPct: r.funnel?.receivedRate ?? 0,
+          clicouPct: r.funnel?.clickRate ?? 0,
+        },
+      });
+    },
+  },
+  {
+    name: "listar_segmentos",
+    description:
+      "Lista os segmentos salvos (filtros do CRM) com a contagem ao vivo: quantos contatos no segmento e quantos estão com conversa aberta agora. Só quem está com conversa aberta (falou com a conta nas últimas 24h), não pediu pra sair e não foi assumido recebe disparo.",
+    inputSchema: { type: "object", properties: {} },
+    async run(_args, call) {
+      const res = await api(call, "GET", "/api/segments?count=1");
+      if (!res.ok) return res.result;
+      const rows = (res.data as SegmentSummaryRow[]).map((s) => ({
+        id: s.id,
+        nome: s.name,
+        filtros: s.filters,
+        contatos: s.count?.total ?? s.lastCount ?? 0,
+        comConversaAberta: s.count?.windowOpen ?? null,
+        recebemAgora: s.count?.eligible ?? null,
+        sairam: s.count?.optedOut ?? null,
+        assumidos: s.count?.takeover ?? null,
+        noMeioDeFluxo: s.count?.busy ?? null,
+      }));
+      return text(rows);
+    },
+  },
+  {
+    name: "criar_rascunho_disparo",
+    description:
+      "Cria um RASCUNHO de disparo (mensagem pra um segmento). NÃO envia: enviar ou agendar é só pela tela do Lead Engine, com o dono da conta. " +
+      "Regra do Instagram: só recebe quem falou com a conta nas últimas 24h; a lista é decidida na hora do envio. " +
+      'Texto até 640 caracteres, com {username} e {first_name}. Botões (até 3): {id,label,kind:"link",url} ou {id,label,kind:"flow",flowId} (fluxo publicado e ligado). ' +
+      "A/B opcional: variantes [{key:A|B|C, weight, text}] com pesos somando 100.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { ...str, description: "Nome interno do disparo" },
+        segmentId: { ...str, description: "ID do segmento (listar_segmentos)" },
+        filtros: { type: "object", description: "Filtros na hora, se não usar um segmento salvo" },
+        text: { ...str, description: "Mensagem (até 640 caracteres)" },
+        buttons: { type: "array", items: { type: "object" }, description: "Até 3 botões" },
+        variantes: { type: "array", items: { type: "object" }, description: "A/B: [{key, weight, text}]" },
+        instagramAccountId: { ...str, description: "Conta (opcional; padrão a conta conectada)" },
+      },
+      required: ["name", "text"],
+    },
+    async run(args, call) {
+      const name = requireString(args, "name");
+      const message = requireString(args, "text");
+      if (!name || !message) return text("Informe name e text.", true);
+      const body: Record<string, unknown> = { name, text: message };
+      const segmentId = requireString(args, "segmentId");
+      if (segmentId) body.segmentId = segmentId;
+      if (args.filtros && typeof args.filtros === "object") body.filters = args.filtros;
+      if (Array.isArray(args.buttons)) body.buttons = args.buttons;
+      if (Array.isArray(args.variantes)) body.variants = args.variantes;
+      const account = requireString(args, "instagramAccountId");
+      if (account) body.instagramAccountId = account;
+      const res = await api(call, "POST", "/api/broadcasts", body);
+      if (!res.ok) return res.result;
+      const created = res.data as { id: string; name: string; status: string };
+      const detail = await api(call, "GET", `/api/broadcasts/${encodeURIComponent(created.id)}`);
+      const audience = detail.ok ? (detail.data as { audience?: { total?: number; eligible?: number } }).audience : null;
+      return text({
+        criado: true,
+        status: created.status,
+        enviado: false,
+        id: created.id,
+        nome: created.name,
+        contatosNoSegmento: audience?.total ?? null,
+        receberiamAgora: audience?.eligible ?? null,
+        aviso: "É só um rascunho. Enviar ou agendar é pela tela, com o dono da conta. Só recebe quem estiver com conversa aberta na hora do envio.",
+      });
+    },
+  },
 ];
+
+type CtrRowData = { name: string; sent: number; clicks: number; ctr: number };
+function ctrRow(r: CtrRowData) {
+  return { nome: r.name, enviadas: r.sent, cliques: r.clicks, ctr: r.ctr };
+}
+
+type ReportData = {
+  days: number;
+  timezone?: string;
+  dms?: {
+    total?: number;
+    groups?: Record<string, number>;
+    ledgerSince?: string;
+    campaignsFromDmLog?: number;
+  };
+  ctr?: { campaigns?: CtrRowData[]; flows?: CtrRowData[]; broadcasts?: CtrRowData[] };
+  newContacts?: { total?: number; byDay?: { day: string; count: number }[] };
+  topTags?: { tag: string; added: number; removed: number; net: number }[];
+  topPosts?: { mediaId: string; dms: number; people: number }[];
+  moderation?: { hidden?: number; wouldHide?: number; restored?: number };
+  funnel?: { commented?: number; received?: number; clicked?: number; receivedRate?: number; clickRate?: number };
+};
+
+type SegmentSummaryRow = {
+  id: string;
+  name: string;
+  filters: unknown;
+  lastCount: number | null;
+  count?: { total: number; windowOpen: number; eligible: number; optedOut: number; takeover: number; busy: number };
+};
 
 function rpcResult(id: JsonRpcId, result: unknown) {
   return { jsonrpc: "2.0", id, result };
@@ -1115,7 +1264,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura.",
       });
     }
     case "ping":

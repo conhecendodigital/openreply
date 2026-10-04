@@ -11,11 +11,13 @@ import type { FlowDefinition } from "@/lib/flows/schema";
 async function freeSlug(): Promise<string> {
   for (let i = 0; i < 5; i++) {
     const slug = generateTrackedLinkSlug();
-    const [campaign, flow] = await Promise.all([
+    const [campaign, flow, broadcast] = await Promise.all([
       prisma.trackedLink.findUnique({ where: { slug }, select: { id: true } }),
       prisma.flowLink.findUnique({ where: { slug }, select: { id: true } }),
+      // Etapa 5: broadcast buttons share the /r/<slug> namespace.
+      prisma.broadcastLink.findUnique({ where: { slug }, select: { id: true } }),
     ]);
-    if (!campaign && !flow) return slug;
+    if (!campaign && !flow && !broadcast) return slug;
   }
   throw new Error("Could not create a unique link slug");
 }

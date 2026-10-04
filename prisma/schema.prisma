@@ -93,6 +93,8 @@ model Workspace {
   sequences          Sequence[]
   conversationLinks  ConversationLink[]
   flows              Flow[]
+  segments           Segment[]
+  broadcasts         Broadcast[]
 
   @@index([ownerId])
 }
@@ -206,16 +208,16 @@ model WorkspaceInvitation {
 }
 
 model InstagramAccount {
-  id                String    @id @default(cuid())
+  id                String                 @id @default(cuid())
   workspaceId       String
-  instagramId       String    @unique
+  instagramId       String                 @unique
   username          String
   name              String?
   accessToken       String
   tokenExpiresAt    DateTime?
-  webhookSubscribed Boolean   @default(false)
+  webhookSubscribed Boolean                @default(false)
   /// Hours a human takeover pauses every automation for one person.
-  takeoverHours     Int       @default(24)
+  takeoverHours     Int                    @default(24)
   /// ACTIVE: automations run. NEEDS_RECONNECT: Meta rejected the token (code
   /// 190). DISCONNECTED: turned off by a person. Only ACTIVE sends anything;
   /// the other two keep every campaign, contact and message untouched, and
@@ -230,11 +232,11 @@ model InstagramAccount {
   /// CDN url: it expires, refreshed on reconnect and on "test connection".
   profilePictureUrl String?
   /// Webhook fields subscribed on the last successful subscribe.
-  webhookFields     String[]  @default([])
+  webhookFields     String[]               @default([])
   /// Last webhook Meta delivered for this account (throttled to ~1/min).
   lastWebhookAt     DateTime?
-  connectedAt       DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  connectedAt       DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   automations        Automation[]
@@ -248,6 +250,7 @@ model InstagramAccount {
   outboundMessages   OutboundMessage[]
   conversationLinks  ConversationLink[]
   flows              Flow[]
+  broadcasts         Broadcast[]
 
   @@index([workspaceId])
   @@index([workspaceId, status])
@@ -305,34 +308,39 @@ model Automation {
   storyUrl                String?
   postId                  String?
   postUrl                 String?
-  pendingNextReel         Boolean  @default(false)
-  matchAnyPost            Boolean  @default(false)
+  pendingNextReel         Boolean           @default(false)
+  matchAnyPost            Boolean           @default(false)
   keywords                String[]
-  matchAnyWord            Boolean  @default(false)
+  matchAnyWord            Boolean           @default(false)
   // Also fire this campaign when someone sends a DM whose text matches the
   // keywords above. Independent of the post trigger — a DM has no media, so
   // postId / matchAnyPost do not apply to it.
-  dmTriggerEnabled        Boolean  @default(false)
+  dmTriggerEnabled        Boolean           @default(false)
   dmMessage               String
-  openingDmEnabled        Boolean  @default(false)
+  openingDmEnabled        Boolean           @default(false)
   openingDmMessage        String?
   openingDmButtonLabel    String?
   linkButtonLabel         String?
-  requireFollow           Boolean  @default(false)
+  requireFollow           Boolean           @default(false)
   followPromptMessage     String?
   followPromptButtonLabel String?
-  followUpEnabled         Boolean  @default(false)
+  followUpEnabled         Boolean           @default(false)
   followUpMessage         String?
   // Minutes to wait after the link is delivered before sending the follow-up.
   // 0 sends it right away.
-  followUpDelayMinutes    Int      @default(0)
-  publicReplyEnabled      Boolean  @default(false)
+  followUpDelayMinutes    Int               @default(0)
+  publicReplyEnabled      Boolean           @default(false)
   publicReplyMessage      String?
-  publicReplyMessages     String[] @default([])
-  isActive                Boolean  @default(true)
-  wholeWordMatch          Boolean  @default(true)
-  reportShareSlug         String?  @unique
-  reportShareEnabled      Boolean  @default(true)
+  publicReplyMessages     String[]          @default([])
+  isActive                Boolean           @default(true)
+  wholeWordMatch          Boolean           @default(true)
+  reportShareSlug         String?           @unique
+  reportShareEnabled      Boolean           @default(true)
+  /// Etapa 5: A/B of the opening DM / final message. Off by default: without
+  /// it the worker never looks the variants up and sends the texts above.
+  abTestEnabled           Boolean           @default(false)
+  /// Key of the variant declared winner (its texts were copied above).
+  abWinnerKey             String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -344,6 +352,7 @@ model Automation {
   linkClicks        LinkClick[]
   sequence          Sequence?
   conversationLinks ConversationLink[]
+  variants          CampaignVariant[]
 
   @@index([workspaceId])
   @@index([instagramAccountId])
@@ -372,6 +381,8 @@ model DmLog {
   // retries; a DM failure never blocks or re-posts the public reply.
   publicReplySentAt DateTime?
   publicReplyError  String?
+  /// Etapa 5: A/B variant ("A" | "B" | "C") the person got. null = no A/B.
+  variantKey        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -385,6 +396,8 @@ model DmLog {
   @@index([automationId])
   @@index([instagramAccountId])
   @@index([status])
+  @@index([workspaceId, dmSentAt])
+  @@index([automationId, status])
 }
 
 // Every comment the system has seen, from either the webhook or the polling
@@ -610,6 +623,12 @@ model Contact {
   clicksCount         Int       @default(0)
   hiddenCommentsCount Int       @default(0)
   notes               String?
+  /// Etapa 5: wrote PARAR / SAIR / STOP. Out of every future broadcast
+  /// (campaigns and flows still answer, as before).
+  broadcastOptOutAt   DateTime?
+  /// Last known answer of Meta's is_user_follow_business (null = unknown).
+  followsBusiness     Boolean?
+  followsCheckedAt    DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -621,11 +640,13 @@ model Contact {
   sequenceEnrollments SequenceEnrollment[]
   linkOpens           ConversationLinkOpen[]
   flowRuns            FlowRun[]
+  broadcastRecipients BroadcastRecipient[]
 
   @@unique([instagramAccountId, igUserId])
   @@index([workspaceId, lastSeenAt])
   @@index([workspaceId, username])
   @@index([workspaceId, lastInboundAt])
+  @@index([workspaceId, firstSeenAt])
 }
 
 /// A tag as plain text: "comentou:FOTO", "recebeu:<campanha>", "clicou", or a
@@ -643,6 +664,7 @@ model ContactTag {
 
   @@unique([contactId, name])
   @@index([workspaceId, name])
+  @@index([workspaceId, createdAt])
 }
 
 /// Timeline of a contact. The unique (contactId, type, refId) makes webhook
@@ -728,7 +750,7 @@ model OutboundMessage {
   /// The person (IGSID). For a private reply, the commenter.
   contactIgUserId    String
   mid                String?  @unique
-  /// automation | followup | sequence | draft | inbox | private_reply
+  /// automation | followup | sequence | draft | inbox | private_reply | flow | broadcast
   origin             String
   /// dmLogId | draftId | enrollmentId | userId
   refId              String?
@@ -740,6 +762,8 @@ model OutboundMessage {
   instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
 
   @@index([instagramAccountId, contactIgUserId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, origin, createdAt])
 }
 
 /// A reply proposed for one person (by the AI "vendedor" or by hand). Nothing
@@ -1019,16 +1043,16 @@ model FlowStep {
 /// Tracked link of a flow's link button (/r/<slug>), separate from campaign
 /// TrackedLink so nothing in the campaign tables changes.
 model FlowLink {
-  id             String          @id @default(cuid())
+  id             String   @id @default(cuid())
   workspaceId    String
   flowId         String
   nodeId         String
   buttonId       String
-  slug           String          @unique
+  slug           String   @unique
   label          String?
   destinationUrl String
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   flow   Flow            @relation(fields: [flowId], references: [id], onDelete: Cascade)
   clicks FlowLinkClick[]
@@ -1051,5 +1075,192 @@ model FlowLinkClick {
 
   @@index([flowId, nodeId])
   @@index([runId])
+  @@index([contactIgUserId])
+  @@index([flowId, createdAt])
+}
+
+// ─── Etapa 5: escala (A/B, segmentos, disparos) ─────────────────────────────
+
+/// One variant of a campaign's A/B test. null texts = the campaign's own.
+/// Declaring a winner copies its texts to the campaign, turns the test off
+/// and keeps these rows as history (winnerAt on the winner).
+model CampaignVariant {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  automationId     String
+  /// "A" | "B" | "C"
+  key              String
+  /// Percent; the active variants add up to 100.
+  weight           Int
+  openingDmMessage String?
+  dmMessage        String?
+  isActive         Boolean   @default(true)
+  winnerAt         DateTime?
+  createdBy        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, key])
+  @@index([automationId])
+}
+
+/// A saved CRM filter (lib/segments/filters.ts). Counted live, never cached
+/// as a list: the people in it change every minute.
+model Segment {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  /// Internal InstagramAccount.id; null = every account of the workspace.
+  instagramAccountId String?
+  name               String
+  filters            Json
+  createdBy          String?
+  /// session | mcp
+  createdVia         String    @default("session")
+  lastCount          Int?
+  lastCountAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  broadcasts Broadcast[]
+
+  @@index([workspaceId])
+}
+
+enum BroadcastStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  DONE
+  CANCELED
+  FAILED
+}
+
+/// A message to a segment. Instagram only allows it to people whose 24 h
+/// window is open, so the recipients are picked when it STARTS (not when it
+/// is created) and re-checked one by one before each send. No message tag.
+model Broadcast {
+  id                 String          @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String
+  segmentId          String?
+  /// Filters used (copied from the segment when it starts).
+  filtersSnapshot    Json
+  name               String
+  text               String
+  /// [{id,label,kind:"link",url} | {id,label,kind:"flow",flowId}] (up to 3)
+  buttons            Json            @default("[]")
+  /// [{key,weight,text}] (A/B, up to 3) or null.
+  variants           Json?
+  abWinnerKey        String?
+  /// Skip people in the middle of a flow or sequence (two robots talking).
+  skipBusy           Boolean         @default(true)
+  status             BroadcastStatus @default(DRAFT)
+  stopReason         String?
+  scheduledAt        DateTime?
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  canceledAt         DateTime?
+  canceledBy         String?
+  createdBy          String?
+  /// session | mcp
+  createdVia         String          @default("session")
+  sentBy             String?
+  batchSize          Int             @default(20)
+  pauseSeconds       Int             @default(60)
+  /// Claim of the next batch job (bcbatch_<id>_<seq>).
+  batchSeq           Int             @default(0)
+  /// When the next batch is due (the sweep re-queues a lost one).
+  nextBatchAt        DateTime?
+  segmentCount       Int             @default(0)
+  eligibleCount      Int             @default(0)
+  sentCount          Int             @default(0)
+  failedCount        Int             @default(0)
+  skippedCount       Int             @default(0)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  workspace        Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount     @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  segment          Segment?             @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  recipients       BroadcastRecipient[]
+  links            BroadcastLink[]
+
+  @@index([workspaceId, status, createdAt])
+  @@index([status, scheduledAt])
+}
+
+enum BroadcastRecipientStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  MAYBE_SENT
+  SKIPPED_WINDOW
+  SKIPPED_TAKEOVER
+  SKIPPED_OPTOUT
+  SKIPPED_CHANNEL
+  SKIPPED_LIMIT
+  SKIPPED_BUSY
+  SKIPPED_CANCELED
+}
+
+/// One person of a broadcast. The unique (broadcastId, contactId) is the
+/// dedupe: nobody gets the same broadcast twice.
+model BroadcastRecipient {
+  id          String                   @id @default(cuid())
+  broadcastId String
+  workspaceId String
+  contactId   String
+  igUserId    String
+  variantKey  String?
+  status      BroadcastRecipientStatus @default(PENDING)
+  mid         String?
+  error       String?
+  sentAt      DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([broadcastId, contactId])
+  @@index([broadcastId, status])
+  @@index([igUserId])
+}
+
+/// Tracked link of a broadcast button (/r/<slug>), resolved after campaign
+/// and flow links. Slugs are unique across the three tables.
+model BroadcastLink {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  broadcastId    String
+  buttonId       String
+  slug           String   @unique
+  label          String?
+  destinationUrl String
+  createdAt      DateTime @default(now())
+
+  broadcast Broadcast            @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  clicks    BroadcastLinkClick[]
+
+  @@unique([broadcastId, buttonId])
+}
+
+model BroadcastLinkClick {
+  id              String   @id @default(cuid())
+  broadcastLinkId String
+  broadcastId     String
+  recipientId     String?
+  contactIgUserId String?
+  ipHash          String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+
+  link BroadcastLink @relation(fields: [broadcastLinkId], references: [id], onDelete: Cascade)
+
+  @@index([broadcastId, createdAt])
   @@index([contactIgUserId])
 }
