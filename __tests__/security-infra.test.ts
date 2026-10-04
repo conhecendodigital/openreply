@@ -195,8 +195,20 @@ describe("limites de requisição", () => {
 
   it("magic link: e-mail fora do ALLOWED_EMAILS continua barrado", async () => {
     vi.stubEnv("ALLOWED_EMAILS", "dono@ex.com");
-    expect(await allowSignIn({ user: { email: "intruso@ex.com" }, email: { verificationRequest: true } })).toBe(false);
-    expect(await allowSignIn({ user: { email: "dono@ex.com" }, email: { verificationRequest: true } })).toBe(true);
+    const semConvite = async () => false;
+    expect(await allowSignIn({ user: { email: "intruso@ex.com" }, email: { verificationRequest: true } }, semConvite)).toBe(false);
+    expect(await allowSignIn({ user: { email: "dono@ex.com" }, email: { verificationRequest: true } }, semConvite)).toBe(true);
+  });
+
+  it("magic link: convidado entra mesmo fora do ALLOWED_EMAILS; erro no banco barra", async () => {
+    vi.stubEnv("ALLOWED_EMAILS", "dono@ex.com");
+    const convidados = async (email: string) => email === "convidada@ex.com";
+    expect(await allowSignIn({ user: { email: "convidada@ex.com" }, email: { verificationRequest: true } }, convidados)).toBe(true);
+    expect(await allowSignIn({ user: { email: "convidada@ex.com" }, email: { verificationRequest: false } }, convidados)).toBe(true);
+    expect(await allowSignIn({ user: { email: "intruso@ex.com" }, email: { verificationRequest: true } }, convidados)).toBe(false);
+    const bancoCaiu = async () => { throw new Error("db down"); };
+    expect(await allowSignIn({ user: { email: "convidada@ex.com" }, email: { verificationRequest: true } }, bancoCaiu)).toBe(false);
+    expect(await allowSignIn({ user: { email: null }, email: { verificationRequest: true } }, convidados)).toBe(false);
   });
 });
 
