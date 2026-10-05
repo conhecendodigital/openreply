@@ -12,9 +12,13 @@
  * precisa de atenção).
  * 2026-10-07: Fluxos (Etapa 3), logo depois de Campanhas em Automações.
  * 2026-10-08: Etapa 5. Disparos e Segmentos em Automações, Relatórios em Início.
+ * 2026-10-09: pedido do dono, "pra não ficar aquele menu gigante". Cada seção
+ * vira um grupo que abre e fecha; o grupo da página atual abre sozinho e o
+ * que ficou aberto é lembrado no navegador. Avisos (aprovações, canal) sobem
+ * pro nome do grupo quando ele está fechado. A Etapa 6 entra como grupo "Quiz".
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LangSwitch, useT } from "@/components/lang-provider";
@@ -121,6 +125,39 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
   },
 ];
 
+const isActiveHref = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
+
+/** Which groups the owner left open or closed. Browser only; empty is fine. */
+const OPEN_GROUPS_KEY = "lead-engine:menu-grupos";
+const OPEN_GROUPS_EVENT = "lead-engine:menu-grupos";
+// Fallback when the browser blocks storage (private window): the menu still
+// opens and closes, it just forgets on reload.
+let groupsInMemory = "{}";
+const readGroups = () => {
+  try {
+    return window.localStorage.getItem(OPEN_GROUPS_KEY) ?? groupsInMemory;
+  } catch {
+    return groupsInMemory;
+  }
+};
+const writeGroups = (value: string) => {
+  groupsInMemory = value;
+  try {
+    window.localStorage.setItem(OPEN_GROUPS_KEY, value);
+  } catch {
+    // Blocked storage: groupsInMemory keeps it for this visit.
+  }
+  window.dispatchEvent(new Event(OPEN_GROUPS_EVENT));
+};
+const subscribeGroups = (onChange: () => void) => {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(OPEN_GROUPS_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(OPEN_GROUPS_EVENT, onChange);
+  };
+};
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -166,6 +203,19 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
     };
   }, [pathname]);
 
+  // Groups the owner opened or closed by hand. A group never touched follows
+  // the page: open when it holds the current page, closed otherwise.
+  const savedGroups = useSyncExternalStore(subscribeGroups, readGroups, () => "{}");
+  const openGroups = useMemo<Record<string, boolean>>(() => {
+    try {
+      const parsed = JSON.parse(savedGroups);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }, [savedGroups]);
+  const toggleGroup = (title: string, open: boolean) => writeGroups(JSON.stringify({ ...openGroups, [title]: !open }));
+
   return (
     <>
       {/* Mobile overlay */}
@@ -187,45 +237,80 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label={t("Menu")}>
-          {navSections.map((section, i) => (
-            <div key={section.title} className={i > 0 ? "mt-5" : ""}>
-              <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                {t(section.title)}
-              </p>
-              <ul className="space-y-0.5">
-                {section.items.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                  const Icon = icones[item.href];
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        onClick={onClose}
-                        aria-current={isActive ? "page" : undefined}
-                        className={`flex items-center gap-4 rounded-lg px-3 py-2.5 text-[15px] text-foreground transition-colors hover:bg-surface-hover ${
-                          isActive ? "font-bold" : ""
-                        }`}
-                      >
-                        {Icon && <Icon ativo={isActive} />}
-                        <span className="flex-1">{t(item.label)}</span>
-                        {item.href === "/approvals" && pendingDrafts > 0 && (
-                          <span
-                            className="grid h-5 min-w-5 place-items-center rounded-full bg-error px-1.5 text-[11px] font-semibold text-white"
-                            aria-label={t("{n} waiting", { n: pendingDrafts })}
+          {navSections.map((section, i) => {
+            const hasActive = section.items.some((item) => isActiveHref(pathname, item.href));
+            const open = openGroups[section.title] ?? hasActive;
+            const groupId = `menu-grupo-${i}`;
+            const drafts = section.items.some((item) => item.href === "/approvals") ? pendingDrafts : 0;
+            const channelAlert = channelsNeedAttention && section.items.some((item) => item.href === "/channels");
+            return (
+              <div key={section.title} className={i > 0 ? "mt-1" : ""}>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(section.title, open)}
+                  aria-expanded={open}
+                  aria-controls={groupId}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[15px] text-foreground transition-colors hover:bg-surface-hover ${
+                    hasActive ? "font-bold" : "font-semibold"
+                  }`}
+                >
+                  <span className="flex-1">{t(section.title)}</span>
+                  {!open && drafts > 0 && (
+                    <span
+                      className="grid h-5 min-w-5 place-items-center rounded-full bg-error px-1.5 text-[11px] font-semibold text-white"
+                      aria-label={t("{n} waiting", { n: drafts })}
+                    >
+                      {drafts > 99 ? "99+" : drafts}
+                    </span>
+                  )}
+                  {!open && channelAlert && (
+                    <span className="h-2.5 w-2.5 rounded-full bg-error" aria-label={t("Needs attention")} />
+                  )}
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className={`h-4 w-4 text-muted transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+                  >
+                    <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {open && (
+                  <ul id={groupId} className="mb-2 space-y-0.5 pl-2">
+                    {section.items.map((item) => {
+                      const isActive = isActiveHref(pathname, item.href);
+                      const Icon = icones[item.href];
+                      return (
+                        <li key={item.href}>
+                          <Link
+                            href={item.href}
+                            onClick={onClose}
+                            aria-current={isActive ? "page" : undefined}
+                            className={`flex items-center gap-4 rounded-lg px-3 py-2.5 text-[15px] text-foreground transition-colors hover:bg-surface-hover ${
+                              isActive ? "font-bold" : ""
+                            }`}
                           >
-                            {pendingDrafts > 99 ? "99+" : pendingDrafts}
-                          </span>
-                        )}
-                        {item.href === "/channels" && channelsNeedAttention && (
-                          <span className="h-2.5 w-2.5 rounded-full bg-error" aria-label={t("Needs attention")} />
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+                            {Icon && <Icon ativo={isActive} />}
+                            <span className="flex-1">{t(item.label)}</span>
+                            {item.href === "/approvals" && pendingDrafts > 0 && (
+                              <span
+                                className="grid h-5 min-w-5 place-items-center rounded-full bg-error px-1.5 text-[11px] font-semibold text-white"
+                                aria-label={t("{n} waiting", { n: pendingDrafts })}
+                              >
+                                {pendingDrafts > 99 ? "99+" : pendingDrafts}
+                              </span>
+                            )}
+                            {item.href === "/channels" && channelsNeedAttention && (
+                              <span className="h-2.5 w-2.5 rounded-full bg-error" aria-label={t("Needs attention")} />
+                            )}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         <div className="space-y-3 px-5 py-4 border-t border-border">
