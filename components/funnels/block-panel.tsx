@@ -751,6 +751,15 @@ function OptionsFields({
           { value: "grid", label: t("Grid (2 columns, good with images)") },
         ]}
       />
+      <SelectField
+        label={t("Option image size")}
+        value={block.imageSize ?? "photo"}
+        onChange={(v) => set({ imageSize: v === "photo" ? undefined : v })}
+        options={[
+          { value: "photo", label: t("Large photo (on top of the text)") },
+          { value: "icon", label: t("Small icon (next to the text)") },
+        ]}
+      />
 
       <fieldset className="space-y-3">
         <legend className="mb-1 text-xs font-semibold">{t("Options")}</legend>

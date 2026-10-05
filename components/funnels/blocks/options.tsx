@@ -21,9 +21,11 @@ export default function OptionsView({ block, ctx }: { block: OptionsBlock; ctx: 
   const questionId = `${groupId}-q`;
   const errorId = `${groupId}-e`;
 
+  // "icon": a small picture next to the text (emoji-like icons); "photo": the big picture on top.
+  const iconImages = block.imageSize === "icon";
   const content = (o: FunnelOption, selected: boolean) => (
     <>
-      {o.imageUrl &&
+      {o.imageUrl && !iconImages &&
         (isPlaceholderMedia(o.imageUrl) ? (
           <span className="block w-full">
             <MediaPlaceholder label={t("Add your image")} ratio="1 / 1" />
@@ -32,6 +34,9 @@ export default function OptionsView({ block, ctx }: { block: OptionsBlock; ctx: 
           <img src={o.imageUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" className="aspect-square w-full object-cover" style={{ borderRadius: "calc(var(--fq-radius) - 4px)" }} />
         ))}
       <span className={`flex w-full items-center gap-3 ${grid ? "justify-center text-center" : ""}`}>
+        {o.imageUrl && iconImages && !isPlaceholderMedia(o.imageUrl) && (
+          <img src={o.imageUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" width={40} height={40} className="h-10 w-10 shrink-0 rounded-full object-cover" />
+        )}
         {o.emoji && (
           <span aria-hidden="true" className="text-2xl leading-none">
             {o.emoji}

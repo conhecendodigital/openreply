@@ -89,6 +89,8 @@ export type OptionsBlock = BlockBase & {
   minChoices?: number;
   maxChoices?: number;
   layout?: "list" | "grid";
+  /** Tamanho da imagem das opções: "photo" (padrão) = foto grande em cima; "icon" = ícone pequeno ao lado do texto. */
+  imageSize?: "photo" | "icon";
   /** Texto do botão Continuar (múltipla). Padrão "Continuar". */
   continueLabel?: string;
   options: FunnelOption[];

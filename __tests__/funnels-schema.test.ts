@@ -54,6 +54,18 @@ describe("definição: formato", () => {
     expect(empty.settings.pixelConsent).toBe("banner");
   });
 
+  it("tamanho da imagem das opções: photo e icon passam, outro valor falha", () => {
+    for (const imageSize of ["photo", "icon"] as const) {
+      const d = minimal();
+      const b = d.steps[0].blocks[1];
+      if (b.type === "options") b.imageSize = imageSize;
+      expect(ok(d)).toBe(true);
+    }
+    const ruim = minimal() as unknown as { steps: { blocks: Record<string, unknown>[] }[] };
+    ruim.steps[0].blocks[1].imageSize = "gigante";
+    expect(ok(ruim)).toBe(false);
+  });
+
   it("ids duplicados de tela, bloco, opção e name falham", () => {
     const a = minimal();
     a.steps[1].id = "s1";

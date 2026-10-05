@@ -140,6 +140,7 @@ const optionsBlock = z.object({
   minChoices: z.number().int().min(0).max(MAX_OPTIONS).optional(),
   maxChoices: z.number().int().min(1).max(MAX_OPTIONS).optional(),
   layout: z.enum(["list", "grid"]).optional(),
+  imageSize: z.enum(["photo", "icon"]).optional(),
   continueLabel: label.optional(),
   options: z.array(option).max(MAX_OPTIONS),
 });
