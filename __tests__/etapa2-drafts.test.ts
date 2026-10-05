@@ -2,7 +2,7 @@
  * Etapa 2: rascunhos com aprovação. Regra do dono: nenhuma DM escrita por IA
  * sai sem aprovação humana registrada.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const { mockPrisma, mockContext, mockCaller, mockSend, mockRecordEvent } = vi.hoisted(() => ({
@@ -93,7 +93,15 @@ function req(path: string, body?: unknown) {
 }
 const params = (id = "d_1") => ({ params: Promise.resolve({ id }) });
 
+// The code reads the real clock for the 24-hour window, so pin it to `now`
+// (otherwise these tests start failing a day after `now`).
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(now);
   vi.clearAllMocks();
   mockContext.mockResolvedValue(ctx);
   mockCaller.mockResolvedValue({ kind: "session" });

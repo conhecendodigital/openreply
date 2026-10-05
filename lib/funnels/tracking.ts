@@ -27,8 +27,28 @@ import { contactFromToken } from "@/lib/funnels/contact-link";
 import type { LivePublicFunnel } from "@/lib/funnels/public";
 import { addTag, AUTO_TAGS, recordEvent, type ContactRef } from "@/lib/contacts/record";
 import { getRequestIp, hashClickIp } from "@/lib/tracking/server";
+import {
+  EVENT_ID_RE,
+  fbcFromFbclid,
+  isCapiReady,
+  newEventId,
+  quizSourceUrl,
+  scheduleCapi,
+  sendCapiEvent,
+  validFbc,
+  validFbp,
+  type CapiEventName,
+} from "@/lib/meta/capi";
 
 const ID = /^[A-Za-z0-9_-]{1,40}$/;
+
+/** Pixel/CAPI signals from the browser. A bad fbp/fbc is just ignored. */
+const adSignals = {
+  adConsent: z.enum(["accepted", "declined"]).optional(),
+  fbp: z.string().max(100).optional(),
+  fbc: z.string().max(600).optional(),
+  eventId: z.string().regex(EVENT_ID_RE).optional(),
+};
 
 export const funnelEventBodySchema = z.object({
   visitorId: z.string().regex(/^[a-f0-9]{32}$/),
@@ -40,6 +60,7 @@ export const funnelEventBodySchema = z.object({
   tracking: z.record(z.string(), z.unknown()).optional(),
   contactToken: z.string().max(200).optional(),
   referrer: z.string().max(2048).optional(),
+  ...adSignals,
 });
 
 export const funnelLeadBodySchema = z.object({
@@ -49,6 +70,7 @@ export const funnelLeadBodySchema = z.object({
   fields: z.partialRecord(z.enum(LEAD_FIELDS), z.string().max(300)),
   consent: z.boolean(),
   website: z.string().max(300).optional(),
+  ...adSignals,
 });
 
 export class LeadError extends Error {
@@ -86,15 +108,62 @@ export function referrerHostOf(referrer: string | null | undefined): string | nu
   }
 }
 
-type VisitRow = { id: string; contactId: string | null };
+type VisitRow = {
+  id: string;
+  contactId: string | null;
+  createdAt?: Date | null;
+  tracking?: unknown;
+  adConsent?: boolean | null;
+  clientIp?: string | null;
+  clientUserAgent?: string | null;
+  fbp?: string | null;
+  fbc?: string | null;
+};
+
+type AdBody = { adConsent?: "accepted" | "declined"; fbp?: string; fbc?: string };
+
+/**
+ * Consent for Pixel/CAPI of this visit, decided on the server with the
+ * quiz mode: "banner" (default) = only after Accept; "notice" = already on.
+ * IP, user agent and the Pixel cookies are kept only with consent AND with
+ * the Conversions API set up (the Hotmart Purchase needs them later).
+ */
+export function adConsentFields(funnel: LivePublicFunnel, body: AdBody, request: Request) {
+  const mode = funnel.settings.pixelConsent ?? "banner";
+  const allowed = Boolean(funnel.settings.pixelId) && (mode === "notice" || body.adConsent === "accepted");
+  if (!allowed) return { adConsent: false, clientIp: null, clientUserAgent: null, fbp: null, fbc: null };
+  if (!isCapiReady(funnel.capi, funnel.settings.pixelId)) return { adConsent: true };
+  const fbp = validFbp(body.fbp);
+  const fbc = validFbc(body.fbc);
+  return {
+    adConsent: true,
+    clientIp: getRequestIp(request)?.slice(0, 64) ?? null,
+    clientUserAgent: request.headers.get("user-agent")?.slice(0, 500) ?? null,
+    ...(fbp ? { fbp } : {}),
+    ...(fbc ? { fbc } : {}),
+  };
+}
+
+const VISIT_SELECT = {
+  id: true,
+  contactId: true,
+  createdAt: true,
+  tracking: true,
+  adConsent: true,
+  clientIp: true,
+  clientUserAgent: true,
+  fbp: true,
+  fbc: true,
+} as const;
 
 async function ensureVisit(
   funnel: LivePublicFunnel,
-  body: { visitorId: string; tracking?: Record<string, unknown>; contactToken?: string; referrer?: string },
+  body: { visitorId: string; tracking?: Record<string, unknown>; contactToken?: string; referrer?: string } & AdBody,
   request: Request
 ): Promise<{ visit: VisitRow; contact: ContactRef | null }> {
   const contact = body.contactToken ? await contactFromToken(funnel.workspaceId, funnel.slug, body.contactToken) : null;
   const tracking = pickTrackingParams(body.tracking ?? null);
+  const ad = adConsentFields(funnel, body, request);
   const visit = await prisma.funnelVisit.upsert({
     where: { funnelId_visitorId: { funnelId: funnel.id, visitorId: body.visitorId } },
     create: {
@@ -108,10 +177,12 @@ async function ensureVisit(
       referrerHost: referrerHostOf(body.referrer),
       device: deviceOf(request.headers.get("user-agent")),
       ipHash: hashClickIp(getRequestIp(request)),
+      ...ad,
     },
-    // A valid token later in the visit (rare) links the person.
-    update: contact ? { contactId: contact.id } : {},
-    select: { id: true, contactId: true },
+    // A valid token later in the visit (rare) links the person. The consent
+    // follows the last choice of the cookie notice.
+    update: contact ? { contactId: contact.id, ...ad } : { ...ad },
+    select: VISIT_SELECT,
   });
   const linked: ContactRef | null =
     contact ?? (visit.contactId ? { id: visit.contactId, workspaceId: funnel.workspaceId } : null);
@@ -182,6 +253,49 @@ const safe = async (fn: () => Promise<unknown>) => {
     console.warn("[Funnel] CRM step failed:", error instanceof Error ? error.message : "error");
   }
 };
+
+/**
+ * CAPI copy of a quiz event, after the response. Only with consent on the
+ * visit and the account Pixel + token. Never throws, never blocks.
+ */
+function sendQuizCapi(
+  funnel: LivePublicFunnel,
+  visit: VisitRow,
+  input: { eventName: CapiEventName; eventId?: string; visitorId: string; lead?: { name?: string | null; email?: string | null; phone?: string | null } | null }
+) {
+  if (visit.adConsent !== true || !isCapiReady(funnel.capi, funnel.settings.pixelId)) return;
+  const fbclid = (visit.tracking as TrackingParams | null | undefined)?.fbclid;
+  const fbc = visit.fbc ?? fbcFromFbclid(fbclid, visit.createdAt ?? new Date());
+  const eventId = input.eventId ?? newEventId(input.eventName.toLowerCase());
+  scheduleCapi(async () => {
+    const lead =
+      input.lead !== undefined
+        ? input.lead
+        : await prisma.funnelLead
+            .findUnique({ where: { visitId: visit.id }, select: { name: true, email: true, phone: true } })
+            .catch(() => null);
+    await sendCapiEvent(
+      funnel.capi,
+      {
+        eventName: input.eventName,
+        eventId,
+        eventSourceUrl: quizSourceUrl(funnel.slug),
+        user: {
+          email: lead?.email,
+          phone: lead?.phone,
+          name: lead?.name,
+          externalId: input.visitorId,
+          ip: visit.clientIp,
+          userAgent: visit.clientUserAgent,
+          fbc,
+          fbp: visit.fbp,
+        },
+        customData: { content_name: funnel.name.slice(0, 120) },
+      },
+      { workspaceId: funnel.workspaceId, pixelId: funnel.settings.pixelId }
+    );
+  });
+}
 
 export async function recordFunnelEvent(
   funnel: LivePublicFunnel,
@@ -267,6 +381,7 @@ export async function recordFunnelEvent(
     case "checkout": {
       await addEvent({ funnel, visitId: visit.id, type: "checkout", stepId: step.id, blockId: body.blockId });
       await markOnce(visit.id, "checkoutAt", now);
+      sendQuizCapi(funnel, visit, { eventName: "InitiateCheckout", eventId: body.eventId, visitorId: body.visitorId });
       if (contact) {
         await safe(() =>
           recordEvent(contact, { type: "FUNNEL_CHECKOUT", refId: visit.id, occurredAt: now, text: funnel.name })
@@ -353,6 +468,12 @@ export async function submitFunnelLead(
     select: { id: true },
   });
   await markOnce(visit.id, "leadAt", now);
+  sendQuizCapi(funnel, visit, {
+    eventName: "Lead",
+    eventId: body.eventId,
+    visitorId: body.visitorId,
+    lead: { name: data.name, email: data.email, phone: data.phone },
+  });
   if (contact) {
     await safe(async () => {
       await recordEvent(contact, { type: "FUNNEL_LEAD", refId: lead.id, occurredAt: now, text: funnel.name });

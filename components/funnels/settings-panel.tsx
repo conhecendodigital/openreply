@@ -158,28 +158,24 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
               placeholder="123456789012345"
               onChange={(v) => set({ pixelId: opt(v.replace(/\s/g, "")) })}
               error={pixelBad ? t("Only digits (5 to 20).") : null}
-              hint={t("Empty = no Pixel and no cookie notice. Only the number: the script is ours.")}
+              hint={t("Empty = uses the account Pixel (Settings, Pixel and Conversions API). Without one there either, no Pixel and no cookie notice. Only the number: the script is ours.")}
             />
-            {s.pixelId && (
-              <>
-                <SelectField
-                  label={t("Cookie notice")}
-                  value={s.pixelConsent ?? "banner"}
-                  onChange={(v) => set({ pixelConsent: v })}
-                  options={[
-                    { value: "banner", label: t("Ask first (Pixel only after Accept)") },
-                    { value: "notice", label: t("Only inform (Pixel loads right away)") },
-                  ]}
-                  hint={t("Asking first is the safest choice for LGPD.")}
-                />
-                <CheckField
-                  label={t("Event per screen")}
-                  hint={t("Sends QuizStep with the screen number to the Pixel.")}
-                  checked={Boolean(s.pixelStepEvents)}
-                  onChange={(v) => set({ pixelStepEvents: v || undefined })}
-                />
-              </>
-            )}
+            <SelectField
+              label={t("Cookie notice")}
+              value={s.pixelConsent ?? "banner"}
+              onChange={(v) => set({ pixelConsent: v })}
+              options={[
+                { value: "banner", label: t("Ask first (Pixel only after Accept)") },
+                { value: "notice", label: t("Only inform (Pixel loads right away)") },
+              ]}
+              hint={t("Asking first is the safest choice for LGPD.")}
+            />
+            <CheckField
+              label={t("Event per screen")}
+              hint={t("Sends QuizStep with the screen number to the Pixel.")}
+              checked={Boolean(s.pixelStepEvents)}
+              onChange={(v) => set({ pixelStepEvents: v || undefined })}
+            />
           </section>
 
           <section className="space-y-4">

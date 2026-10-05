@@ -11,6 +11,7 @@ import type { PublicFunnel } from "@/lib/funnels/types";
 import { definitionOrNull } from "@/lib/funnels/schema";
 import { toPublicFunnel } from "@/lib/funnels/render";
 import { isValidSlug } from "@/lib/funnels/slug";
+import { PIXEL_ID_RE, type StoredCapiSettings } from "@/lib/meta/capi";
 
 const SELECT = {
   id: true,
@@ -23,30 +24,51 @@ const SELECT = {
   publishedVersion: true,
 } as const;
 
-export type LivePublicFunnel = PublicFunnel & { workspaceId: string };
+/**
+ * `capi` = the account's Pixel/Conversions API settings (token still
+ * encrypted). Server-only: getPublishedFunnelBySlug strips it (and the
+ * workspace) before anything reaches the browser.
+ */
+export type LivePublicFunnel = PublicFunnel & { workspaceId: string; capi?: StoredCapiSettings | null };
+
+const CAPI_SELECT = {
+  workspace: { select: { metaCapi: { select: { pixelId: true, accessTokenEnc: true, testEventCode: true } } } },
+} as const;
+
+/** Quiz without its own Pixel id uses the account default Pixel. */
+export function withAccountPixel<T extends PublicFunnel>(funnel: T, accountPixelId: string | null | undefined): T {
+  const own = funnel.settings.pixelId?.trim();
+  if (own || !accountPixelId || !PIXEL_ID_RE.test(accountPixelId)) return funnel;
+  return { ...funnel, settings: { ...funnel.settings, pixelId: accountPixelId } };
+}
 
 /** Live funnel + its workspace (for the tracking APIs). */
 export async function getLiveFunnel(slug: string): Promise<LivePublicFunnel | null> {
   if (!isValidSlug(slug)) return null;
-  const row = await prisma.funnel.findUnique({ where: { slug }, select: SELECT });
+  const row = await prisma.funnel.findUnique({ where: { slug }, select: { ...SELECT, ...CAPI_SELECT } });
   if (!row || row.status !== "PUBLISHED") return null;
   const definition = definitionOrNull(row.published);
   if (!definition) return null;
-  const funnel = toPublicFunnel({
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    version: row.publishedVersion,
-    definition,
-  });
-  return { ...funnel, workspaceId: row.workspaceId };
+  const capi = row.workspace?.metaCapi ?? null;
+  const funnel = withAccountPixel(
+    toPublicFunnel({
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      version: row.publishedVersion,
+      definition,
+    }),
+    capi?.pixelId
+  );
+  return { ...funnel, workspaceId: row.workspaceId, capi };
 }
 
 export async function getPublishedFunnelBySlug(slug: string): Promise<PublicFunnel | null> {
   const live = await getLiveFunnel(slug);
   if (!live) return null;
-  const { workspaceId: _ws, ...funnel } = live;
+  const { workspaceId: _ws, capi: _capi, ...funnel } = live;
   void _ws;
+  void _capi;
   return funnel;
 }
 

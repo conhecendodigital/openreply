@@ -20,6 +20,7 @@ import { useT } from "@/components/lang-provider";
 import { answerLabels, nextStepId, progressPct, type Answers } from "@/lib/funnels/navigation";
 import { buildCheckoutUrl } from "@/lib/funnels/checkout";
 import type {
+  FunnelAdSignals,
   FunnelDefinition,
   FunnelOption,
   LeadField,
@@ -50,6 +51,8 @@ import ConsentBanner from "@/components/funnels/consent-banner";
 import {
   getVisitorId,
   loadPixel,
+  newEventId,
+  readPixelCookies,
   pixelCustom,
   pixelTrack,
   readConsent,
@@ -203,6 +206,14 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
     if (pixelAllowed && pixelId) loadPixel(pixelId);
   }, [pixelAllowed, pixelId]);
 
+  // What the server needs for the Conversions API copy of the events: the
+  // cookie notice choice (no choice = nothing goes) and the Pixel cookies.
+  const adSignals = (): FunnelAdSignals => {
+    if (!pixelId) return {};
+    const adConsent = consentChoice === "accepted" ? "accepted" : consentChoice === "declined" ? "declined" : undefined;
+    return { ...(adConsent ? { adConsent } : {}), ...(pixelAllowed ? readPixelCookies() : {}) };
+  };
+
   const visitorId = useMemo(() => (live && mounted ? getVisitorId(funnel.id) : ""), [live, mounted, funnel.id]);
 
   // ── Each screen: record the view, scroll up, move the focus ─────────────
@@ -219,6 +230,7 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
         version: funnel.version,
         type: "view",
         stepId: currentId,
+        ...adSignals(),
         ...(isFirst
           ? {
               tracking: entryParams,
@@ -271,9 +283,9 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
     onStepChange?.(prev);
   };
 
-  const track = (type: "answer" | "checkout", extra: { blockId?: string; optionIds?: string[] } = {}) => {
+  const track = (type: "answer" | "checkout", extra: { blockId?: string; optionIds?: string[]; eventId?: string } = {}) => {
     if (!live || !visitorId) return;
-    sendFunnelEvent(funnel.slug, { visitorId, version: funnel.version, type, stepId: currentId, ...extra });
+    sendFunnelEvent(funnel.slug, { visitorId, version: funnel.version, type, stepId: currentId, ...adSignals(), ...extra });
   };
 
   const optionsOf = (): OptionsBlock | undefined => blocks.find((b): b is OptionsBlock => b.type === "options");
@@ -307,7 +319,10 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
     setBusy(true);
     const clean: Partial<Record<LeadField, string>> = {};
     for (const b of blocks) if (b.type === "field" && fields[b.field]?.trim()) clean[b.field] = fields[b.field]!.trim();
+    const eventId = newEventId("lead");
     const r = await submitFunnelLead(funnel.slug, {
+      ...adSignals(),
+      eventId,
       visitorId,
       version: funnel.version,
       stepId: currentId,
@@ -330,7 +345,7 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
       });
       return false;
     }
-    pixelTrack("Lead");
+    pixelTrack("Lead", eventId);
     return true;
   }
 
@@ -356,8 +371,9 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
       setNotice({ tone: "error", text: t("This button has no checkout link yet.") });
       return;
     }
-    track("checkout", { blockId: block.id });
-    pixelTrack("InitiateCheckout");
+    const eventId = newEventId("ic");
+    track("checkout", { blockId: block.id, eventId });
+    pixelTrack("InitiateCheckout", eventId);
     if (action.newTab) window.open(target, "_blank", "noopener");
     else window.location.assign(target);
   }

@@ -10,10 +10,16 @@
  *   "comprou:<produto>" + PURCHASE event. Refund/chargeback: refundedAt and
  *   tag "reembolso:<produto>". Other events: only the row.
  * - The buyer e-mail is never stored here, only a salted hash.
+ * - Meta Conversions API: the first approved event of a visit sends a
+ *   Purchase (value + currency of the sale) with the IP, user agent, fbc and
+ *   fbp kept from the visit. Only when the visit had ad consent and the
+ *   account has Pixel + token. event_id = purchase_<transaction>.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/db/client";
 import { addTag, AUTO_TAGS, recordEvent, type ContactRef } from "@/lib/contacts/record";
+import { definitionOrNull } from "@/lib/funnels/schema";
+import { fbcFromFbclid, PIXEL_ID_RE, quizSourceUrl, sendCapiEvent, type CapiResult } from "@/lib/meta/capi";
 
 export type HotmartPurchase = {
   event: string;
@@ -202,12 +208,15 @@ export async function applyHotmartPurchase(
   const contact: ContactRef | null = match.contactId ? { id: match.contactId, workspaceId: match.workspaceId } : null;
 
   if (APPROVED_EVENTS.has(parsed.event)) {
+    let firstPurchase = false;
     if (match.visitId) {
-      await prisma.funnelVisit.updateMany({ where: { id: match.visitId, purchasedAt: null }, data: { purchasedAt: at } });
+      const marked = await prisma.funnelVisit.updateMany({ where: { id: match.visitId, purchasedAt: null }, data: { purchasedAt: at } });
+      firstPurchase = marked?.count === 1;
     }
     if (match.leadId) {
       await prisma.funnelLead.updateMany({ where: { id: match.leadId, purchasedAt: null }, data: { purchasedAt: at } });
     }
+    if (firstPurchase && match.visitId) await sendPurchaseCapi(match.visitId, parsed).catch(() => null);
     if (contact) {
       await safe(async () => {
         await addTag(contact, AUTO_TAGS.bought(product), "auto", at);
@@ -221,6 +230,71 @@ export async function applyHotmartPurchase(
     if (contact) await safe(() => addTag(contact, AUTO_TAGS.refunded(product), "auto", at));
   }
   return { matched: true, duplicate: false };
+}
+
+/**
+ * Purchase on the Meta Conversions API for a matched visit. null = not sent
+ * (no consent, no Pixel/token, visit gone). Never throws.
+ */
+export async function sendPurchaseCapi(visitId: string, parsed: HotmartPurchase): Promise<CapiResult | null> {
+  const visit = await prisma.funnelVisit.findUnique({
+    where: { id: visitId },
+    select: {
+      visitorId: true,
+      createdAt: true,
+      tracking: true,
+      adConsent: true,
+      clientIp: true,
+      clientUserAgent: true,
+      fbp: true,
+      fbc: true,
+      workspaceId: true,
+      lead: { select: { name: true, email: true, phone: true } },
+      funnel: {
+        select: {
+          slug: true,
+          name: true,
+          published: true,
+          workspace: { select: { metaCapi: { select: { pixelId: true, accessTokenEnc: true, testEventCode: true } } } },
+        },
+      },
+    },
+  });
+  if (!visit || visit.adConsent !== true) return null;
+  const capi = visit.funnel?.workspace?.metaCapi ?? null;
+  const own = definitionOrNull(visit.funnel?.published)?.settings.pixelId?.trim();
+  const pixelId = own && PIXEL_ID_RE.test(own) ? own : capi?.pixelId ?? null;
+  if (!capi?.accessTokenEnc || !pixelId) return null;
+
+  const fbclid = (visit.tracking as { fbclid?: string } | null)?.fbclid;
+  const customData: { value?: number; currency?: string; content_name?: string } = {};
+  if (parsed.amountCents !== null && parsed.currency) {
+    customData.value = parsed.amountCents / 100;
+    customData.currency = parsed.currency.toUpperCase();
+  }
+  const product = parsed.productName || parsed.productId;
+  if (product) customData.content_name = product;
+  return sendCapiEvent(
+    capi,
+    {
+      eventName: "Purchase",
+      eventId: `purchase_${parsed.transaction}`.slice(0, 80),
+      eventTime: parsed.occurredAt,
+      eventSourceUrl: visit.funnel?.slug ? quizSourceUrl(visit.funnel.slug) : null,
+      user: {
+        email: parsed.buyerEmail ?? visit.lead?.email,
+        phone: visit.lead?.phone,
+        name: visit.lead?.name,
+        externalId: visit.visitorId,
+        ip: visit.clientIp,
+        userAgent: visit.clientUserAgent,
+        fbc: visit.fbc ?? fbcFromFbclid(fbclid, visit.createdAt),
+        fbp: visit.fbp,
+      },
+      customData,
+    },
+    { workspaceId: visit.workspaceId, pixelId }
+  );
 }
 
 async function safe(fn: () => Promise<unknown>) {

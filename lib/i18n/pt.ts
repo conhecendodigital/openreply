@@ -9,6 +9,7 @@ import { ptFunnels } from "@/lib/i18n/pt-funnels";
 import { ptFunnelsApi } from "@/lib/i18n/pt-funnels-api";
 import { ptSite } from "@/lib/i18n/pt-site";
 import { ptPublic } from "@/lib/i18n/pt-public";
+import { ptCapi } from "@/lib/i18n/pt-capi";
 
 export const pt: Record<string, string> = {
   // 2026-10-08: Etapa 5 (Segmentos, Disparos, A/B, Relatórios), em
@@ -18,6 +19,8 @@ export const pt: Record<string, string> = {
   // de validação, modelos e tipos de bloco em lib/i18n/pt-funnels-api.ts.
   ...ptFunnels,
   ...ptFunnelsApi,
+  // 2026-10-11: Pixel padrão e API de Conversões da Meta, em lib/i18n/pt-capi.ts.
+  ...ptCapi,
   // 2026-10-04: site público (página inicial, cabeçalho, login) em lib/i18n/pt-site.ts.
   ...ptSite,
   // 2026-10-04: páginas públicas fora do painel (modelos, SEO, legais,

@@ -308,6 +308,17 @@ export type FunnelEventBody = {
   tracking?: TrackingParams;
   contactToken?: string;
   referrer?: string;
+} & FunnelAdSignals;
+/**
+ * Pixel/CAPI: o que o navegador sabe. adConsent = escolha no aviso de
+ * cookies (sem escolha = não vai); fbp/fbc = cookies do Pixel; eventId = o
+ * mesmo eventID do fbq (Lead, InitiateCheckout), pra Meta contar uma vez só.
+ */
+export type FunnelAdSignals = {
+  adConsent?: "accepted" | "declined";
+  fbp?: string;
+  fbc?: string;
+  eventId?: string;
 };
 export type FunnelLeadBody = {
   visitorId: string;
@@ -317,5 +328,5 @@ export type FunnelLeadBody = {
   consent: boolean;
   /** Honeypot: tem de vir vazio. */
   website?: string;
-};
+} & FunnelAdSignals;
 export type FunnelPublicOk = { ok: true; ignored?: boolean };

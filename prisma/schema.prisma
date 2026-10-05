@@ -96,6 +96,7 @@ model Workspace {
   segments           Segment[]
   broadcasts         Broadcast[]
   funnels            Funnel[]
+  metaCapi           MetaCapiSettings?
 
   @@index([ownerId])
 }
@@ -1327,6 +1328,17 @@ model FunnelVisit {
   leadAt        DateTime?
   purchasedAt   DateTime?
   refundedAt    DateTime?
+  /// Consentimento de anúncios (Pixel/CAPI) da visita: true = pode mandar
+  /// eventos server-side; false/null = não manda. Calculado no servidor com o
+  /// modo do quiz (banner = só depois do "Aceitar"; notice = já vale).
+  adConsent       Boolean?
+  /// Só gravados com consentimento E com a API de Conversões configurada.
+  /// Usados no Purchase da Hotmart (que chega sem o navegador).
+  clientIp        String?
+  clientUserAgent String?
+  /// Cookies _fbp / _fbc do Pixel do navegador.
+  fbp             String?
+  fbc             String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -1341,6 +1353,25 @@ model FunnelVisit {
   @@index([funnelId, createdAt])
   @@index([funnelId, source, createdAt])
   @@index([contactId])
+}
+
+/// Pixel padrão e API de Conversões da Meta da conta (1 por workspace).
+/// O token fica só criptografado (AES-256-GCM, lib/meta/oauth.ts) e nunca sai
+/// em nenhuma API: a tela vê só os 4 últimos caracteres.
+model MetaCapiSettings {
+  id             String   @id @default(cuid())
+  workspaceId    String   @unique
+  /// Só dígitos (5 a 20). Quiz sem Pixel próprio usa este.
+  pixelId        String?
+  accessTokenEnc String?
+  tokenLast4     String?
+  /// Código de evento de teste do Gerenciador de Eventos (opcional).
+  testEventCode  String?
+  updatedBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 model FunnelEvent {

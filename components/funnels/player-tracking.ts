@@ -128,9 +128,33 @@ export function loadPixel(pixelId: string): boolean {
   return true;
 }
 
-export function pixelTrack(event: "ViewContent" | "Lead" | "InitiateCheckout"): void {
+/** eventID = the same event_id the server sends to the Conversions API (Meta counts once). */
+export function pixelTrack(event: "ViewContent" | "Lead" | "InitiateCheckout", eventId?: string): void {
   if (!pixelReady) return;
-  (window as PixelWindow).fbq?.("track", event);
+  if (eventId) (window as PixelWindow).fbq?.("track", event, {}, { eventID: eventId });
+  else (window as PixelWindow).fbq?.("track", event);
+}
+
+/** Id shared by the Pixel (eventID) and the Conversions API (event_id). */
+export function newEventId(prefix: "lead" | "ic"): string {
+  return `${prefix}_${randomVisitorId().slice(0, 16)}`;
+}
+
+/** The Pixel cookies _fbp and _fbc, when the Pixel already set them. */
+export function readPixelCookies(): { fbp?: string; fbc?: string } {
+  if (typeof document === "undefined") return {};
+  const out: { fbp?: string; fbc?: string } = {};
+  try {
+    for (const part of document.cookie.split(";")) {
+      const [k, ...rest] = part.trim().split("=");
+      const v = decodeURIComponent(rest.join("=") || "");
+      if (k === "_fbp" && /^fb\.\d\.\d+\.\d+$/.test(v)) out.fbp = v.slice(0, 100);
+      if (k === "_fbc" && /^fb\.\d\.\d+\.[A-Za-z0-9_-]+$/.test(v)) out.fbc = v.slice(0, 600);
+    }
+  } catch {
+    // Blocked cookies: the server builds fbc from the fbclid.
+  }
+  return out;
 }
 
 export function pixelCustom(event: string, data: Record<string, string | number>): void {

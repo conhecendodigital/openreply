@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import type { AccountOption } from "@/components/account-select";
 import { ApiKeysPanel } from "@/components/api-keys-panel";
+import { MetaCapiPanel } from "@/components/meta-capi-panel";
 import { InstagramConnectNotice } from "@/components/instagram-connect-notice";
 
 import { useT } from "@/components/lang-provider";
@@ -370,6 +371,8 @@ export default function SettingsPage() {
           </form>
         )}
       </section>
+
+      {canManageMembers && <MetaCapiPanel />}
 
       {canManageMembers && <ApiKeysPanel />}
 
