@@ -31,7 +31,7 @@ export default function InvitationAcceptCard({
       window.location.assign("/dashboard");
       return;
     }
-    setMessage(payload.error ?? "Could not accept invitation");
+    setMessage(payload.error ?? t("Could not accept invitation"));
     setBusy(false);
   }
 

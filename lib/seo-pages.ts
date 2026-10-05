@@ -1,237 +1,272 @@
 import type { SeoPageConfig } from "@/components/seo-page-shell";
 
+/**
+ * Páginas públicas de SEO (2026-10-04). O texto fica em inglês aqui (é a
+ * chave) e a tradução em português mora em lib/i18n/pt-public.ts. Só fatos
+ * que o app faz hoje: nada de número, cliente ou depoimento inventado. Ao
+ * citar concorrente, comparação neutra e sem prometer o que o app não faz.
+ */
+
 const templateLinks = [
-  { label: "DTC product link template", href: "/templates/dtc-product-link" },
+  { label: "Product link template", href: "/templates/dtc-product-link" },
   { label: "Real estate lead form template", href: "/templates/real-estate-lead-form" },
   { label: "Fitness plan template", href: "/templates/fitness-plan" },
-  { label: "Browse every template", href: "/templates" },
+  { label: "See every template", href: "/templates" },
 ];
 
 export const manychatAlternativePage: SeoPageConfig = {
-  eyebrow: "Manychat alternative",
-  title: "A focused Manychat alternative for Instagram comment-to-DM campaigns",
+  metaTitle: "ManyChat alternative for Instagram comment to DM - Lead Engine",
+  metaDescription:
+    "Lead Engine is an open source tool focused on Instagram: comment to DM, Direct, contacts and reports through the official Meta API. See how it compares with ManyChat.",
+  eyebrow: "ManyChat alternative",
+  title: "An Instagram focused alternative to ManyChat",
   description:
-    "Lead Engine is for teams that do not need a broad chatbot builder. It turns keyword comments into Meta-compliant private replies, tracked links, campaign analytics, and client reports.",
-  primaryCta: "Try the focused alternative",
+    "ManyChat is a conversation automation platform that serves several channels. Lead Engine does one thing: Instagram, through the official Meta API, with comment to DM, Direct, contacts and campaign reports.",
+  primaryCta: "Sign in to Lead Engine",
+  checklistTitle: "What you get",
   bullets: [
-    "Built around Instagram comments, posts, reels, and private replies.",
-    "Official Meta API flow with no scraping or password sharing.",
-    "Campaign templates, tracked links, and shareable client reports.",
-    "Open-source core with hosted SaaS for agencies that want managed reliability.",
+    "Comment to DM campaigns for a post, a reel or any post.",
+    "Official Meta API, with no shared password and no browser bot.",
+    "Direct inbox with photos, videos and audio, plus a contacts CRM.",
+    "Open source code under the MIT license, running on your own server.",
   ],
   sections: [
     {
-      title: "Narrower by design",
-      body: "Broad automation suites can be powerful, but they also add flow-builder weight. Lead Engine keeps the campaign path tight: keyword, post, reply, link, result.",
+      title: "Instagram only",
+      body: "Lead Engine does not try to cover every channel. Everything in it is built around comments, the Direct and the contacts of your Instagram professional account.",
     },
     {
-      title: "Agency proof",
-      body: "Tracked links and shareable reports make it easier to show clients what happened after the comment, not just that a message was sent.",
+      title: "Proof for the client",
+      body: "Each campaign can have a public read only report link with sends, skips, failures, clicks and keywords, so you can show what happened after the comment.",
     },
     {
-      title: "Meta-first delivery",
-      body: "Comment events are processed through webhooks, queued, deduped, checked against limits, and sent as private replies using the comment ID.",
+      title: "Inside Meta's rules",
+      body: "Comments arrive by webhook, go into a queue, are checked against duplicates and sending limits, and the reply goes out through the official API.",
     },
   ],
-  comparisonTitle: "Lead Engine vs broad chatbot builders",
+  comparisonTitle: "Lead Engine and ManyChat side by side",
+  otherLabel: "ManyChat",
   comparisons: [
     {
-      label: "Setup",
-      ours: "Create a keyword campaign for a specific post or reel.",
-      other: "Build and maintain a larger chatbot automation flow.",
+      label: "Channels",
+      ours: "Instagram only, through the official Meta API.",
+      other: "Several channels, such as Instagram, Messenger and WhatsApp.",
     },
     {
-      label: "Reporting",
-      ours: "Campaign-level sends, skips, failures, clicks, CTR, and client report links.",
-      other: "Usually broader conversation analytics that need cleanup for client reporting.",
+      label: "Where it runs",
+      ours: "Open source code (MIT) that you run on your own server.",
+      other: "Hosted service run by the company itself.",
     },
     {
-      label: "Positioning",
-      ours: "Instagram Campaign OS for agencies and campaign teams.",
-      other: "General DM automation across many channels and use cases.",
+      label: "Comment to DM",
+      ours: "Campaign by post or reel, with keyword, public reply and tracked link.",
+      other: "Also offers Instagram comment to DM automation.",
+    },
+    {
+      label: "Client report",
+      ours: "Public read only link per campaign, without your brand on it.",
+      other: "Check the current features and plans on the ManyChat website.",
     },
   ],
   templateLinks,
   faqs: [
     {
-      title: "Is Lead Engine a full Manychat replacement?",
-      body: "No. Lead Engine is intentionally focused on Instagram comment-to-DM campaigns. If you need a complete chatbot suite, use a broad platform. If you need fast campaign loops, Lead Engine is built for that.",
+      title: "Does Lead Engine fully replace ManyChat?",
+      body: "It depends on what you use. If you need channels other than Instagram, Lead Engine does not cover them. If your work is on Instagram, it has comment to DM, Direct, contacts, visual flows, moderation and broadcasts within 24 hours.",
     },
     {
-      title: "Does it support agencies?",
-      body: "Yes. It supports multiple Instagram accounts, workspace members, account filters, analytics, and shareable reports, with no account limit.",
+      title: "Do I need to share my Instagram password?",
+      body: "No. You connect your professional account through the official Meta login and can disconnect at any time.",
+    },
+    {
+      title: "Is Lead Engine affiliated with Meta or ManyChat?",
+      body: "No. Lead Engine uses the official Meta API and has no link with Meta, Instagram or ManyChat.",
     },
   ],
 };
 
 export const templatesSeoPage: SeoPageConfig = {
-  eyebrow: "Instagram comment-to-DM templates",
-  title: "Instagram comment-to-DM templates for high-intent campaign replies",
+  metaTitle: "Instagram comment to DM templates - Lead Engine",
+  metaDescription:
+    "Comment to DM campaign templates for product links, free materials, price lists, events and creators. Each one comes with keywords, a message and a step by step.",
+  eyebrow: "Comment to DM templates",
+  title: "Comment to DM templates for Instagram",
   description:
-    "Start with proven campaign patterns for product links, lead magnets, price replies, launch waitlists, coaching offers, events, and local services.",
-  primaryCta: "Use a template",
+    "Start from a ready example for product links, free materials, price lists, events and services. Each template comes with keywords, the DM message and a step by step.",
+  primaryCta: "Sign in and create a campaign",
+  checklistTitle: "In every template",
   bullets: [
-    "Template intent carries into signup and campaign creation.",
-    "Each template includes keywords, a campaign goal, and reply copy.",
-    "Tracked links turn template replies into measurable clicks.",
-    "Agencies can reuse templates across client accounts.",
+    "Suggested keywords for the comment.",
+    "A DM message you can edit before turning it on.",
+    "A step by step to set up the campaign.",
+    "The metrics worth following after it goes live.",
   ],
   sections: [
     {
-      title: "Product link drops",
-      body: "Use LINK, SHOP, BUY, or SIZE comments to send exact product pages, launch bundles, or collection links.",
+      title: "Product links",
+      body: "Use LINK, SHOP or BUY in the comment to send the product page, the collection or the launch kit.",
     },
     {
-      title: "Lead magnets",
-      body: "Use GUIDE, CHECKLIST, PLAN, or START comments to send free resources and follow-up offers.",
+      title: "Free materials",
+      body: "Use GUIDE, PLAN or START to deliver a free material and, after it, the next step of your offer.",
     },
     {
       title: "Local services",
-      body: "Use PRICE, BOOK, INFO, or TOUR comments to deliver booking links, quote forms, and local offer pages.",
+      body: "Use PRICE, BOOK or MENU to send the price list, the booking link or the service menu.",
     },
   ],
-  comparisonTitle: "Template campaigns vs manual inbox replies",
+  comparisonTitle: "Template campaign or replying by hand",
+  otherLabel: "Replying by hand",
   comparisons: [
     {
       label: "Speed",
-      ours: "Launch from reusable campaign templates in minutes.",
-      other: "Reply manually or rebuild the same campaign copy each time.",
+      ours: "Start from a ready example and adjust the text.",
+      other: "Write the same reply every time someone comments.",
     },
     {
-      label: "Measurement",
-      ours: "Use tracked links and keyword analytics per campaign.",
-      other: "Rely on screenshots, inbox memory, or scattered link data.",
+      label: "Tracking",
+      ours: "Tracked links and keyword counts per campaign.",
+      other: "Screenshots, memory and scattered links.",
     },
     {
       label: "Reuse",
-      ours: "Clone the same playbook across posts, reels, and client accounts.",
-      other: "Repeat setup work for every campaign.",
+      ours: "The same idea works on other posts, reels and accounts.",
+      other: "Every campaign starts from zero.",
     },
   ],
   templateLinks,
   faqs: [
     {
-      title: "Can I edit the template copy?",
-      body: "Yes. Templates are starting points. You can change keywords, private reply text, tracked destination URLs, and active status before launching.",
+      title: "Can I change the template text?",
+      body: "Yes. The template is a starting point. You change the keywords, the DM message and the link before turning the campaign on.",
     },
     {
-      title: "Do templates work for reels?",
-      body: "Yes. Campaigns can target Instagram posts or reels returned by the connected professional account.",
+      title: "Do templates work on reels?",
+      body: "Yes. A campaign can point to a post or a reel of the connected professional account.",
     },
   ],
 };
 
 export const agenciesSeoPage: SeoPageConfig = {
-  eyebrow: "Instagram DM automation for agencies",
-  title: "Instagram DM automation for agencies managing client campaigns",
+  metaTitle: "Instagram DM automation for agencies - Lead Engine",
+  metaDescription:
+    "Several Instagram accounts in one workspace, team roles, account filters and read only campaign reports to share with clients.",
+  eyebrow: "For agencies",
+  title: "Instagram DM automation for agencies that manage clients",
   description:
-    "Lead Engine gives agencies multi-account workspaces, client-ready reports, tracked links, and a focused comment-to-DM workflow for repeatable Instagram campaigns.",
-  primaryCta: "Start an agency workspace",
+    "Connect your clients' Instagram accounts in one workspace, invite the team with the right role and share read only campaign reports.",
+  primaryCta: "Sign in and set up the workspace",
+  checklistTitle: "What helps agencies",
   bullets: [
-    "Connect multiple client Instagram accounts on the Agency plan.",
-    "Filter dashboards, logs, campaigns, and settings by account.",
-    "Invite teammates as owners, admins, or members.",
-    "Share read-only client reports without exposing workspace controls.",
+    "Several Instagram professional accounts in one workspace.",
+    "Filter campaigns, history and settings by account.",
+    "Invite people as owner, admin or member.",
+    "Share read only reports without opening the panel.",
   ],
   sections: [
     {
-      title: "Client separation",
-      body: "Account filters keep campaign creation, logs, and reporting cleaner when one workspace manages multiple brands.",
+      title: "Each client separated",
+      body: "The account filter keeps campaigns, history and reports of each brand apart, even with everything in the same workspace.",
     },
     {
-      title: "Repeatable offers",
-      body: "Use templates to package lead magnets, product drops, price replies, and launch waitlists as repeatable agency services.",
+      title: "Services you can repeat",
+      body: "Use the templates to package free materials, product links, price lists and waitlists as a service you repeat for each client.",
     },
     {
       title: "Proof of work",
-      body: "Shareable reports show sends, skips, failures, clicks, CTR, top keywords, and tracked links in a client-safe view.",
+      body: "The report shows sends, skips, failures, clicks, click rate, top keywords and tracked links, without exposing the panel.",
     },
   ],
-  comparisonTitle: "Agency workflow vs generic automation",
+  comparisonTitle: "Agency routine with and without Lead Engine",
+  otherLabel: "Without a dedicated tool",
   comparisons: [
     {
-      label: "Client reporting",
-      ours: "Public read-only campaign report links, unbranded, with no plan gating.",
-      other: "Manual screenshots or dashboards that expose too much internal workspace context.",
+      label: "Client report",
+      ours: "Public read only link per campaign, without your brand on it.",
+      other: "Screenshots put together by hand every week.",
     },
     {
-      label: "Team roles",
-      ours: "Owner, admin, and member roles with invite links.",
-      other: "Often one shared login or overpowered teammate access.",
+      label: "Team",
+      ours: "Owner, admin and member roles, with an invitation link.",
+      other: "One shared login for everyone.",
     },
     {
-      label: "Account operations",
-      ours: "Per-account filters for campaigns, logs, dashboard stats, and settings.",
-      other: "Client work can get mixed across broad automation workspaces.",
+      label: "Accounts",
+      ours: "Filter by account in campaigns, history, dashboard and settings.",
+      other: "Work from different clients mixed together.",
     },
   ],
   templateLinks,
   faqs: [
     {
-      title: "How many Instagram accounts can agencies connect?",
-      body: "The Agency plan is shaped for up to 10 connected Instagram professional accounts in the current launch packaging.",
+      title: "How many Instagram accounts can I connect?",
+      body: "The open source version does not set a limit on accounts. Meta's own sending limits still apply to each account.",
     },
     {
-      title: "Can clients see reports without logging in?",
-      body: "Yes. Shareable report pages are public read-only links that hide private workspace controls and DM copy.",
+      title: "Can the client see the report without signing in?",
+      body: "Yes. The report link is public and read only. It hides the panel controls and the DM text.",
     },
   ],
 };
 
 export const commentLinkSeoPage: SeoPageConfig = {
+  metaTitle: "Comment LINK automation for Instagram - Lead Engine",
+  metaDescription:
+    "Whoever comments LINK, SHOP, GUIDE or your keyword gets the DM with the right link, through the official Meta API, with tracked clicks.",
   eyebrow: "Comment LINK automation",
-  title: "Comment LINK automation for Instagram posts and reels",
+  title: "Comment LINK and get the link in the Direct",
   description:
-    "Let followers comment LINK, SHOP, GUIDE, or any keyword and receive the right private reply with a tracked destination URL.",
-  primaryCta: "Automate comment LINK",
+    "Your follower comments LINK, SHOP, GUIDE or any keyword you choose and gets the DM with the right link, with tracked clicks.",
+  primaryCta: "Sign in and create a campaign",
+  checklistTitle: "How it works",
   bullets: [
-    "Match exact keywords or whole-word phrases.",
-    "Send Meta-compliant private replies from the triggering comment.",
-    "Insert tracked links into replies with click analytics.",
-    "Deduplicate comment jobs and log sent, skipped, and failed outcomes.",
+    "Match the exact word or any word in the comment.",
+    "The reply goes out from the comment, through the official Meta API.",
+    "Tracked links show who clicked.",
+    "Each comment is processed once and every send is logged: sent, skipped or failed.",
   ],
   sections: [
     {
-      title: "For product links",
-      body: "Turn high-intent LINK comments into tracked visits to product pages, landing pages, waitlists, or checkout offers.",
+      title: "For products",
+      body: "Turn LINK comments into visits to the product page, the sales page, the waitlist or the checkout.",
     },
     {
-      title: "For creator offers",
-      body: "Send guides, free resources, course links, and coaching applications without manually watching the inbox.",
+      title: "For creators",
+      body: "Send guides, free materials, course links and applications without watching the inbox all day.",
     },
     {
-      title: "For launch spikes",
-      body: "Queue and process campaign replies while a reel is getting attention, with plan and rate-limit checks in the worker.",
+      title: "For busy moments",
+      body: "When a reel takes off, the replies go into a queue and respect Meta's sending limits.",
     },
   ],
-  comparisonTitle: "Comment LINK automation vs manual link replies",
+  comparisonTitle: "Automatic link or link pasted by hand",
+  otherLabel: "Pasting by hand",
   comparisons: [
     {
-      label: "Reply accuracy",
-      ours: "Every matched comment gets the campaign reply tied to that post or reel.",
-      other: "Manual replies are easy to miss when comments spike.",
+      label: "Nobody left out",
+      ours: "Every comment with the keyword gets the reply for that post or reel.",
+      other: "When comments pile up, it is easy to miss someone.",
     },
     {
       label: "Tracking",
-      ours: "Tracked links connect private replies to click outcomes.",
-      other: "Regular pasted links rarely show campaign-level performance.",
+      ours: "Tracked links connect the DM to the click.",
+      other: "A pasted link does not show results per campaign.",
     },
     {
-      label: "Compliance",
-      ours: "Built around official private reply semantics and rate-aware queues.",
-      other: "Unsafe browser automation or scraping can put accounts at risk.",
+      label: "Account safety",
+      ours: "Official Meta API, with a queue that respects the limits.",
+      other: "Browser bots and scraping can put the account at risk.",
     },
   ],
   templateLinks,
   faqs: [
     {
-      title: "Can I use keywords other than LINK?",
-      body: "Yes. Each campaign can use multiple keywords such as PRICE, SHOP, GUIDE, PLAN, WAITLIST, TOUR, or your own phrase.",
+      title: "Can I use words other than LINK?",
+      body: "Yes. Each campaign can have several keywords, like PRICE, SHOP, GUIDE, PLAN or a word of your own.",
     },
     {
-      title: "Does Lead Engine send a normal Instagram DM?",
-      body: "It sends a Meta-compliant private reply triggered by the comment event, using the Instagram comment ID.",
+      title: "Does it send a normal Instagram DM?",
+      body: "It sends a private reply tied to the comment, through the official Meta API, using the comment ID. It arrives in the person's Direct.",
     },
   ],
 };
-

@@ -6,6 +6,7 @@
 import { ptFlows } from "@/lib/i18n/pt-flows";
 import { ptEscala } from "@/lib/i18n/pt-escala";
 import { ptSite } from "@/lib/i18n/pt-site";
+import { ptPublic } from "@/lib/i18n/pt-public";
 
 export const pt: Record<string, string> = {
   // 2026-10-08: Etapa 5 (Segmentos, Disparos, A/B, Relatórios), em
@@ -13,6 +14,9 @@ export const pt: Record<string, string> = {
   ...ptEscala,
   // 2026-10-04: site público (página inicial, cabeçalho, login) em lib/i18n/pt-site.ts.
   ...ptSite,
+  // 2026-10-04: páginas públicas fora do painel (modelos, SEO, legais,
+  // relatório público, convite) em lib/i18n/pt-public.ts.
+  ...ptPublic,
   // Menu e topo
   Dashboard: "Início",
   Overview: "Visão geral",

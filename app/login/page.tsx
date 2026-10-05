@@ -59,14 +59,14 @@ export default async function LoginPage({
             </h1>
             <p className="mt-6 text-center text-[15px] font-semibold leading-snug text-muted">
               {selectedTemplate
-                ? t("Sign in to use the {name} template.", { name: selectedTemplate.title })
+                ? t("Sign in to use the {name} template.", { name: t(selectedTemplate.title) })
                 : t("Sign in to manage your comments, Direct and contacts.")}
             </p>
 
             {selectedTemplate && !checkEmail && (
               <div className="mt-5 rounded-lg border border-border bg-[#fafafa] px-4 py-3">
                 <p className="text-xs font-semibold text-muted">{t("Template selected")}</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{selectedTemplate.title}</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">{t(selectedTemplate.title)}</p>
               </div>
             )}
 

@@ -166,7 +166,7 @@ export const CAMPAIGN_TEMPLATES: CampaignTemplate[] = [
     outcome: "Turn food reels into reservations and menu views.",
     bestFor: ["Specials", "New menu launches", "Weekend reservation pushes"],
     playbook: [
-      "Use a high-appetite food reel with a clear comment prompt.",
+      "Use a mouthwatering food reel that clearly asks for the comment.",
       "Send a mobile-friendly menu or booking page.",
       "Mention limited seating only when it is true.",
       "Repeat the template for seasonal specials.",

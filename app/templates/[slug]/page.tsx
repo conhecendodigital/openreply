@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PublicSiteHeader from "@/components/public-site-header";
+import PublicSiteFooter from "@/components/public-site-footer";
 import TemplateVisual from "@/components/template-visual";
 import {
   CAMPAIGN_TEMPLATES,
   getCampaignTemplate,
   getCampaignTemplateSlugs,
 } from "@/lib/templates/campaign-templates";
+import { getT } from "@/lib/i18n/server";
 
 type TemplatePageProps = {
   params: Promise<{ slug: string }>;
@@ -17,29 +19,29 @@ export function generateStaticParams() {
   return getCampaignTemplateSlugs().map((slug) => ({ slug }));
 }
 
-export async function generateMetadata({
-  params,
-}: TemplatePageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: TemplatePageProps): Promise<Metadata> {
   const { slug } = await params;
   const template = getCampaignTemplate(slug);
+  const t = await getT();
 
   if (!template) {
-    return {
-      title: "Template Not Found - Lead Engine",
-    };
+    return { title: t("Template not found - Lead Engine") };
   }
 
   return {
-    title: `${template.title} - Instagram Comment to DM Template`,
-    description: template.summary,
-    keywords: [
-      `${template.title} template`,
-      "Instagram comment to DM template",
-      "Instagram DM campaign template",
-      template.category,
-      template.audience,
-    ],
+    title: t("{name}: Instagram comment to DM template - Lead Engine", { name: t(template.title) }),
+    description: t(template.summary),
+    alternates: { canonical: `/templates/${template.slug}` },
   };
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-white p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-1.5 text-base font-semibold text-foreground">{value}</p>
+    </div>
+  );
 }
 
 export default async function TemplateDetailPage({ params }: TemplatePageProps) {
@@ -50,167 +52,151 @@ export default async function TemplateDetailPage({ params }: TemplatePageProps) 
     notFound();
   }
 
-  const relatedTemplates = CAMPAIGN_TEMPLATES.filter(
-    (item) => item.slug !== template.slug
-  ).slice(0, 3);
+  const t = await getT();
+  const relatedTemplates = CAMPAIGN_TEMPLATES.filter((item) => item.slug !== template.slug).slice(0, 3);
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-[#fafafa] text-foreground">
       <PublicSiteHeader active="templates" />
 
-      <section className="border-b border-white/10 bg-zinc-950/55">
-        <div className="mx-auto grid w-full max-w-7xl gap-10 px-5 py-14 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8 lg:py-20">
-          <div>
-            <Link
-              href="/templates"
-              className="text-sm font-semibold text-zinc-400 transition hover:text-white"
-            >
-              Back to templates
+      <main>
+        <section className="mx-auto grid w-full max-w-5xl items-start gap-8 px-4 pb-12 pt-8 sm:px-6 md:grid-cols-[1.1fr_0.9fr] md:gap-12 md:pb-16 md:pt-12">
+          <div className="min-w-0">
+            <Link href="/templates" className="text-sm font-semibold text-accent hover:underline">
+              ‹ {t("Back to templates")}
             </Link>
-            <p className="mt-8 text-sm font-bold uppercase tracking-wide text-cyan-200">
-              {template.category} template
+            <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-accent">
+              {t("{category} template", { category: t(template.category) })}
             </p>
-            <h1 className="mt-4 text-5xl font-black leading-[1.02] text-white sm:text-6xl">
-              {template.title}
+            <h1 className="mt-2 text-balance text-[30px] font-bold leading-[1.15] tracking-tight sm:text-[40px]">
+              {t(template.title)}
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">
-              {template.summary}
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <p className="mt-4 max-w-xl text-base leading-7 text-muted">{t(template.summary)}</p>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
                 href={`/login?template=${template.slug}`}
-                className="inline-flex items-center justify-center bg-cyan-300 px-6 py-3 text-sm font-bold text-zinc-950 transition hover:bg-cyan-200"
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
               >
-                Use this template
+                {t("Use this template")}
               </Link>
               <a
-                href="#playbook"
-                className="inline-flex items-center justify-center border border-white/10 bg-white/[0.04] px-6 py-3 text-sm font-bold text-white transition hover:border-white/20 hover:bg-white/[0.08]"
+                href="#passo-a-passo"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-white px-6 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
               >
-                Read playbook
+                {t("Read the step by step")}
               </a>
             </div>
           </div>
 
-          <TemplateVisual template={template} />
-        </div>
-      </section>
-
-      <section className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-16 sm:px-6 lg:grid-cols-[0.78fr_1.22fr] lg:px-8">
-        <aside className="space-y-4">
-          <div className="border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Audience
-            </p>
-            <p className="mt-2 text-lg font-bold text-white">{template.audience}</p>
+          <div className="min-w-0">
+            <TemplateVisual template={template} t={t} />
           </div>
-          <div className="border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Setup time
-            </p>
-            <p className="mt-2 text-lg font-bold text-white">
-              {template.setupMinutes} minutes
-            </p>
-          </div>
-          <div className="border border-white/10 bg-white/[0.035] p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Campaign goal
-            </p>
-            <p className="mt-2 text-lg font-bold text-white">{template.goal}</p>
-          </div>
-        </aside>
+        </section>
 
-        <div id="playbook" className="space-y-8">
-          <section className="border border-white/10 bg-white/[0.035] p-6">
-            <h2 className="text-2xl font-black text-white">Campaign Outcome</h2>
-            <p className="mt-3 text-base leading-8 text-zinc-300">
-              {template.outcome}
-            </p>
-          </section>
+        <section className="border-t border-border bg-white py-12 md:py-16">
+          <div className="mx-auto grid w-full max-w-5xl gap-6 px-4 sm:px-6 md:grid-cols-[0.75fr_1.25fr] md:gap-8">
+            <aside className="grid content-start gap-3">
+              <InfoCard label={t("Audience")} value={t(template.audience)} />
+              <InfoCard
+                label={t("Estimated setup time")}
+                value={t("About {n} minutes", { n: template.setupMinutes })}
+              />
+              <InfoCard label={t("Campaign goal")} value={t(template.goal)} />
+            </aside>
 
-          <section className="border border-white/10 bg-white/[0.035] p-6">
-            <h2 className="text-2xl font-black text-white">Setup Playbook</h2>
-            <ol className="mt-5 space-y-3">
-              {template.playbook.map((step, index) => (
-                <li key={step} className="grid gap-3 sm:grid-cols-[40px_1fr]">
-                  <span className="flex h-8 w-8 items-center justify-center bg-cyan-300 text-sm font-black text-zinc-950">
-                    {index + 1}
-                  </span>
-                  <span className="text-sm leading-7 text-zinc-300">{step}</span>
+            <div id="passo-a-passo" className="min-w-0 scroll-mt-20 space-y-3">
+              <section className="rounded-xl border border-border bg-white p-5">
+                <h2 className="text-lg font-semibold">{t("What this campaign is for")}</h2>
+                <p className="mt-2 text-sm leading-6 text-muted">{t(template.outcome)}</p>
+              </section>
+
+              <section className="rounded-xl border border-border bg-white p-5">
+                <h2 className="text-lg font-semibold">{t("Step by step")}</h2>
+                <ol className="mt-4 space-y-3">
+                  {template.playbook.map((step, index) => (
+                    <li key={step} className="flex gap-3">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-white">
+                        {index + 1}
+                      </span>
+                      <span className="pt-0.5 text-sm leading-6 text-foreground">{t(step)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+
+              <section className="rounded-xl border border-border bg-white p-5">
+                <h2 className="text-lg font-semibold">{t("DM message")}</h2>
+                <p className="mt-2 break-words rounded-lg border border-border bg-[#fafafa] p-3 font-mono text-[13px] leading-6 text-foreground">
+                  {t(template.dmMessage)}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  {t("{username} is replaced by the name of the person who commented. Swap the link for yours.")}
+                </p>
+              </section>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <section className="rounded-xl border border-border bg-white p-5">
+                  <h2 className="text-base font-semibold">{t("Good for")}</h2>
+                  <ul className="mt-3 space-y-1.5">
+                    {template.bestFor.map((item) => (
+                      <li key={item} className="text-sm text-muted">
+                        {t(item)}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+                <section className="rounded-xl border border-border bg-white p-5">
+                  <h2 className="text-base font-semibold">{t("Metrics to follow")}</h2>
+                  <ul className="mt-3 space-y-1.5">
+                    {template.metrics.map((item) => (
+                      <li key={item} className="text-sm text-muted">
+                        {t(item)}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </div>
+
+              <section className="rounded-xl border border-border bg-[#fafafa] p-5">
+                <h2 className="text-lg font-semibold">{t("Use this template in Lead Engine")}</h2>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  {t(
+                    "Sign in, connect your Instagram account, choose the post or reel and create the campaign with the keywords and the message of this template."
+                  )}
+                </p>
+                <Link
+                  href={`/login?template=${template.slug}`}
+                  className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-lg bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover sm:w-auto"
+                >
+                  {t("Use this template")}
+                </Link>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-t border-border py-12 md:py-16">
+          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+            <h2 className="text-2xl font-bold tracking-tight">{t("More templates")}</h2>
+            <ul className="mt-6 grid gap-3 md:grid-cols-3">
+              {relatedTemplates.map((item) => (
+                <li key={item.slug}>
+                  <Link
+                    href={`/templates/${item.slug}`}
+                    className="block h-full rounded-xl border border-border bg-white p-5 transition-colors hover:bg-surface-hover"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-accent">{t(item.category)}</p>
+                    <h3 className="mt-2 text-base font-semibold">{t(item.title)}</h3>
+                    <p className="mt-1.5 text-sm leading-6 text-muted">{t(item.summary)}</p>
+                  </Link>
                 </li>
               ))}
-            </ol>
-          </section>
-
-          <section className="grid gap-4 md:grid-cols-2">
-            <div className="border border-white/10 bg-white/[0.035] p-6">
-              <h2 className="text-xl font-black text-white">Best For</h2>
-              <ul className="mt-4 space-y-2">
-                {template.bestFor.map((item) => (
-                  <li key={item} className="text-sm text-zinc-300">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="border border-white/10 bg-white/[0.035] p-6">
-              <h2 className="text-xl font-black text-white">Metrics To Watch</h2>
-              <ul className="mt-4 space-y-2">
-                {template.metrics.map((item) => (
-                  <li key={item} className="text-sm text-zinc-300">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-
-          <section className="border border-cyan-200/20 bg-cyan-300/10 p-6">
-            <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-              <div>
-                <h2 className="text-2xl font-black text-white">
-                  Copy this campaign into Lead Engine
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-zinc-300">
-                  Sign in, connect Instagram, pick a post or reel, and the
-                  template copy will be ready for your campaign draft.
-                </p>
-              </div>
-              <Link
-                href={`/login?template=${template.slug}`}
-                className="inline-flex items-center justify-center bg-cyan-300 px-6 py-3 text-sm font-bold text-zinc-950 transition hover:bg-cyan-200"
-              >
-                Use this template
-              </Link>
-            </div>
-          </section>
-        </div>
-      </section>
-
-      <section className="border-t border-white/10 bg-zinc-950/60 py-14">
-        <div className="mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-black text-white">More templates</h2>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {relatedTemplates.map((item) => (
-              <Link
-                key={item.slug}
-                href={`/templates/${item.slug}`}
-                className="border border-white/10 bg-white/[0.035] p-5 transition hover:border-white/20 hover:bg-white/[0.055]"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200">
-                  {item.category}
-                </p>
-                <h3 className="mt-3 text-lg font-black text-white">
-                  {item.title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  {item.summary}
-                </p>
-              </Link>
-            ))}
+            </ul>
           </div>
-        </div>
-      </section>
-    </main>
+        </section>
+      </main>
+
+      <PublicSiteFooter />
+    </div>
   );
 }

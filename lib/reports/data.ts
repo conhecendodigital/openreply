@@ -139,6 +139,8 @@ export async function getCampaignReportBySlug(shareSlug: string) {
       ]);
 
       return {
+        // Start of the day, so the public page can format it in the viewer's language.
+        day: start,
         date: start.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
