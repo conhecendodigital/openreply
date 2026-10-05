@@ -78,7 +78,7 @@ export const FUNNEL_DRAFT_HELP =
   "Rascunho = { schemaVersion: 1, settings: { theme: { mode: \"light\"|\"dark\", primary, background, text (#RRGGBB), radius? }, checkoutUrl? (https), pixelId? (só dígitos), pixelConsent? (\"banner\"|\"notice\"), seo?, privacyUrl?, consentText?, footerText? }, steps: [{ id, title, header?: { showBack?, showProgress?, showLogo? }, blocks: [...] }] }. " +
   "ids: letras, números, - ou _ (até 40), únicos no funil. Blocos (todos com id e delaySec? em segundos): " +
   '{type:"heading", text, level?:1|2, align?}; {type:"text", text (**negrito**, *itálico*, "- " vira item, {resposta.<name>})}; ' +
-  '{type:"image", url (https, GIF ok), alt}; {type:"video", url (YouTube, inclusive não listado, Vimeo ou Panda Video), title, vertical?}; ' +
+  '{type:"image", url (https, GIF ok), alt}; {type:"video", url (YouTube, inclusive não listado, Vimeo, Panda Video ou link de um vídeo já enviado pelo editor), title, vertical?, autoplay? e posterUrl? (só vídeo enviado)};' +
   '{type:"button", label, action:{kind:"next"}|{kind:"goto",stepId}|{kind:"checkout",url?}, style?, sticky?}; ' +
   '{type:"options", name (a-z0-9_-, único), question?, multiple:false|true, options:[{id,label,emoji?,imageUrl?,tag? (etiqueta no contato),goto? (só escolha única),score?}]} (no máximo 1 por tela); ' +
   '{type:"field", field:"name"|"email"|"whatsapp", label, required?}; {type:"compare", before:{title,imageUrl?,items[]}, after:{...}, authorized?}; ' +

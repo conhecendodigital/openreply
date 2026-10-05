@@ -64,7 +64,7 @@ describe("parseVideoUrl", () => {
     expect(isPlaceholderUrl("https://cdn.x.com/capa.jpg")).toBe(false);
   });
 
-  it("upload ainda não existe (armazenamento não decidido)", () => {
+  it("sem armazenamento configurado não há envio de arquivo (só link)", () => {
     expect(getMediaUploader()).toBeNull();
   });
 });

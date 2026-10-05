@@ -41,6 +41,8 @@ export const FUNNEL_ERROR_CODES = [
   "rate_limited",
   "too_large",
   "not_configured",
+  "media_type",
+  "media_too_large",
 ] as const;
 export type FunnelErrorCode = (typeof FUNNEL_ERROR_CODES)[number];
 
@@ -58,6 +60,8 @@ export const FUNNEL_ERROR_TEXT: Record<FunnelErrorCode, string> = {
   rate_limited: "Too many tries in a row. Wait a moment and try again.",
   too_large: "The quiz is too big to save. Remove some screens or blocks.",
   not_configured: "This is not configured on the server yet.",
+  media_type: "This file type is not accepted. Use JPG, PNG, WebP, GIF, MP4 or WebM.",
+  media_too_large: "The file is too big. Images and GIFs go up to 15 MB, videos up to 500 MB.",
 };
 
 /** Server error code -> sentence for the owner. */

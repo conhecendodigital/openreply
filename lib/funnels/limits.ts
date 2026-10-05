@@ -6,6 +6,8 @@
 export const FUNNEL_EVENT_LIMIT = { limit: 120, windowSeconds: 60 };
 /** Lead submissions per IP per 10 minutes. */
 export const FUNNEL_LEAD_LIMIT = { limit: 10, windowSeconds: 600 };
+/** Pre-signed file uploads of the quiz editor per user per hour. */
+export const MEDIA_UPLOAD_LIMIT = { limit: 60, windowSeconds: 60 * 60 };
 /** Body of /api/q/... (bytes). */
 export const MAX_PUBLIC_BODY = 8_192;
 /** Body of the Hotmart webhook (bytes). */

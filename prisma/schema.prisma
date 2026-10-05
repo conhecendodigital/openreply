@@ -96,6 +96,7 @@ model Workspace {
   segments           Segment[]
   broadcasts         Broadcast[]
   funnels            Funnel[]
+  funnelMedia        FunnelMedia[]
   metaCapi           MetaCapiSettings?
 
   @@index([ownerId])
@@ -1301,8 +1302,35 @@ model Funnel {
   events    FunnelEvent[]
   leads     FunnelLead[]
   purchases FunnelPurchase[]
+  media     FunnelMedia[]
 
   @@index([workspaceId, updatedAt])
+}
+
+/// Arquivo (foto, GIF, vídeo) enviado pelo editor do quiz pro armazenamento
+/// próprio (S3 compatível). A chave nunca leva o nome original do arquivo.
+model FunnelMedia {
+  id          String    @id @default(cuid())
+  workspaceId String
+  funnelId    String
+  /// <workspaceId>/<funnelId>/<aaaa-mm>/<uuid>.<ext>
+  key         String    @unique
+  url         String
+  /// image | video
+  kind        String
+  contentType String
+  size        Int
+  /// Nome original, só pra mostrar na lista (até 120 caracteres).
+  name        String?
+  createdBy   String?
+  /// Preenchido quando o navegador termina o envio. Null = envio não confirmado.
+  uploadedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  funnel    Funnel    @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, funnelId, createdAt])
 }
 
 model FunnelVisit {

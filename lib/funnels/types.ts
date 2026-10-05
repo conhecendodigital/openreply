@@ -36,7 +36,8 @@ export type ImageBlock = BlockBase & {
   height?: number;
   rounded?: boolean;
 };
-export type VideoProvider = "youtube" | "vimeo" | "panda";
+/** "file" = arquivo MP4/WebM do nosso armazenamento (MEDIA_PUBLIC_BASE_URL), tocado com <video>. */
+export type VideoProvider = "youtube" | "vimeo" | "panda" | "file";
 export type VideoBlock = BlockBase & {
   type: "video";
   /** URL como o dono colou (watch, youtu.be, shorts, embed, vimeo, panda embed). */
@@ -44,6 +45,10 @@ export type VideoBlock = BlockBase & {
   /** Título acessível do iframe. */
   title: string;
   vertical?: boolean;
+  /** Só vídeo próprio: começa mudo sozinho, com "toque para ativar o som" (como a VSL). */
+  autoplay?: boolean;
+  /** Só vídeo próprio: imagem de capa antes de tocar. */
+  posterUrl?: string;
 };
 
 export type ButtonAction =

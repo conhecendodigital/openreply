@@ -404,4 +404,39 @@ export const ptFunnels: Record<string, string> = {
   "Before: {title}": "Antes: {title}",
   "This page is not available": "Esta página não está disponível",
   "The link may be wrong or the page is not online anymore.": "O link pode estar errado ou a página não está mais no ar.",
+
+  // Envio de arquivo (fotos, GIFs e vídeos) e vídeo próprio
+  "Send file": "Enviar arquivo",
+  "Send video file": "Enviar vídeo",
+  "Pick one already sent": "Escolher um já enviado",
+  "Close the list": "Fechar a lista",
+  "Files already sent": "Arquivos já enviados",
+  "Use {name}": "Usar {name}",
+  "Use this file": "Usar este arquivo",
+  "JPG, PNG, WebP or GIF up to 15 MB. On the phone you can take a photo or pick from the gallery.":
+    "JPG, PNG, WebP ou GIF até 15 MB. No celular, você pode tirar uma foto ou escolher da galeria.",
+  "MP4 or WebM up to 500 MB. On the phone you can record or pick from the gallery.":
+    "MP4 ou WebM até 500 MB. No celular, você pode gravar ou escolher da galeria.",
+  "Sending file": "Enviando arquivo",
+  "Sending... {n}%": "Enviando... {n}%",
+  "File sent. The link is already in the block.": "Arquivo enviado. O link já está no bloco.",
+  "Upload canceled.": "Envio cancelado.",
+  "This file type is not accepted. Use JPG, PNG, WebP or GIF.": "Esse tipo de arquivo não é aceito. Use JPG, PNG, WebP ou GIF.",
+  "This file type is not accepted. Use an MP4 or WebM video.": "Esse tipo de arquivo não é aceito. Use um vídeo MP4 ou WebM.",
+  "This file type is not accepted. Use JPG, PNG, WebP, GIF, MP4 or WebM.":
+    "Esse tipo de arquivo não é aceito. Use JPG, PNG, WebP, GIF, MP4 ou WebM.",
+  "The file is too big. Images and GIFs go up to 15 MB.": "O arquivo é grande demais. Imagens e GIFs vão até 15 MB.",
+  "The file is too big. Videos go up to 500 MB.": "O arquivo é grande demais. Vídeos vão até 500 MB.",
+  "The file is too big. Images and GIFs go up to 15 MB, videos up to 500 MB.":
+    "O arquivo é grande demais. Imagens e GIFs vão até 15 MB, vídeos até 500 MB.",
+  "The upload failed because of the connection. Check your internet and try again.":
+    "O envio falhou por causa da conexão. Confira sua internet e tente de novo.",
+  "The upload failed. Try again in a moment.": "O envio falhou. Tente de novo daqui a pouco.",
+  "Recognized: your own video file": "Reconhecido: arquivo de vídeo seu",
+  "Start by itself without sound (tap to turn on the sound)": "Começar sozinho sem som (toque para ativar o som)",
+  "Like a VSL: the video starts muted and shows a button to turn on the sound, which plays it from the start.":
+    "Como numa VSL: o vídeo começa mudo e mostra um botão pra ativar o som, que toca do começo.",
+  "Cover image (optional)": "Imagem de capa (opcional)",
+  "Your video already started": "Seu vídeo já começou",
+  "Tap to turn on the sound": "Toque para ativar o som",
 };

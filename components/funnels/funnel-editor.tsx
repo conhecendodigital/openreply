@@ -29,6 +29,8 @@ import BlockPanel from "@/components/funnels/block-panel";
 import SettingsPanel from "@/components/funnels/settings-panel";
 import PhonePreview from "@/components/funnels/phone-preview";
 import PublishDialog from "@/components/funnels/publish-dialog";
+import { MediaUploadProvider, type MediaEditorState } from "@/components/funnels/media-upload";
+import { getMediaUploader, setMediaPublicBase, type FunnelMediaItem, type MediaUploadConfig } from "@/lib/funnels/media";
 
 type Tab = "steps" | "blocks" | "props" | "preview";
 type Notice = { tone: "ok" | "error" | "warn"; text: string };
@@ -57,6 +59,15 @@ export default function FunnelEditor({ funnelId }: { funnelId: string }) {
   const [showPublish, setShowPublish] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [media, setMedia] = useState<{ config: MediaUploadConfig | null; files: FunnelMediaItem[] }>({ config: null, files: [] });
+  const mediaState = useMemo<MediaEditorState>(
+    () => ({
+      uploader: getMediaUploader(media.config ? { ...media.config, funnelId } : null),
+      files: media.files,
+      addFile: (file) => setMedia((s) => ({ ...s, files: [file, ...s.files.filter((f) => f.id !== file.id)] })),
+    }),
+    [media, funnelId]
+  );
   const tRef = useRef(t);
   useEffect(() => {
     tRef.current = t;
@@ -67,9 +78,17 @@ export default function FunnelEditor({ funnelId }: { funnelId: string }) {
   // ── Load ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     let alive = true;
-    void funnelApi<FunnelDetail>(`/api/funnels/${encodeURIComponent(funnelId)}`).then((r) => {
+    const path = `/api/funnels/${encodeURIComponent(funnelId)}`;
+    void Promise.all([
+      funnelApi<FunnelDetail>(path),
+      funnelApi<MediaUploadConfig & { files: FunnelMediaItem[] }>(`${path}/media`),
+    ]).then(([r, m]) => {
       if (!alive) return;
       const tr = tRef.current;
+      // Before the draft: the checks of a video of our own storage need the base.
+      const mediaConfig = m.success ? m.data : null;
+      setMediaPublicBase(mediaConfig?.publicBaseUrl ?? null);
+      setMedia({ config: mediaConfig, files: mediaConfig?.files ?? [] });
       if (!r.success) {
         setLoadError(funnelErrorText(tr, r));
         return;
@@ -473,7 +492,9 @@ export default function FunnelEditor({ funnelId }: { funnelId: string }) {
               <span className="text-xs">{t("See list")}</span>
             </button>
           )}
-          <BlockPanel def={def} stepId={currentStepId} blockId={currentBlockId} setDef={setDef} issues={allIssues} onSelectBlock={setBlockId} />
+          <MediaUploadProvider value={mediaState}>
+            <BlockPanel def={def} stepId={currentStepId} blockId={currentBlockId} setDef={setDef} issues={allIssues} onSelectBlock={setBlockId} />
+          </MediaUploadProvider>
           {shapeTexts.length > 0 && (
             <ul className="mt-4 list-disc space-y-1 rounded-xl bg-error/10 py-2 pl-8 pr-3 text-xs text-error">
               {shapeTexts.slice(0, 6).map((x) => (

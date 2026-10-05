@@ -12,7 +12,8 @@
 
 import { useState } from "react";
 import { useT } from "@/components/lang-provider";
-import { getMediaUploader, isAllowedImageUrl, isPlaceholderUrl, parseVideoUrl } from "@/lib/funnels/media";
+import { isAllowedImageUrl, isPlaceholderUrl, parseVideoUrl } from "@/lib/funnels/media";
+import { MediaUploadControl, useMediaUpload } from "@/components/funnels/media-upload";
 import type {
   ButtonAction,
   CompareSide,
@@ -228,8 +229,21 @@ function BlockFields({
           <VideoUrlField value={block.url} onChange={(v) => set({ url: v })} />
           {parsed && (
             <p className="text-xs text-muted">
-              {t("Recognized: {provider}", { provider: parsed.provider === "youtube" ? "YouTube" : parsed.provider === "vimeo" ? "Vimeo" : "Panda Video" })}
+              {parsed.provider === "file"
+                ? t("Recognized: your own video file")
+                : t("Recognized: {provider}", { provider: parsed.provider === "youtube" ? "YouTube" : parsed.provider === "vimeo" ? "Vimeo" : "Panda Video" })}
             </p>
+          )}
+          {parsed?.provider === "file" && (
+            <>
+              <CheckField
+                label={t("Start by itself without sound (tap to turn on the sound)")}
+                hint={t("Like a VSL: the video starts muted and shows a button to turn on the sound, which plays it from the start.")}
+                checked={block.autoplay === true}
+                onChange={(v) => set({ autoplay: v || undefined })}
+              />
+              <ImageUrlField label={t("Cover image (optional)")} value={block.posterUrl ?? ""} onChange={(v) => set({ posterUrl: v || undefined })} />
+            </>
           )}
           <TextField
             label={t("Video title (for screen readers)")}
@@ -545,7 +559,7 @@ function LinkInput({
 
 function ImageUrlField({ label, value, onChange, required = false }: { label: string; value: string; onChange: (v: string) => void; required?: boolean }) {
   const t = useT();
-  const uploader = getMediaUploader();
+  const { uploader } = useMediaUpload();
   const placeholder = Boolean(value.trim()) && isPlaceholderUrl(value);
   const real = Boolean(value.trim()) && !placeholder && isAllowedImageUrl(value.trim());
   return (
@@ -565,33 +579,45 @@ function ImageUrlField({ label, value, onChange, required = false }: { label: st
         error={t("Use a link that starts with https://")}
       />
       {real && <img src={value} alt="" aria-hidden="true" className="max-h-28 rounded-lg border border-border object-contain" loading="lazy" />}
-      {uploader ? null : <p className="text-xs text-muted">{t("File upload comes later; for now paste the image link.")}</p>}
+      {uploader ? (
+        <MediaUploadControl kind="image" onUploaded={onChange} />
+      ) : (
+        <p className="text-xs text-muted">{t("File upload comes later; for now paste the image link.")}</p>
+      )}
     </div>
   );
 }
 
 function VideoUrlField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const t = useT();
-  const placeholder = parseVideoUrl(value)?.id === "XXXXXXXXXXX";
+  const { uploader } = useMediaUpload();
+  const parsed = parseVideoUrl(value);
+  const placeholder = parsed?.id === "XXXXXXXXXXX";
   return (
-    <LinkInput
-      label={t("Video link")}
-      value={value}
-      shown={placeholder ? "" : value}
-      accept={(v) => {
-        const x = v.trim();
-        if (!x) return PLACEHOLDER_VIDEO;
-        return parseVideoUrl(x) ? x : null;
-      }}
-      onValid={onChange}
-      placeholder="https://www.youtube.com/watch?v=..."
-      hint={
-        placeholder
-          ? t("Paste the video link. Use YouTube (unlisted works too), Vimeo or Panda Video.")
-          : t("Use YouTube (unlisted works too), Vimeo or Panda Video.")
-      }
-      error={t("This link is not from YouTube, Vimeo or Panda Video. Paste the link of the video page or the embed link.")}
-    />
+    <div className="space-y-2">
+      <LinkInput
+        label={t("Video link")}
+        value={value}
+        shown={placeholder ? "" : value}
+        accept={(v) => {
+          const x = v.trim();
+          if (!x) return PLACEHOLDER_VIDEO;
+          return parseVideoUrl(x) ? x : null;
+        }}
+        onValid={onChange}
+        placeholder="https://www.youtube.com/watch?v=..."
+        hint={
+          placeholder
+            ? t("Paste the video link. Use YouTube (unlisted works too), Vimeo or Panda Video.")
+            : t("Use YouTube (unlisted works too), Vimeo or Panda Video.")
+        }
+        error={t("This link is not from YouTube, Vimeo or Panda Video. Paste the link of the video page or the embed link.")}
+      />
+      {parsed?.provider === "file" && (
+        <video src={parsed.embedUrl} preload="metadata" muted playsInline controls className="max-h-40 w-full rounded-lg border border-border bg-black" />
+      )}
+      {uploader && <MediaUploadControl kind="video" onUploaded={onChange} />}
+    </div>
   );
 }
 

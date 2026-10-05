@@ -133,6 +133,7 @@ export function imageUrls(block: FunnelBlock): string[] {
   if (block.type === "compare") list.push(block.before.imageUrl, block.after.imageUrl);
   if (block.type === "testimonial") list.push(block.imageUrl);
   if (block.type === "gallery") list.push(...block.images.map((i) => i.url));
+  if (block.type === "video") list.push(block.posterUrl);
   return list.filter((u): u is string => typeof u === "string" && u !== "");
 }
 

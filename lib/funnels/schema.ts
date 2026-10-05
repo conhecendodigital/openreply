@@ -104,6 +104,8 @@ const videoBlock = z.object({
     .refine((v) => parseVideoUrl(v) !== null, "Use a YouTube, Vimeo or Panda Video link"),
   title: label,
   vertical: z.boolean().optional(),
+  autoplay: z.boolean().optional(),
+  posterUrl: optionalImageUrl,
 });
 const buttonAction = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("next") }),

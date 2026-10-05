@@ -26,6 +26,14 @@ export const SECURITY_HEADERS = [
  * nocookie, Vimeo, Panda Video) and Facebook (Pixel). No script-src /
  * connect-src: the Pixel (connect.facebook.net) and Next's scripts keep
  * working. Same key on a later rule replaces the general CSP for /q.
+ *
+ * Own media (MEDIA_PUBLIC_BASE_URL, editor upload): neither CSP has
+ * default-src / img-src / media-src / connect-src, so the photos and the
+ * <video> of our storage load on /q and in the panel, and the editor's direct
+ * PUT to the storage is not blocked. Which video plays is closed in code
+ * instead (lib/funnels/media.ts: a direct video only from our base). These
+ * headers are fixed at build time (the Docker build has no env), so a
+ * media-src read from the env here would never see the runtime value.
  */
 export const PUBLIC_FUNNEL_CSP =
   "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'; " +
