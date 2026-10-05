@@ -5,6 +5,8 @@ import { RECIPIENT_PARAM, verifyRecipientToken } from "@/lib/tracking/recipient"
 import { AUTO_TAGS, trackInteraction } from "@/lib/contacts/record";
 import { recordFlowLinkClick } from "@/lib/flows/links";
 import { recordBroadcastLinkClick } from "@/lib/broadcasts/links";
+// Etapa 6: a link to one of our quizzes carries who clicked (signed c=).
+import { withFunnelContact } from "@/lib/funnels/contact-link";
 
 type RedirectRouteProps = {
   params: Promise<{ slug: string }>;
@@ -36,14 +38,16 @@ export async function GET(request: NextRequest, { params }: RedirectRouteProps) 
       request,
       contactIgUserId: recipientIgUserId,
     });
-    if (flowDestination) return NextResponse.redirect(flowDestination, { status: 302 });
+    if (flowDestination) return NextResponse.redirect(withFunnelContact(flowDestination, recipientIgUserId), { status: 302 });
     // Etapa 5: then a broadcast button's link (slugs are unique across the 3).
     const broadcastDestination = await recordBroadcastLinkClick({
       slug,
       request,
       contactIgUserId: recipientIgUserId,
     });
-    if (broadcastDestination) return NextResponse.redirect(broadcastDestination, { status: 302 });
+    if (broadcastDestination) {
+      return NextResponse.redirect(withFunnelContact(broadcastDestination, recipientIgUserId), { status: 302 });
+    }
     return NextResponse.redirect(new URL("/", request.url), { status: 302 });
   }
 
@@ -79,7 +83,7 @@ export async function GET(request: NextRequest, { params }: RedirectRouteProps) 
     }).catch(() => {});
   }
 
-  return NextResponse.redirect(trackedLink.destinationUrl, { status: 302 });
+  return NextResponse.redirect(withFunnelContact(trackedLink.destinationUrl, contactIgUserId), { status: 302 });
 }
 
 async function creditClick(input: {

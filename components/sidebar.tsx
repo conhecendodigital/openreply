@@ -16,6 +16,7 @@
  * vira um grupo que abre e fecha; o grupo da página atual abre sozinho e o
  * que ficou aberto é lembrado no navegador. Avisos (aprovações, canal) sobem
  * pro nome do grupo quando ele está fechado. A Etapa 6 entra como grupo "Quiz".
+ * 2026-10-10: Etapa 6. Grupo "Quiz" (funis interativos), logo depois de Automações.
  */
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -42,6 +43,9 @@ const icones: Record<string, Icone> = {
   ),
   "/flows": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="2.5" y="3.5" width="7" height="5" rx="1.5" /><rect {...traco(ativo)} x="14.5" y="9.5" width="7" height="5" rx="1.5" /><rect {...traco(ativo)} x="2.5" y="15.5" width="7" height="5" rx="1.5" /><path {...traco(ativo)} d="M9.5 6H12v12H9.5M12 12h2.5" /></svg>
+  ),
+  "/quizzes": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="4" y="2.5" width="16" height="19" rx="3" /><path {...traco(ativo)} d="M9.5 8.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 16.5h.01" /></svg>
   ),
   "/reports": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M4 4v16h16" /><path {...traco(ativo)} d="m7.5 14.5 3.5-4 3 2.5 5-6" /></svg>
@@ -114,6 +118,10 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
       { label: "Moderation", href: "/moderation" },
       { label: "DM Logs", href: "/logs" },
     ],
+  },
+  {
+    title: "Quiz",
+    items: [{ label: "Quizzes", href: "/quizzes" }],
   },
   {
     title: "Channels and account",

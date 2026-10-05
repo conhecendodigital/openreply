@@ -95,6 +95,7 @@ model Workspace {
   flows              Flow[]
   segments           Segment[]
   broadcasts         Broadcast[]
+  funnels            Funnel[]
 
   @@index([ownerId])
 }
@@ -641,6 +642,8 @@ model Contact {
   linkOpens           ConversationLinkOpen[]
   flowRuns            FlowRun[]
   broadcastRecipients BroadcastRecipient[]
+  funnelVisits        FunnelVisit[]
+  funnelLeads         FunnelLead[]
 
   @@unique([instagramAccountId, igUserId])
   @@index([workspaceId, lastSeenAt])
@@ -1263,4 +1266,161 @@ model BroadcastLinkClick {
 
   @@index([broadcastId, createdAt])
   @@index([contactIgUserId])
+}
+
+// ─── Etapa 6: funis interativos (Quiz) ───────────────────────────────────────
+
+enum FunnelStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// Etapa 6: funil interativo (quiz). Definição em JSON (lib/funnels/schema.ts).
+model Funnel {
+  id               String       @id @default(cuid())
+  workspaceId      String
+  name             String
+  /// Global (a URL pública /q/<slug> não tem workspace).
+  slug             String       @unique
+  status           FunnelStatus @default(DRAFT)
+  draft            Json
+  /// Cópia congelada do rascunho na última publicação. Público só lê isto.
+  published        Json?
+  publishedVersion Int          @default(0)
+  publishedAt      DateTime?
+  publishedBy      String?
+  templateId       String?
+  createdBy        String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  visits    FunnelVisit[]
+  events    FunnelEvent[]
+  leads     FunnelLead[]
+  purchases FunnelPurchase[]
+
+  @@index([workspaceId, updatedAt])
+}
+
+model FunnelVisit {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  funnelId      String
+  /// 32 hex gerado no navegador. Global (vira xcod no checkout Hotmart).
+  visitorId     String
+  funnelVersion Int
+  contactId     String?
+  /// utm_*, fbclid, gclid, src, sck da entrada.
+  tracking      Json?
+  /// utm_source em minúsculas ou "direto".
+  source        String
+  referrerHost  String?
+  /// mobile | tablet | desktop
+  device        String?
+  ipHash        String?
+  maxStepIndex  Int       @default(0)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  checkoutAt    DateTime?
+  leadAt        DateTime?
+  purchasedAt   DateTime?
+  refundedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  funnel    Funnel           @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  contact   Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  events    FunnelEvent[]
+  lead      FunnelLead?
+  purchases FunnelPurchase[]
+
+  @@unique([funnelId, visitorId])
+  @@index([visitorId])
+  @@index([funnelId, createdAt])
+  @@index([funnelId, source, createdAt])
+  @@index([contactId])
+}
+
+model FunnelEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  funnelId    String
+  visitId     String
+  /// view | answer | checkout | complete
+  type        String
+  stepId      String
+  /// "" quando não é de um bloco (unique não aceita null repetido).
+  blockId     String   @default("")
+  /// answer: { optionIds: string[] }
+  value       Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  funnel Funnel      @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  visit  FunnelVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@unique([visitId, type, stepId, blockId])
+  @@index([funnelId, type, createdAt])
+}
+
+model FunnelLead {
+  id          String    @id @default(cuid())
+  workspaceId String
+  funnelId    String
+  visitId     String    @unique
+  contactId   String?
+  name        String?
+  email       String?
+  /// Só dígitos com DDI, ex.: 5511999998888.
+  phone       String?
+  /// name -> rótulos escolhidos
+  answers     Json
+  tags        String[]  @default([])
+  consentAt   DateTime?
+  consentText String?
+  purchasedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  funnel  Funnel      @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  visit   FunnelVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  contact Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([funnelId, createdAt])
+  @@index([workspaceId, email])
+}
+
+model FunnelPurchase {
+  id             String   @id @default(cuid())
+  /// null = compra que não casou com nenhuma visita/lead.
+  workspaceId    String?
+  funnelId       String?
+  visitId        String?
+  leadId         String?
+  contactId      String?
+  provider       String   @default("hotmart")
+  transaction    String
+  /// PURCHASE_APPROVED, PURCHASE_COMPLETE, PURCHASE_REFUNDED, PURCHASE_CHARGEBACK, PURCHASE_CANCELED...
+  event          String
+  status         String?
+  productId      String?
+  productName    String?
+  offerCode      String?
+  amountCents    Int?
+  currency       String?
+  /// sha256(sal + e-mail minúsculo). E-mail puro não é guardado aqui.
+  buyerEmailHash String?
+  src            String?
+  sck            String?
+  xcod           String?
+  occurredAt     DateTime
+  createdAt      DateTime @default(now())
+
+  funnel Funnel?      @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  visit  FunnelVisit? @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, transaction, event])
+  @@index([funnelId, occurredAt])
 }

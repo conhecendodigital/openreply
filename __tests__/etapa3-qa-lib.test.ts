@@ -71,8 +71,8 @@ describe("QA sidebar sections", () => {
   const titles = [...block.matchAll(/title: "([^"]+)"/g)].map((m) => m[1]);
   const items = [...block.matchAll(/\{ label: "([^"]+)", href: "([^"]+)" \}/g)].map((m) => ({ label: m[1], href: m[2] }));
 
-  it("has the 4 sections, each with a title", () => {
-    expect(titles).toEqual(["Home", "Conversations", "Automations", "Channels and account"]);
+  it("has the 5 sections, each with a title (Quiz since Etapa 6)", () => {
+    expect(titles).toEqual(["Home", "Conversations", "Automations", "Quiz", "Channels and account"]);
   });
 
   it("lists every top-level dashboard screen once (and only screens that exist)", () => {

@@ -5,6 +5,8 @@
  */
 import { ptFlows } from "@/lib/i18n/pt-flows";
 import { ptEscala } from "@/lib/i18n/pt-escala";
+import { ptFunnels } from "@/lib/i18n/pt-funnels";
+import { ptFunnelsApi } from "@/lib/i18n/pt-funnels-api";
 import { ptSite } from "@/lib/i18n/pt-site";
 import { ptPublic } from "@/lib/i18n/pt-public";
 
@@ -12,6 +14,10 @@ export const pt: Record<string, string> = {
   // 2026-10-08: Etapa 5 (Segmentos, Disparos, A/B, Relatórios), em
   // lib/i18n/pt-escala.ts. Vem primeiro: uma chave que já existia aqui embaixo vence.
   ...ptEscala,
+  // 2026-10-10: Etapa 6 (Quiz). Telas e player em lib/i18n/pt-funnels.ts; mensagens
+  // de validação, modelos e tipos de bloco em lib/i18n/pt-funnels-api.ts.
+  ...ptFunnels,
+  ...ptFunnelsApi,
   // 2026-10-04: site público (página inicial, cabeçalho, login) em lib/i18n/pt-site.ts.
   ...ptSite,
   // 2026-10-04: páginas públicas fora do painel (modelos, SEO, legais,

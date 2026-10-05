@@ -39,6 +39,10 @@ export const CONTACT_EVENT_TYPES = [
   // Etapa 5 (escala)
   "BROADCAST_SENT",
   "OPT_OUT",
+  // Etapa 6 (quiz / funis)
+  "FUNNEL_LEAD",
+  "FUNNEL_CHECKOUT",
+  "PURCHASE",
 ] as const;
 export type ContactEventType = (typeof CONTACT_EVENT_TYPES)[number];
 
@@ -87,6 +91,10 @@ export const AUTO_TAGS = {
   cameFrom: (origin: string) => `veio:${origin.trim() || "link"}`,
   // Etapa 5: wrote PARAR / SAIR / STOP (out of future broadcasts).
   optedOut: "saiu:disparos",
+  // Etapa 6: answered a quiz / bought / got a refund (Hotmart webhook).
+  quizLead: (slug: string) => `quiz:${slug}`,
+  bought: (product: string) => `comprou:${product.trim()}`,
+  refunded: (product: string) => `reembolso:${product.trim()}`,
 };
 
 export function normalizeTagName(name: string): string {

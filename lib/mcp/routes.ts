@@ -42,6 +42,12 @@ import * as broadcastsRoute from "@/app/api/broadcasts/route";
 import * as broadcastRoute from "@/app/api/broadcasts/[id]/route";
 import * as broadcastCancelRoute from "@/app/api/broadcasts/[id]/cancel/route";
 import * as reportsRoute from "@/app/api/reports/route";
+// Etapa 6 (quiz). No publish / unpublish / leads route: an API key only
+// creates and edits DRAFTS and reads the numbers.
+import * as funnelsRoute from "@/app/api/funnels/route";
+import * as funnelRoute from "@/app/api/funnels/[id]/route";
+import * as funnelDuplicateRoute from "@/app/api/funnels/[id]/duplicate/route";
+import * as funnelResultsRoute from "@/app/api/funnels/[id]/results/route";
 
 export type Handler = (
   request: NextRequest,
@@ -92,6 +98,11 @@ export function resolveHandler(
     [/^\/api\/broadcasts\/([^/]+)\/cancel$/, broadcastCancelRoute],
     [/^\/api\/broadcasts\/([^/]+)$/, broadcastRoute],
     [/^\/api\/reports$/, reportsRoute],
+    // Etapa 6. Static paths before the [id] patterns.
+    [/^\/api\/funnels$/, funnelsRoute],
+    [/^\/api\/funnels\/([^/]+)\/duplicate$/, funnelDuplicateRoute],
+    [/^\/api\/funnels\/([^/]+)\/results$/, funnelResultsRoute],
+    [/^\/api\/funnels\/([^/]+)$/, funnelRoute],
   ];
   for (const [pattern, mod, param] of routes) {
     const match = pattern.exec(pathname);

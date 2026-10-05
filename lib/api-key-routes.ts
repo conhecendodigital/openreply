@@ -48,6 +48,11 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   /^\/api\/broadcasts\/[^/]+$/,
   /^\/api\/broadcasts\/[^/]+\/cancel$/,
   /^\/api\/reports$/,
+  // Etapa 6 (quiz): drafts and numbers only. Never publish, unpublish, leads.
+  /^\/api\/funnels$/,
+  /^\/api\/funnels\/[^/]+\/duplicate$/,
+  /^\/api\/funnels\/[^/]+\/results$/,
+  /^\/api\/funnels\/[^/]+$/,
 ];
 
 /** True when a request with an Authorization header may reach this route. */

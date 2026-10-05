@@ -60,7 +60,7 @@ vi.mock("@/lib/workspace-access", () => ({
 
 import { proxy, config as proxyConfig } from "../proxy";
 import { API_KEY_ROUTES, isApiKeyRouteAllowed } from "../lib/api-key-routes";
-import nextConfig, { SECURITY_HEADERS } from "../next.config";
+import nextConfig, { PUBLIC_FUNNEL_CSP, SECURITY_HEADERS } from "../next.config";
 import { hitRateLimit, MAGIC_LINK_LIMIT } from "../lib/http-rate-limit";
 import { allowSignIn } from "../lib/auth-signin";
 import {
@@ -328,5 +328,52 @@ describe("health e diagnóstico", () => {
   it("diagnóstico: membro comum = 403", async () => {
     h.role = "MEMBER";
     expect((await diagnostics.GET()).status).toBe(403);
+  });
+});
+
+// Etapa 6 (quiz): só casos novos.
+describe("quiz (funis)", () => {
+  it.each([
+    ["POST", "/api/funnels/f1/publish"],
+    ["POST", "/api/funnels/f1/unpublish"],
+    ["GET", "/api/funnels/f1/leads"],
+    ["GET", "/api/funnels/f1/leads/export"],
+    ["DELETE", "/api/funnels/f1"],
+  ])("%s %s com Bearer = 403 no proxy", async (method, path) => {
+    const res = proxy(req(path, method, BEARER));
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe("human_only");
+  });
+
+  it("rascunho por chave passa (a rota decide)", () => {
+    for (const [method, path] of [["POST", "/api/funnels"], ["PATCH", "/api/funnels/f1"], ["GET", "/api/funnels/f1/results"]]) {
+      expect(proxy(req(path, method, BEARER)).headers.get("x-middleware-next"), path).toBe("1");
+    }
+  });
+
+  it("APIs públicas do quiz e webhook da Hotmart sem Authorization passam", () => {
+    for (const path of ["/api/q/chat/event", "/api/q/chat/lead", "/api/webhooks/hotmart"]) {
+      expect(proxy(req(path, "POST")).headers.get("x-middleware-next"), path).toBe("1");
+    }
+  });
+
+  it("/quizzes deslogado vai pro login; /q é público", () => {
+    const res = proxy(req("/quizzes/f1"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/login?callbackUrl=%2Fquizzes%2Ff1");
+    expect(proxyConfig.matcher).toContain("/quizzes/:path*");
+    expect(proxyConfig.matcher.some((m: string) => m.startsWith("/q/"))).toBe(false);
+  });
+
+  it("/q tem CSP de iframe fechada (só vídeo e Facebook) e mantém frame-ancestors; a regra geral não muda", async () => {
+    const rules = await nextConfig.headers!();
+    expect(rules[0].source).toBe("/:path*");
+    expect(rules[0].headers).toEqual(SECURITY_HEADERS);
+    const q = rules.find((r) => r.source === "/q/:path*")!;
+    const csp = q.headers.find((x) => x.key === "Content-Security-Policy")!.value;
+    expect(csp).toBe(PUBLIC_FUNNEL_CSP);
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toMatch(/frame-src https:\/\/www\.youtube-nocookie\.com https:\/\/www\.youtube\.com https:\/\/player\.vimeo\.com https:\/\/\*\.pandavideo\.com\.br https:\/\/www\.facebook\.com/);
+    expect(csp).not.toMatch(/script-src|connect-src|default-src/);
   });
 });
