@@ -246,6 +246,11 @@ model InstagramAccount {
   id                String                 @id @default(cuid())
   workspaceId       String
   instagramId       String                 @unique
+  /// App-scoped id of the account (the `id` of /me). Meta's data deletion and
+  /// deauthorize callbacks (signed_request user_id) carry this one, not the
+  /// professional account id above. Filled on every connect; null on accounts
+  /// connected before 2026-10-06 until they reconnect.
+  appScopedId       String?
   username          String
   name              String?
   accessToken       String
@@ -289,6 +294,35 @@ model InstagramAccount {
 
   @@index([workspaceId])
   @@index([workspaceId, status])
+  @@index([appScopedId])
+  @@schema("public")
+}
+
+/// Pedido de exclusão de dados que a Meta manda (signed_request) quando a
+/// pessoa remove o app pelo Instagram ou pede a exclusão (06/10/2026). Tabela
+/// de sistema: só o callback da Meta grava (papel le_system) e a página
+/// pública de status lê só o status pelo código. Nenhum dado pessoal aqui além
+/// do id que a Meta mandou.
+model DataDeletionRequest {
+  id                 String    @id @default(cuid())
+  /// Código que a Meta mostra pra pessoa (e que abre a página de status).
+  confirmationCode   String    @unique
+  /// user_id do signed_request, do jeito que chegou.
+  metaUserId         String
+  /// RECEIVED, COMPLETED, NOT_FOUND (nenhuma conta com esse id, nada apagado),
+  /// AMBIGUOUS (mais de uma conta bate, nada apagado), FAILED.
+  status             String    @default("RECEIVED")
+  /// Conta apagada (sem FK: a linha da conta some na exclusão).
+  instagramAccountId String?
+  workspaceId        String?
+  /// Quantas linhas saíram de cada tabela.
+  deleted            Json?
+  error              String?
+  createdAt          DateTime  @default(now())
+  completedAt        DateTime?
+
+  @@index([metaUserId])
+  @@index([createdAt])
   @@schema("public")
 }
 
