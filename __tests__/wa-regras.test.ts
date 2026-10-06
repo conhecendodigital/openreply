@@ -17,7 +17,7 @@ import { detectarExcecaoLocal, detectarLocal, detectarServico, SINAIS_VAZIOS } f
 import { lerRegras, regrasVazias, temRegras } from "@/lib/whatsapp/regras/esquema";
 import { classificarLead, decidirMudanca, estagioNaTela } from "@/lib/whatsapp/regras/estagio";
 import { exemploDaRespostaHumana, exemplosParecidos, limparExemplo } from "@/lib/whatsapp/regras/exemplos";
-import { camposDaFicha, conferirExtracao, editarFicha, fichaVazia, juntarFicha, preencherPorRegra, SISTEMA_FICHA } from "@/lib/whatsapp/regras/ficha";
+import { camposDaFicha, conferirExtracao, editarFicha, fichaVazia, juntarFicha, preencherPorRegra } from "@/lib/whatsapp/regras/ficha";
 import { blocoRegras } from "@/lib/whatsapp/regras/prompt";
 import { aplicarMudanca, lerSugestoesIa, sugestoesDosCasos } from "@/lib/whatsapp/regras/sugestoes";
 import { SISTEMA_CLIENTE, testarAgente } from "@/lib/whatsapp/regras/testar";

@@ -85,6 +85,9 @@ const icones: Record<string, Icone> = {
   "/whatsapp/inbox": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.4z" /><path {...traco(ativo)} d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.4-1.8-1.2-2.2-2.2l1-1-1-2z" /></svg>
   ),
+  "/whatsapp/leads": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="3" y="4" width="5" height="16" rx="1" /><rect {...traco(ativo)} x="10" y="4" width="5" height="11" rx="1" /><rect {...traco(ativo)} x="17" y="4" width="4" height="7" rx="1" /></svg>
+  ),
   "/whatsapp/connections": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="3" y="3" width="7" height="7" rx="1" /><rect {...traco(ativo)} x="14" y="3" width="7" height="7" rx="1" /><rect {...traco(ativo)} x="3" y="14" width="7" height="7" rx="1" /><path {...traco(ativo)} d="M14 14h3v3h-3zM20 14v.01M20 20h-6M17 17v3" /></svg>
   ),
@@ -124,10 +127,11 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
     ],
   },
   {
-    // 2026-10-06: WhatsApp (conectar pelo QR, inbox e os 3 agentes de IA).
+    // 2026-10-06: WhatsApp (conectar pelo QR, inbox, leads por estágio e os 3 agentes de IA).
     title: "WhatsApp",
     items: [
       { label: "Conversations", href: "/whatsapp/inbox" },
+      { label: "Leads", href: "/whatsapp/leads" },
       { label: "Connections", href: "/whatsapp/connections" },
       { label: "Agents", href: "/whatsapp/agents" },
     ],

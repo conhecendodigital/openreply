@@ -51,6 +51,37 @@ Na tela Agentes, o botão **Treinar com um documento** recebe o briefing que a e
 
 O texto do documento nunca vai pro log. Testes em `__tests__/wa-treinar.test.ts` e `__tests__/wa-treinar-banco.test.ts`, com o briefing fictício de `__tests__/fixtures/`.
 
+## Regras duras, ficha do lead, estágio e aprendizado
+
+O treino também extrai as **regras duras** estruturadas (`WaAgentProfile.regrasNegocio`): cidades atendidas e não atendidas, regiões com cuidado, exceções de local, serviços aceitos e recusados (com as palavras que o cliente usaria), exceções de serviço, informações mínimas, horário, o que nunca prometer, mensagens de fora da área e de serviço recusado, casos de teste com a decisão esperada, resumo pra equipe e o responsável. Ficam editáveis na tela Agentes e só mudam no Salvar ou ao aceitar uma sugestão.
+
+Em cada mensagem do contato (texto e transcrição de áudio), o motor:
+
+1. junta as mensagens seguidas (janela de 3 a 30 s por número, padrão 10, em "Ritmo humano"): só o job da última mensagem responde;
+2. atualiza a **ficha do lead** (`WaConversation.leadFicha`): por regra primeiro, e um modelo barato (`kind = ficha` em Gastos de IA) só pro que falta, sempre com o id da mensagem como evidência (sem evidência, o campo não entra); o dono edita na conversa e a edição vale como confirmada;
+3. põe no Comando as regras, as mensagens aprovadas e os casos de teste na parte FIXA (cache de prompt da Anthropic) e a ficha ("o que você já sabe" e "o que ainda falta perguntar") e os exemplos aprendidos parecidos na parte variável;
+4. confere a resposta por regra (`lib/whatsapp/regras/verificar.ts`): cidade fora da área, cidade não informada, serviço recusado, informação mínima faltando, confirmação de atendimento, recusa seca, pergunta repetida e promessa. Se quebrar, pede UMA correção ao modelo com a regra explicada; se continuar errada, vira rascunho com o aviso. Quem decide qualificar, mandar pra análise ou transferir é a regra, não o modelo;
+5. atualiza o **estágio do lead** (Novo, Em qualificação, Qualificado, Para analisar, Fora do perfil, Cliente, Sem resposta) com o motivo e o histórico (`WaLeadStageEvent`, só inclusão). Mudança manual do dono vence até chegar fato novo na ficha. "Sem resposta" é calculado na leitura (48 h).
+
+Aprendizado: rascunho editado e resposta da equipe depois de assumir viram exemplos (`WaAgentExample`, sem telefone, e-mail, documento, link nem nome, até 100 por número); rascunho descartado e resposta bloqueada viram casos (`WaAgentLearningCase`). "O que o agente aprendeu" mostra tudo e as sugestões (`WaAgentSuggestion`): por contagem (3 pessoas da mesma cidade fora da área em 30 dias, por exemplo) ou pela IA (`kind = aprendizado`). Sugestão só vira regra com o clique do dono.
+
+"Testar o agente" simula os casos de teste do briefing com um modelo fazendo o cliente e mostra passou/falhou por regra (`kind = teste`). WhatsApp > Leads mostra o quadro por estágio, com filtros, arrastar pra mudar e CSV dos leads e do histórico.
+
+| Arquivo | O que faz |
+|---|---|
+| `lib/whatsapp/regras/esquema.ts` | Formato das regras (zod), leitura que nunca quebra |
+| `lib/whatsapp/regras/detectar.ts` | Cidade da obra (sem acento, UF, bairro, moradia x obra, áudio), exceção, serviço, informação mínima |
+| `lib/whatsapp/regras/ficha.ts` | Ficha do lead: campos pelas regras, regra, extração com evidência, edição do dono |
+| `lib/whatsapp/regras/verificar.ts` | Verificação determinística e a mensagem de correção |
+| `lib/whatsapp/regras/prompt.ts` | Resumo das regras (parte fixa) e a ficha (parte variável) |
+| `lib/whatsapp/regras/estagio.ts` | Estágio do lead, manual x agente, "sem resposta" |
+| `lib/whatsapp/regras/exemplos.ts` | Exemplos aprendidos e os parecidos com a conversa |
+| `lib/whatsapp/regras/sugestoes.ts` | Sugestões (contagem e IA) e aplicar só no clique |
+| `lib/whatsapp/regras/testar.ts` | "Testar o agente" |
+| `lib/whatsapp/regras/painel.ts` | Telas: leads, CSV, estágio, ficha, aprendizado, sugestões, teste |
+
+O aviso opcional pro WhatsApp do responsável (desligado por padrão) sai pelo próprio número e só quando o responsável já mandou mensagem pra esse número nas últimas 24 h. Testes em `__tests__/wa-regras.test.ts` (modelo falso) e `__tests__/wa-regras-banco.test.ts` (PGlite, RLS).
+
 ## Variáveis de ambiente
 
 | Nome | Padrão | Uso |
