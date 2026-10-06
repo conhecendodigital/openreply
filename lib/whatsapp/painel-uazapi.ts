@@ -2,6 +2,7 @@
  * Conexões > uazapi: o que a tela lê e grava quando o número é da uazapi.
  * Só no servidor. Mesmas regras do painel (lib/whatsapp/painel.ts):
  * - desconectar NUNCA apaga nada (nem no Lead Engine, nem a instância na uazapi);
+ *   só o "Excluir número" (lib/whatsapp/painel-excluir.ts) apaga a instância;
  * - o navegador nunca vê o admintoken nem o token da instância;
  * - sem cidade do proxy escolhida, não conecta (o motivo da troca pro uazapi
  *   foi justamente sair por um IP do Brasil).
@@ -94,8 +95,11 @@ export async function uazapiOverview(deps: PainelDeps, workspaceId?: string | nu
     used = await new UazapiAdmin({ serverUrl: cfg.serverUrl, adminToken: cfg.adminToken }).countInstances();
   } catch {
     source = "local";
-    // Servidor do próprio workspace: só os números dele; servidor do ambiente: todos.
-    const where = cfg.source === "workspace" && workspaceId ? { provider: "UAZAPI" as const, workspaceId } : { provider: "UAZAPI" as const };
+    // Servidor do próprio workspace: só os números dele; servidor do ambiente: todos. Excluído não conta.
+    const where =
+      cfg.source === "workspace" && workspaceId
+        ? { provider: "UAZAPI" as const, workspaceId, deletedAt: null }
+        : { provider: "UAZAPI" as const, deletedAt: null };
     used = await withSystemRole((tx) => tx.waSession.count({ where }), deps.system ?? getPrisma()).catch(() => 0);
   }
   return { configured: true, max: cfg.maxInstances, used, remaining: Math.max(0, cfg.maxInstances - used), source };
@@ -202,7 +206,7 @@ export async function createUazapiSession(
   const method = parseMethod(input);
   const region = await resolveRegion(cfg, input.proxy);
 
-  const existing = await rls(ctx, deps, (tx) => tx.waSession.count({ where: { workspaceId: ctx.workspaceId } }));
+  const existing = await rls(ctx, deps, (tx) => tx.waSession.count({ where: { workspaceId: ctx.workspaceId, deletedAt: null } }));
   if (existing >= MAX_NUMBERS_PER_WORKSPACE) throw new PainelError("too_many", "This workspace already has 5 numbers.", 409);
   const slots = await uazapiOverview(deps, ctx.workspaceId);
   if (slots.remaining <= 0) {
@@ -269,7 +273,7 @@ type Secrets = { token: string; secret: string | null; region: (ProxyRegion & { 
 async function loadSecrets(ctx: RlsContext, deps: PainelDeps, sessionId: string): Promise<Secrets> {
   const row = await rls(ctx, deps, (tx) =>
     tx.waSession.findFirst({
-      where: { id: sessionId, workspaceId: ctx.workspaceId ?? "", provider: "UAZAPI" },
+      where: { id: sessionId, workspaceId: ctx.workspaceId ?? "", provider: "UAZAPI", deletedAt: null },
       select: { instanceTokenEnc: true, webhookSecretEnc: true, proxyCountry: true, proxyState: true, proxyCity: true, proxyCityLabel: true },
     })
   );

@@ -5,7 +5,10 @@
  *
  * Regras do dono:
  * - Desconectar NUNCA apaga conversa, contato nem configuração. Só faz logout
- *   no gateway e marca o número como desconectado. Não existe "apagar número".
+ *   no gateway e marca o número como desconectado.
+ * - Excluir número é outra ação, separada e com confirmação
+ *   (lib/whatsapp/painel-excluir.ts). Número excluído "só o número" fica com
+ *   deletedAt: some de Conexões e Agentes, e as conversas ficam só pra leitura.
  * - IA e chave de API nunca ligam nada sozinhas: os agentes nascem desligados e
  *   só a pessoa liga, nesta tela.
  * - O navegador nunca fala com o gateway: só este código, com a chave do servidor.
@@ -54,7 +57,9 @@ export type PainelDeps = {
 export type GatewayClient = Pick<
   OpenWAConnector,
   "connect" | "getQr" | "getInfo" | "disconnect" | "ensureWebhook" | "markRead" | "fetchMedia"
->;
+> &
+  /** Só o "Excluir número" usa. */
+  Partial<Pick<OpenWAConnector, "deleteSession">>;
 
 export class PainelError extends Error {
   constructor(
@@ -90,7 +95,7 @@ async function gatewayCreds(deps: PainelDeps, workspaceId: string | null | undef
   return { baseUrl: creds.baseUrl, apiKey: creds.apiKey };
 }
 
-async function connectorFor(
+export async function connectorFor(
   deps: PainelDeps,
   workspaceId: string | null | undefined,
   providerSessionId: string,
@@ -186,14 +191,14 @@ export function toSessionView(r: SessionRow): SessionView {
 
 export async function listSessions(ctx: RlsContext, deps: PainelDeps): Promise<SessionView[]> {
   const rows = await rls(ctx, deps, (tx) =>
-    tx.waSession.findMany({ where: { workspaceId: ctx.workspaceId ?? "" }, select: SESSION_VIEW_SELECT, orderBy: { createdAt: "asc" } })
+    tx.waSession.findMany({ where: { workspaceId: ctx.workspaceId ?? "", deletedAt: null }, select: SESSION_VIEW_SELECT, orderBy: { createdAt: "asc" } })
   );
   return rows.map(toSessionView);
 }
 
 export async function loadSession(ctx: RlsContext, deps: PainelDeps, sessionId: string): Promise<SessionRow & { riskAcceptedAt: Date | null }> {
   const row = await rls(ctx, deps, (tx) =>
-    tx.waSession.findFirst({ where: { id: sessionId, workspaceId: ctx.workspaceId ?? "" }, select: SESSION_VIEW_SELECT })
+    tx.waSession.findFirst({ where: { id: sessionId, workspaceId: ctx.workspaceId ?? "", deletedAt: null }, select: SESSION_VIEW_SELECT })
   );
   if (!row) throw new PainelError("not_found", "Number not found.", 404);
   return row;
@@ -235,7 +240,7 @@ export async function createSession(
   const hook = webhookUrl(env);
   if (!hook) throw new PainelError("no_webhook_url", "The server has no public https address for the webhook yet.", 503);
   const creds = await gatewayCreds(deps, ctx.workspaceId);
-  const existing = await rls(ctx, deps, (tx) => tx.waSession.count({ where: { workspaceId: ctx.workspaceId } }));
+  const existing = await rls(ctx, deps, (tx) => tx.waSession.count({ where: { workspaceId: ctx.workspaceId, deletedAt: null } }));
   if (existing >= 5) throw new PainelError("too_many", "This workspace already has 5 numbers.", 409);
 
   const displayName = typeof input.displayName === "string" ? input.displayName.trim().slice(0, 60) || null : null;
@@ -288,7 +293,10 @@ export async function saveStatus(
 ): Promise<SessionView> {
   const now = new Date();
   const row = await rls(ctx, deps, async (tx) => {
-    const current = await tx.waSession.findFirst({ where: { id: sessionId, workspaceId: ctx.workspaceId ?? "" }, select: { status: true, displayName: true } });
+    const current = await tx.waSession.findFirst({
+      where: { id: sessionId, workspaceId: ctx.workspaceId ?? "", deletedAt: null },
+      select: { status: true, displayName: true },
+    });
     if (!current) throw new PainelError("not_found", "Number not found.", 404);
     return tx.waSession.update({
       where: { id: sessionId },
@@ -388,6 +396,8 @@ export type ConversationItem = {
   unreadCount: number;
   hasDraft: boolean;
   paused: boolean;
+  /** O número desta conversa foi excluído ("só o número"): só leitura, sem envio. */
+  numberRemoved: boolean;
 };
 
 export async function listConversations(
@@ -418,7 +428,10 @@ export async function listConversations(
       },
       orderBy: [{ lastMessageAt: { sort: "desc", nulls: "last" } }],
       take: Math.min(200, Math.max(1, query.limit ?? 100)),
-      include: { contact: { select: { id: true, name: true, pushName: true, phoneE164: true, isGroup: true } } },
+      include: {
+        contact: { select: { id: true, name: true, pushName: true, phoneE164: true, isGroup: true } },
+        session: { select: { deletedAt: true } },
+      },
     });
     const ids = rows.map((r) => r.id);
     const drafts = ids.length
@@ -441,6 +454,7 @@ function toItem(
     unreadCount: number;
     humanTakeoverUntil: Date | null;
     contact: { id: string; name: string | null; pushName: string | null; phoneE164: string | null; isGroup: boolean };
+    session: { deletedAt: Date | null };
   },
   withDraft: Set<string>,
   now: Date
@@ -454,6 +468,7 @@ function toItem(
     unreadCount: r.unreadCount,
     hasDraft: withDraft.has(r.id),
     paused: Boolean(r.humanTakeoverUntil && r.humanTakeoverUntil > now),
+    numberRemoved: Boolean(r.session.deletedAt),
   };
 }
 
@@ -473,7 +488,7 @@ export type DraftView = { runId: string; bubbles: string[]; alert: string | null
 
 export type ThreadView = {
   conversation: ConversationItem & { agentMode: string; humanTakeoverUntil: string | null };
-  session: { id: string; status: WaStatus; phoneE164: string | null; displayName: string | null; agentMode: string };
+  session: { id: string; status: WaStatus; phoneE164: string | null; displayName: string | null; agentMode: string; removed: boolean };
   messages: MessageView[];
   window: { open: boolean; closesAt: string | null };
   draft: DraftView | null;
@@ -487,7 +502,7 @@ export async function getThread(ctx: RlsContext, conversationId: string, deps: P
       where: { id: conversationId, workspaceId: ctx.workspaceId ?? "" },
       include: {
         contact: { select: { id: true, name: true, pushName: true, phoneE164: true, isGroup: true } },
-        session: { select: { id: true, status: true, phoneE164: true, displayName: true, agentMode: true } },
+        session: { select: { id: true, status: true, phoneE164: true, displayName: true, agentMode: true, deletedAt: true } },
       },
     });
     if (!c) throw new PainelError("not_found", "Conversation not found.", 404);
@@ -506,7 +521,14 @@ export async function getThread(ctx: RlsContext, conversationId: string, deps: P
         agentMode: c.agentMode,
         humanTakeoverUntil: c.humanTakeoverUntil?.toISOString() ?? null,
       },
-      session: c.session,
+      session: {
+        id: c.session.id,
+        status: c.session.status,
+        phoneE164: c.session.phoneE164,
+        displayName: c.session.displayName,
+        agentMode: c.session.agentMode,
+        removed: Boolean(c.session.deletedAt),
+      },
       messages: rows.reverse().map((m) => ({
         id: m.id,
         fromMe: m.fromMe,
@@ -533,6 +555,7 @@ const BLOCK_MESSAGES: Record<string, string> = {
   sem_mensagem_do_contato: "This contact has not written to you yet, so WhatsApp does not let you start the conversation here.",
   humano_assumiu: "This conversation is paused.",
   sessao_desconectada: "This number is disconnected. Reconnect it in Connections.",
+  number_removed: "This number was deleted. The conversation stays saved only for reading.",
 };
 
 /**
@@ -551,10 +574,11 @@ export async function sendReply(
   const c = await rls(ctx, deps, (tx) =>
     tx.waConversation.findFirst({
       where: { id: conversationId, workspaceId: ctx.workspaceId ?? "" },
-      select: { id: true, sessionId: true, session: { select: { ownerUserId: true, status: true } } },
+      select: { id: true, sessionId: true, session: { select: { ownerUserId: true, status: true, deletedAt: true } } },
     })
   );
   if (!c) throw new PainelError("not_found", "Conversation not found.", 404);
+  if (c.session.deletedAt) throw new PainelError("number_removed", BLOCK_MESSAGES.number_removed, 409);
   if (c.session.status !== "CONNECTED") throw new PainelError("sessao_desconectada", BLOCK_MESSAGES.sessao_desconectada, 409);
   const result = await enqueuePlanned(
     { ownerUserId: c.session.ownerUserId, sessionId: c.sessionId, conversationId, sentBy: "USER_APP", content: { type: "text", text } },
@@ -638,7 +662,7 @@ export async function decideDraft(
   deps: PainelDeps
 ): Promise<{ ok: true }> {
   const run = await rls(ctx, deps, (tx) =>
-    tx.waAgentRun.findFirst({ where: { id: runId, workspaceId: ctx.workspaceId ?? "" }, select: { ownerUserId: true } })
+    tx.waAgentRun.findFirst({ where: { id: runId, workspaceId: ctx.workspaceId ?? "" }, select: { ownerUserId: true, sessionId: true } })
   );
   if (!run) throw new PainelError("not_found", "Draft not found.", 404);
   const store = storeFor(run.ownerUserId, ctx.workspaceId ?? "", deps);
@@ -648,6 +672,8 @@ export async function decideDraft(
     return { ok: true };
   }
   if (input.action !== "approve") throw new PainelError("invalid_action", "Unknown action.", 400);
+  const live = await rls(ctx, deps, (tx) => tx.waSession.findFirst({ where: { id: run.sessionId, deletedAt: null }, select: { id: true } }));
+  if (!live) throw new PainelError("number_removed", BLOCK_MESSAGES.number_removed, 409);
   const bubbles = Array.isArray(input.bubbles)
     ? input.bubbles.filter((b): b is string => typeof b === "string").map((b) => b.slice(0, 1000)).slice(0, 5)
     : undefined;
@@ -682,12 +708,14 @@ export async function messageMedia(
         type: true,
         mediaMime: true,
         mediaFilename: true,
-        session: { select: { id: true, provider: true, providerSessionId: true, riskAcceptedAt: true } },
+        session: { select: { id: true, provider: true, providerSessionId: true, riskAcceptedAt: true, deletedAt: true } },
         conversation: { select: { contact: { select: { jid: true } } } },
       },
     })
   );
   if (!m || !MEDIA_TYPES.has(m.type)) throw new PainelError("not_found", "Media not found.", 404);
+  // Os bytes ficavam no provedor, e o número saiu de lá.
+  if (m.session.deletedAt) throw new PainelError("number_removed_media", "This number was deleted, so this media is not available anymore.", 410);
   if (m.session.provider !== "OPENWA" && m.session.provider !== "UAZAPI") throw new PainelError("not_found", "Media not found.", 404);
   let media: Awaited<ReturnType<GatewayClient["fetchMedia"]>>;
   try {
@@ -736,7 +764,7 @@ const DEFAULT_PROFILE: AgentsView["profile"] = {
 export async function getAgents(ctx: RlsContext, sessionId: string | null, deps: PainelDeps): Promise<AgentsView> {
   return rls(ctx, deps, async (tx) => {
     const sessions = await tx.waSession.findMany({
-      where: { workspaceId: ctx.workspaceId ?? "" },
+      where: { workspaceId: ctx.workspaceId ?? "", deletedAt: null },
       orderBy: { createdAt: "asc" },
       select: { id: true, phoneE164: true, displayName: true, status: true, agentMode: true },
     });

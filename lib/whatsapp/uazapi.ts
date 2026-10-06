@@ -20,15 +20,18 @@
  *   GET  /instance/proxy                                   confere se não caiu pra "direct"
  *   POST /instance/disconnect                              logout (não apaga a instância)
  *   POST /instance/reset                                   reinicia a conexão sem novo pareamento
+ *   DELETE /instance                                       apaga a instância e libera a vaga do plano
+ *                                                          (só no "Excluir número" de Conexões)
  *   GET/POST /webhook                                      webhook do Lead Engine (modo simples)
  *   POST /send/text, /send/media                           envios
  *   POST /message/presence                                 "digitando..."
  *   POST /message/markread, /chat/read                     lida
  *   POST /message/download                                 mídia recebida (fileURL)
  *
- * Nunca usado de propósito: DELETE /instance (apagaria a sessão; o dono pediu
- * que desconectar não apague nada) e o evento "history" (histórico antigo não
- * entra no Lead Engine, ver docs/whatsapp-uazapi.md).
+ * Desconectar nunca chama DELETE /instance (o dono pediu que desconectar não
+ * apague nada): só o botão separado "Excluir número", com confirmação.
+ * Nunca usado: o evento "history" (histórico antigo não entra no Lead Engine,
+ * ver docs/whatsapp-uazapi.md).
  */
 import {
   WhatsAppConnectorError,
@@ -171,7 +174,7 @@ function cleanPath(path: string): string {
 async function call<T>(
   fetchImpl: FetchLike,
   baseUrl: string,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "DELETE",
   path: string,
   headers: Record<string, string>,
   body?: unknown,
@@ -308,7 +311,7 @@ export class UazapiConnector implements WhatsAppConnector {
     if (!config.instanceToken) throw new Error("Token da instância da uazapi ausente");
   }
 
-  private req<T>(method: "GET" | "POST", path: string, body?: unknown, opts: { sendLike?: boolean; timeoutMs?: number } = {}): Promise<T> {
+  private req<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown, opts: { sendLike?: boolean; timeoutMs?: number } = {}): Promise<T> {
     return call<T>(this.fetchImpl, this.baseUrl, method, path, { token: this.config.instanceToken }, body, opts.timeoutMs, opts.sendLike);
   }
 
@@ -406,6 +409,20 @@ export class UazapiConnector implements WhatsAppConnector {
   /** Logout do WhatsApp. A instância continua na uazapi; nada é apagado no Lead Engine. */
   async disconnect(): Promise<void> {
     await this.req("POST", "/instance/disconnect", {});
+  }
+
+  /**
+   * Apaga a instância na uazapi (libera o dispositivo do plano). Só o
+   * "Excluir número" de Conexões chama, nunca o Desconectar. 404 = já não
+   * existe lá, conta como feito.
+   */
+  async deleteInstance(): Promise<void> {
+    try {
+      await this.req("DELETE", "/instance");
+    } catch (error) {
+      if (error instanceof WhatsAppConnectorError && error.status === 404) return;
+      throw error;
+    }
   }
 
   private toResult(res: Obj): SendResult {

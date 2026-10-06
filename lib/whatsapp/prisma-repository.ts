@@ -13,6 +13,7 @@
  * - updateSessionStatus ignora evento mais velho que o último (lastEventAt).
  *
  * Nada aqui apaga conversa, contato ou mensagem. Desconectar só muda o status.
+ * Número excluído (deletedAt) é tratado como inexistente.
  */
 import type { PrismaClient } from "@/app/generated/prisma/client";
 import { getPrisma } from "@/lib/db/client";
@@ -51,6 +52,7 @@ type SessionRow = {
   riskAcceptedAt: Date | null;
   wabaId: string | null;
   instanceTokenEnc: string | null;
+  deletedAt: Date | null;
 };
 
 const SESSION_SELECT = {
@@ -65,6 +67,7 @@ const SESSION_SELECT = {
   riskAcceptedAt: true,
   wabaId: true,
   instanceTokenEnc: true,
+  deletedAt: true,
 } as const;
 
 function openSecret(enc: string | null): string | null {
@@ -107,13 +110,15 @@ export class PrismaWaRepository implements WaRepository {
     const row = await this.sys((tx) =>
       tx.waSession.findUnique({ where: { providerSessionId }, select: SESSION_SELECT })
     );
-    if (!row || row.provider !== provider) return null;
+    // Número excluído: o webhook dele é recusado e nada mais entra.
+    if (!row || row.provider !== provider || row.deletedAt) return null;
     return toSession(row);
   }
 
   async getSession(sessionId: string) {
     const row = await this.sys((tx) => tx.waSession.findUnique({ where: { id: sessionId }, select: SESSION_SELECT }));
-    return row ? toSession(row) : null;
+    // Número excluído: nada mais entra nem sai por ele (webhook, ingest, envios).
+    return row && !row.deletedAt ? toSession(row) : null;
   }
 
   async recordWebhookEvent(input: WebhookEventInput) {
