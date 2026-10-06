@@ -3,8 +3,8 @@
  * Exclusão de dados, rodapé). Troque AQUI e vale pro site inteiro, nas duas
  * línguas.
  *
- * FALTA PREENCHER (06/10/2026): CNPJ e endereço completo. O e-mail de contato
- * (suporte@cloudmatheus.com.br) foi confirmado pelo Matheus.
+ * Preenchido em 06/10/2026 com os dados do cartão CNPJ enviados pelo Matheus
+ * (sede em Curitiba/PR) e o e-mail de contato confirmado por ele.
  * Enquanto estiverem com colchetes, as páginas mostram o marcador do jeito que
  * está, bem visível, pra ninguém publicar sem trocar.
  */
@@ -30,12 +30,12 @@ export const LEGAL_INFO: LegalInfo = {
   /** Site do serviço. */
   site: "https://many.leadenginer.com",
   /** Cidade e estado (vai no endereço e no foro dos Termos). */
-  city: "Itapecerica da Serra/SP",
+  city: "Curitiba/PR",
   country: "Brasil",
   /** CNPJ no formato 00.000.000/0000-00. */
-  cnpj: "[CNPJ]",
+  cnpj: "62.164.228/0001-74",
   /** Rua, número, bairro e CEP. */
-  address: "[ENDERECO]",
+  address: "Rua Bom Jesus, 212, Sala 1904, Juvevê, CEP 80035-010",
   /** E-mail de contato, privacidade e exclusão de dados. */
   email: "suporte@cloudmatheus.com.br",
   /** Data da última revisão dos textos legais (a mesma nas três páginas). */
