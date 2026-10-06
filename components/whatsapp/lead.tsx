@@ -53,7 +53,12 @@ const ORIGIN_LABEL: Record<string, string> = {
 /** Nome do estágio: o que o dono escolheu pro número, senão o padrão traduzido. */
 export function useStageName() {
   const t = useT();
-  return (key: string, custom?: string | null) => (custom && custom.trim() ? custom : t(NOME_ESTAGIO[key as LeadStage] ?? key));
+  // The server sends the default English name when the owner did not rename the
+  // stage; only a real custom name skips the translation.
+  return (key: string, custom?: string | null) => {
+    const padrao = NOME_ESTAGIO[key as LeadStage] ?? key;
+    return custom && custom.trim() && custom !== padrao ? custom : t(padrao);
+  };
 }
 
 export function StageBadge({ stage, name, manual }: { stage: LeadStage; name?: string | null; manual?: boolean }) {
