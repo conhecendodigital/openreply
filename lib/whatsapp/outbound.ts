@@ -95,6 +95,36 @@ export async function enqueueOutbound(request: OutboundRequest, deps: EnqueueDep
   return { status: "queued", outboxId, bubbles: plan.length };
 }
 
+/**
+ * Envio com as bolhas já planejadas por quem pediu (agente ou humano pelo
+ * inbox). Mesmas travas do enqueueOutbound (24h, "Assumir", conversa certa).
+ * `outboxId` fixo (ex.: o id do run do agente) deixa cancelar o job depois.
+ * `delayMs` vira atraso da fila (o worker não fica parado esperando).
+ */
+export async function enqueuePlanned(
+  request: OutboundRequest,
+  plan: BubblePlan[],
+  deps: Pick<EnqueueDeps, "repo" | "queue" | "now">,
+  options: { outboxId?: string; delayMs?: number } = {}
+): Promise<EnqueueResult> {
+  const now = (deps.now ?? Date.now)();
+  const gate = await checkSendGate(deps.repo, request, now);
+  if (!gate.ok) {
+    await block(deps.repo, request, gate.reason, now);
+    return { status: "blocked", reason: gate.reason };
+  }
+  const cleaned = plan.filter((b) => b.text.trim() || request.content.type !== "text");
+  if (cleaned.length === 0) throw new Error("Mensagem vazia");
+  const outboxId = options.outboxId ?? randomUUID();
+  await deps.queue.addSend({ outboxId, request, plan: cleaned, nextIndex: 0 }, { delayMs: options.delayMs });
+  return { status: "queued", outboxId, bubbles: cleaned.length };
+}
+
+/** Resposta humana pelo inbox: uma mensagem só (sem quebrar), com espera curta. */
+export function humanReplyPlan(text: string, rand: Rand = Math.random): BubblePlan[] {
+  return [{ text, waitBeforeTypingMs: Math.round(200 + 400 * rand()), typingMs: Math.round(500 + 700 * rand()) }];
+}
+
 export interface ProcessSendDeps {
   repo: WaRepository;
   getConnector: (session: WaSessionRecord) => Promise<WhatsAppConnector> | WhatsAppConnector;
@@ -103,6 +133,13 @@ export interface ProcessSendDeps {
   now?: () => number;
   /** Grava o progresso no job (BullMQ job.updateData) pra retentativa não repetir bolha. */
   onProgress?: (nextIndex: number) => Promise<void>;
+  /**
+   * Trava extra antes de cada bolha. Pro agente: podeEnviar(runId) (Assumir,
+   * modo, janela até o fim do envio). false = nada mais sai.
+   */
+  canSendBubble?: (request: OutboundRequest, index: number, remainingMs: number) => Promise<boolean>;
+  /** Fim do job (enviado ou barrado). Pro agente: marca o run como "sent". */
+  onFinished?: (request: OutboundRequest, result: ProcessSendResult) => Promise<void>;
 }
 
 export type ProcessSendResult =
@@ -111,6 +148,12 @@ export type ProcessSendResult =
   | { status: "rate_limited"; retryAfterMs: number; nextIndex: number; sent: number };
 
 export async function processSendJob(job: WaSendJob, deps: ProcessSendDeps): Promise<ProcessSendResult> {
+  const result = await runSendJob(job, deps);
+  if (result.status !== "rate_limited") await deps.onFinished?.(job.request, result);
+  return result;
+}
+
+async function runSendJob(job: WaSendJob, deps: ProcessSendDeps): Promise<ProcessSendResult> {
   const clock = deps.now ?? Date.now;
   const { request } = job;
   let sent = 0;
@@ -135,6 +178,14 @@ export async function processSendJob(job: WaSendJob, deps: ProcessSendDeps): Pro
     if (!gate.ok) {
       await block(deps.repo, request, gate.reason, clock());
       return { status: "blocked", reason: gate.reason, sent };
+    }
+
+    if (deps.canSendBubble) {
+      const remainingMs = job.plan.slice(i).reduce((sum, b) => sum + b.waitBeforeTypingMs + b.typingMs, 0);
+      if (!(await deps.canSendBubble(request, i, remainingMs))) {
+        await block(deps.repo, request, "agente_cancelado", clock());
+        return { status: "blocked", reason: "agente_cancelado", sent };
+      }
     }
 
     const slot = await deps.limiter.acquire(session.id, clock());

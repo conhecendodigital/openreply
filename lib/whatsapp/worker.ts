@@ -6,7 +6,7 @@ import { DelayedError, Worker, type Job } from "bullmq";
 import { getRedisConnection } from "@/lib/queue/client";
 import { createConnector } from "@/lib/whatsapp/factory";
 import { processIngestJob, type IngestDeps } from "@/lib/whatsapp/ingest";
-import { processSendJob } from "@/lib/whatsapp/outbound";
+import { processSendJob, type ProcessSendDeps } from "@/lib/whatsapp/outbound";
 import { RedisSendRateLimiter, type SendRateLimiter } from "@/lib/whatsapp/pacing";
 import { WA_INGEST_QUEUE, WA_SEND_QUEUE, type WaIngestJob, type WaSendJob } from "@/lib/whatsapp/queue";
 import type { WhatsAppRuntime } from "@/lib/whatsapp/runtime";
@@ -16,10 +16,12 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export interface WaWorkerOptions {
   runtime: WhatsAppRuntime;
   hooks?: Pick<IngestDeps, "onInboundMessage" | "onOwnerMessage" | "onSessionEvent">;
+  /** Travas extras do envio (agente: podeEnviar antes de cada bolha). */
+  sendHooks?: Pick<ProcessSendDeps, "canSendBubble" | "onFinished">;
   limiter?: SendRateLimiter;
 }
 
-export function createWaWorkers({ runtime, hooks, limiter = new RedisSendRateLimiter() }: WaWorkerOptions) {
+export function createWaWorkers({ runtime, hooks, sendHooks, limiter = new RedisSendRateLimiter() }: WaWorkerOptions) {
   const ingest = new Worker<WaIngestJob>(
     WA_INGEST_QUEUE,
     async (job) => processIngestJob(job.data, { repo: runtime.repo, ...hooks }),
@@ -34,6 +36,7 @@ export function createWaWorkers({ runtime, hooks, limiter = new RedisSendRateLim
         getConnector: async (session) => createConnector(session, { credentials: await runtime.credentialsFor(session) }),
         limiter,
         sleep,
+        ...sendHooks,
         onProgress: async (nextIndex) => {
           await job.updateData({ ...job.data, nextIndex });
         },

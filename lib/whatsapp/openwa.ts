@@ -90,8 +90,19 @@ interface OpenWASession {
   id: string;
   status?: string;
   phone?: string | null;
+  pushName?: string | null;
   restriction?: unknown;
 }
+
+/** Status, número e nome do perfil conectado (GET /api/sessions/:id). */
+export interface OpenWASessionInfo {
+  status: WaStatus;
+  phoneE164: string | null;
+  pushName: string | null;
+}
+
+/** Tamanho máximo de mídia que o inbox busca no gateway (o OpenWA aceita até 30 MB). */
+export const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 
 export class OpenWAConnector implements WhatsAppConnector {
   readonly provider = "OPENWA" as const;
@@ -204,8 +215,60 @@ export class OpenWAConnector implements WhatsAppConnector {
   }
 
   async getStatus(): Promise<WaStatus> {
+    return (await this.getInfo()).status;
+  }
+
+  async getInfo(): Promise<OpenWASessionInfo> {
     const session = await this.request<OpenWASession>("GET", this.sessionPath());
-    return mapOpenWAStatus(session.status, Boolean(session.restriction));
+    const digits = typeof session.phone === "string" ? session.phone.replace(/\D/g, "") : "";
+    return {
+      status: mapOpenWAStatus(session.status, Boolean(session.restriction)),
+      phoneE164: /^\d{8,15}$/.test(digits) ? `+${digits}` : null,
+      pushName: typeof session.pushName === "string" && session.pushName.trim() ? session.pushName.trim().slice(0, 80) : null,
+    };
+  }
+
+  /**
+   * Garante UM webhook do Lead Engine nesta sessão. Se já existe um com a mesma
+   * URL, não cria outro (dois webhooks = cada evento chegando duas vezes, com
+   * chaves de idempotência diferentes).
+   */
+  async ensureWebhook(url: string, secret: string): Promise<{ created: boolean }> {
+    const list = await this.request<Array<{ url?: string; active?: boolean }> | { data?: Array<{ url?: string }> }>(
+      "GET",
+      this.sessionPath("/webhooks")
+    );
+    const items = Array.isArray(list) ? list : Array.isArray(list?.data) ? list.data : [];
+    if (items.some((w) => w?.url === url)) return { created: false };
+    await this.registerWebhook(url, secret);
+    return { created: true };
+  }
+
+  /**
+   * Bytes de uma mídia guardada no gateway. null quando ele não tem (404) ou
+   * passou do limite. Só o servidor chama; o navegador nunca fala com o OpenWA.
+   */
+  async fetchMedia(chatJid: string, providerMessageId: string): Promise<{ bytes: Uint8Array; contentType: string | null } | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const res = await this.fetchImpl(
+        `${this.baseUrl}${this.sessionPath(`/messages/${encodeURIComponent(toOpenWAChatId(chatJid))}/${encodeURIComponent(providerMessageId)}/media`)}`,
+        { method: "GET", headers: { "X-API-Key": this.config.apiKey }, signal: controller.signal }
+      );
+      if (res.status === 404 || res.status === 400) return null;
+      if (!res.ok) throw new WhatsAppConnectorError(`OpenWA respondeu ${res.status} ao buscar mídia`, "OPENWA", res.status, res.status >= 500);
+      const declared = Number(res.headers.get("content-length") ?? "0");
+      if (declared > MAX_MEDIA_BYTES) return null;
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.byteLength > MAX_MEDIA_BYTES) return null;
+      return { bytes: buf, contentType: res.headers.get("content-type") };
+    } catch (error) {
+      if (error instanceof WhatsAppConnectorError) throw error;
+      throw new WhatsAppConnectorError("OpenWA indisponível ao buscar mídia", "OPENWA", null, true);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private toResult(res: { messageId?: string; timestamp?: number }): SendResult {

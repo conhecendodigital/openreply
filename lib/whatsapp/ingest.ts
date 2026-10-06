@@ -80,6 +80,7 @@ export async function processIngestJob(job: WaIngestJob, deps: IngestDeps): Prom
     ack: event.fromMe ? "sent" : "delivered",
     agentRunId: null,
     sentAt,
+    media: event.media ? { mime: event.media.mime, filename: event.media.filename, ref: event.media.ref } : null,
   });
   if (created) {
     await deps.repo.touchConversation(conversation.id, {

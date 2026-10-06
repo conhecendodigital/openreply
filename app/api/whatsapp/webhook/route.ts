@@ -7,7 +7,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { verifyTokenMatches } from "@/lib/meta/webhook-guards";
-import { getWhatsAppRuntime, metaAppSecretsFromEnv } from "@/lib/whatsapp/runtime";
+import { metaAppSecretsFromEnv } from "@/lib/whatsapp/runtime";
+import { ensureWhatsAppRuntime } from "@/lib/whatsapp/setup";
 import { declaredTooLarge, handleWhatsAppWebhook, MAX_WA_WEBHOOK_BYTES, readBodyLimited } from "@/lib/whatsapp/webhook";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const runtime = getWhatsAppRuntime();
+  const runtime = ensureWhatsAppRuntime();
   if (!runtime) return NextResponse.json({ ok: false, error: "WhatsApp ainda não está ligado" }, { status: 503 });
 
   // Recusa antes de ler o corpo quando o tamanho declarado já passa do limite.

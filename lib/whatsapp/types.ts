@@ -86,6 +86,8 @@ export interface WaMessageRecord {
   ack: WaAck;
   agentRunId: string | null;
   sentAt: Date;
+  /** Mídia (tipo, nome e id na Meta). Os bytes ficam no gateway. */
+  media?: { mime: string | null; filename: string | null; ref: string | null } | null;
 }
 
 // ─── Eventos normalizados (saída do webhook, entrada da fila wa-ingest) ──────
@@ -169,4 +171,10 @@ export interface OutboundRequest {
   quotedProviderMessageId?: string | null;
 }
 
-export type BlockReason = "fora_da_janela_24h" | "sem_mensagem_do_contato" | "humano_assumiu" | "sessao_desconectada";
+export type BlockReason =
+  | "fora_da_janela_24h"
+  | "sem_mensagem_do_contato"
+  | "humano_assumiu"
+  | "sessao_desconectada"
+  /** O run do agente não pode mais sair (podeEnviar disse não: Assumir, modo, janela). */
+  | "agente_cancelado";
