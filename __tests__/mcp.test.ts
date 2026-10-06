@@ -103,6 +103,37 @@ describe("handleMcpMessage", () => {
     );
   });
 
+  it("dmFormat: criar sai em text por padrão, aceita button, e editar repassa o campo", async () => {
+    const run = (name: string, args: Record<string, unknown>, call: InternalCall) =>
+      TOOLS.find((t) => t.name === name)!.run(args, call);
+    const created = fakeCall({ success: true, data: { id: "c1", name: "X" } }, 201);
+    await run("criar_automacao", { name: "X", dmMessage: "oi {link}" }, created);
+    await run("criar_automacao", { name: "Y", dmMessage: "oi", dmFormat: "button" }, created);
+    expect(created.mock.calls[0][2]).toMatchObject({ dmFormat: "text", isActive: false });
+    expect(created.mock.calls[1][2]).toMatchObject({ dmFormat: "button" });
+
+    const edited = fakeCall({ success: true, data: {} });
+    await run("editar_automacao", { id: "c1", dmFormat: "text" }, edited);
+    expect(edited).toHaveBeenCalledWith("PATCH", "/api/automations?id=c1", { dmFormat: "text" });
+
+    const schema = TOOLS.find((t) => t.name === "editar_automacao")!.inputSchema as {
+      properties: Record<string, { enum?: string[]; description?: string }>;
+    };
+    expect(schema.properties.dmFormat.enum).toEqual(["button", "text"]);
+    expect(schema.properties.dmFormat.description).toMatch(/desligada/);
+
+    const listed = fakeCall({
+      success: true,
+      data: [
+        { id: "a", name: "A", isActive: false, keywords: [], matchAnyPost: false, matchAnyWord: true, dmTriggerEnabled: false, postUrl: null, dmFormat: "TEXT" },
+        { id: "b", name: "B", isActive: false, keywords: [], matchAnyPost: false, matchAnyWord: true, dmTriggerEnabled: false, postUrl: null },
+      ],
+    });
+    const res = await run("listar_automacoes", {}, listed);
+    const rows = JSON.parse(res.content[0].text) as { formatoDm: string }[];
+    expect(rows.map((r) => r.formatoDm)).toEqual(["text", "button"]);
+  });
+
   it("editing never toggles the campaign", async () => {
     const call = fakeCall({ success: true, data: {} });
     await handleMcpMessage(

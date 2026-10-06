@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getCurrentWorkspaceId, isApiTokenRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
 import { calculateCtr, normalizeTopKeywords } from "@/lib/tracking/analytics";
-import { buildTrackedUrl } from "@/lib/tracking/message";
+import { buildTrackedUrl, DM_FORMATS, parseDmFormat } from "@/lib/tracking/message";
 import { generateTrackedLinkSlug } from "@/lib/tracking/server";
 import { buildReportUrl, generateReportShareSlug } from "@/lib/reports/share";
 import {
@@ -20,6 +20,12 @@ import {
 // This list is read-your-writes (created/imported campaigns must show up
 // immediately), so never cache it at the route or CDN layer.
 export const dynamic = "force-dynamic";
+
+// How the link DM goes out: BUTTON (card with buttons) or TEXT (the tracked
+// link inside the text). Accepts "button" / "text" in any case (the MCP sends
+// lowercase). Left out on create = BUTTON (the column default), so old
+// clients and the CSV import keep the card; the campaign screen sends TEXT.
+const dmFormatSchema = z.preprocess((v) => parseDmFormat(v) ?? v, z.enum(DM_FORMATS));
 
 const createAutomationSchema = z
   .object({
@@ -39,6 +45,7 @@ const createAutomationSchema = z
     matchAnyWord: z.boolean().optional().default(false),
     dmTriggerEnabled: z.boolean().optional().default(false),
     dmMessage: z.string().min(1).max(1000),
+    dmFormat: dmFormatSchema.optional(),
     openingDmEnabled: z.boolean().optional().default(false),
     openingDmMessage: z.string().max(1000).optional().nullable(),
     openingDmButtonLabel: z.string().max(64).optional().nullable(),
@@ -107,6 +114,9 @@ const updateAutomationSchema = z.object({
   matchAnyWord: z.boolean().optional(),
   dmTriggerEnabled: z.boolean().optional(),
   dmMessage: z.string().min(1).max(1000).optional(),
+  // Changing it while the campaign is ON is blocked for an API key, like the
+  // texts (editedCampaignFields below).
+  dmFormat: dmFormatSchema.optional(),
   openingDmEnabled: z.boolean().optional(),
   openingDmMessage: z.string().max(1000).optional().nullable(),
   openingDmButtonLabel: z.string().max(64).optional().nullable(),
@@ -442,6 +452,7 @@ export async function POST(request: NextRequest) {
       matchAnyWord,
       dmTriggerEnabled: parsed.data.dmTriggerEnabled,
       dmMessage: parsed.data.dmMessage,
+      ...(parsed.data.dmFormat ? { dmFormat: parsed.data.dmFormat } : {}),
       openingDmEnabled,
       openingDmMessage: openingDmEnabled
         ? parsed.data.openingDmMessage || null
@@ -584,7 +595,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Turn the campaign off before changing its trigger, texts or links",
+          error: "Turn the campaign off before changing its trigger, texts, links or DM format",
           code: "campaign_on",
           details: { fields: blocked },
         },

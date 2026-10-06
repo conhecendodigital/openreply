@@ -65,7 +65,17 @@ const campaignFields: Record<string, unknown> = {
   matchAnyWord: { ...bool, description: "Dispara com qualquer comentário" },
   wholeWordMatch: { ...bool, description: "Só palavra inteira (padrão true)" },
   dmTriggerEnabled: { ...bool, description: "Também dispara quando a palavra chega por DM" },
-  dmMessage: { ...str, description: "Mensagem que entrega o link. {username} vira o @ da pessoa" },
+  dmMessage: { ...str, description: "Mensagem que entrega o link. {username} vira o @ da pessoa; {link} marca onde o link entra no formato text" },
+  dmFormat: {
+    type: "string",
+    enum: ["button", "text"],
+    description:
+      "Formato da DM com o link. text = texto com o link clicável dentro (aparece pra todo mundo, inclusive em Solicitações; " +
+      "sem {link} o link vai no fim, numa linha própria; o segundo link vai na linha de baixo com o rótulo). " +
+      "button = cartão com botão (mais bonito, mas em algumas versões do Instagram não aparece). " +
+      "Na criação, o padrão é text. Mudar exige a automação desligada, igual aos textos e links. " +
+      "DM de abertura e pedido pra seguir continuam com botão.",
+  },
   trackedDestinationUrl: { ...str, description: "URL do botão de link (com contagem de cliques)" },
   linkButtonLabel: { ...str, description: "Texto do botão de link (até 20 caracteres)" },
   secondaryDestinationUrl: { ...str, description: "URL de um segundo botão" },
@@ -139,6 +149,7 @@ type CampaignRow = {
   postUrl: string | null;
   trigger?: AutomationTriggerValue;
   storyId?: string | null;
+  dmFormat?: string;
   analytics?: unknown;
   trackedLinks?: { trackedUrl?: string; destinationUrl: string; _count?: { clicks: number } }[];
 };
@@ -189,6 +200,7 @@ export const TOOLS: Tool[] = [
                 : "qualquer comentário"
               : a.keywords,
         tambemPorDm: (a.trigger ?? "COMMENT") === "COMMENT" ? a.dmTriggerEnabled : a.trigger === "DM",
+        formatoDm: a.dmFormat === "TEXT" ? "text" : "button",
         numeros: a.analytics,
         links: (a.trackedLinks ?? []).map((l) => ({
           destino: l.destinationUrl,
@@ -225,7 +237,9 @@ export const TOOLS: Tool[] = [
       required: ["name", "dmMessage"],
     },
     async run(args, call) {
-      const body: Record<string, unknown> = { ...pick(args, campaignKeys), isActive: false };
+      // Automação nova sai em texto com link (aparece em qualquer Instagram),
+      // igual à tela; quem quiser o cartão manda dmFormat: "button".
+      const body: Record<string, unknown> = { dmFormat: "text", ...pick(args, campaignKeys), isActive: false };
       if (Array.isArray(body.publicReplyMessages) && body.publicReplyEnabled === undefined) {
         body.publicReplyEnabled = body.publicReplyMessages.length > 0;
       }

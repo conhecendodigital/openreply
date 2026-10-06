@@ -119,6 +119,13 @@ describe("campanha: chave de API nunca liga", () => {
     for (const call of db.automation.create.mock.calls) expect(call[0].data.isActive).toBe(false);
   });
 
+  it("POST: formato TEXT é gravado; sem o campo, o banco usa BUTTON", async () => {
+    await automations.POST(req("/api/automations", "POST", { ...newCampaign, dmFormat: "text" }));
+    await automations.POST(req("/api/automations", "POST", newCampaign));
+    expect(db.automation.create.mock.calls[0][0].data.dmFormat).toBe("TEXT");
+    expect(db.automation.create.mock.calls[1][0].data).not.toHaveProperty("dmFormat");
+  });
+
   it("POST pela tela (sessão) respeita o que a pessoa escolheu", async () => {
     await automations.POST(req("/api/automations", "POST", { ...newCampaign, isActive: true }));
     expect(db.automation.create.mock.calls[0][0].data.isActive).toBe(true);
@@ -192,6 +199,8 @@ describe("campanha LIGADA: chave só mexe em nome, objetivo e desligar", () => {
     [{ secondaryDestinationUrl: "https://outro-site.example" }],
     [{ keywords: ["QUALQUER"] }],
     [{ trigger: "STORY_MENTION" }],
+    [{ dmFormat: "TEXT" }],
+    [{ dmFormat: "text" }],
   ])("%o = 409 e nada muda", async (body) => {
     const res = await automations.PATCH(req("/api/automations?id=auto_1", "PATCH", body));
     expect(res.status).toBe(409);
@@ -215,6 +224,21 @@ describe("campanha LIGADA: chave só mexe em nome, objetivo e desligar", () => {
     h.byKey = false;
     const res = await automations.PATCH(req("/api/automations?id=auto_1", "PATCH", { dmMessage: "Texto novo" }));
     expect(res.status).toBe(200);
+  });
+
+  it("mandar o mesmo formato que já está lá não conta como mudança", async () => {
+    db.automation.findFirst.mockResolvedValue(campaign({ isActive: true, dmFormat: "TEXT" }));
+    const res = await automations.PATCH(req("/api/automations?id=auto_1", "PATCH", { dmFormat: "text" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("desligada, a chave muda o formato (button/text em qualquer caixa)", async () => {
+    db.automation.findFirst.mockResolvedValue(campaign({ isActive: false, dmFormat: "BUTTON" }));
+    const res = await automations.PATCH(req("/api/automations?id=auto_1", "PATCH", { dmFormat: "text" }));
+    expect(res.status).toBe(200);
+    expect(db.automation.update.mock.calls[0][0].data).toEqual({ dmFormat: "TEXT" });
+    const bad = await automations.PATCH(req("/api/automations?id=auto_1", "PATCH", { dmFormat: "cartao" }));
+    expect(bad.status).toBe(400);
   });
 
   it("desligada, a chave edita texto e link (fica desligada)", async () => {
