@@ -32,6 +32,7 @@ const FIELD_NAMES: Record<string, string> = {
   "agent:atendimento": "Customer service instructions",
   "agent:suporte": "Support instructions",
   message: "Approved message",
+  rules: "Business rules",
   example: "Example of how the company talks",
 };
 

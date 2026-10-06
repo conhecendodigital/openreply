@@ -125,6 +125,9 @@ export function AiUsageReport({ scope }: { scope: "admin" | "me" }) {
     triagem: t("Triage"),
     midia: t("Customer audio, photos and PDFs"),
     treino: t("Training with a document"),
+    ficha: t("Lead record"),
+    teste: t("Agent test"),
+    aprendizado: t("Rule suggestions"),
   };
   const periodName: Record<(typeof PERIODS)[number], string> = {
     today: t("Today"),

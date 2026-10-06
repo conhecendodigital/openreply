@@ -12,6 +12,9 @@
  *   RASCUNHO de todos os campos acima, com o painel "Confira antes de salvar".
  *   Só vira configuração no Salvar; depois de salvar, o documento vai pro
  *   cérebro do agente de qualificação. Nenhum agente liga sozinho.
+ * - regras duras do negócio (uma por linha), estágios do lead, aviso ao
+ *   responsável, "O que o agente aprendeu" e "Testar o agente"
+ *   (components/whatsapp/regras.tsx).
  * IA e chave de API nunca ligam nada sozinhas. A chave é a do /admin.
  */
 
@@ -19,6 +22,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useT } from "@/components/lang-provider";
 import { FromDocBadge, ReviewPanel, TRAIN_ACCEPT, TrainPanel } from "@/components/whatsapp/treinar";
+import { LearningPanel, RulesPanel, rulesToText, StagesPanel, TestPanel, textToRules, type RulesText } from "@/components/whatsapp/regras";
+import type { RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
+import type { ConfigEstagio, Estagio } from "@/lib/whatsapp/regras/estagio";
 import { api, btnPrimary, btnSecondary, formatPhone, INPUT, ServerNotice, StatusPill, useServerStatus, WhatsAppTabs, type WaStatus } from "@/components/whatsapp/ui";
 import { aplicarRascunho } from "@/lib/whatsapp/treinar/aplicar";
 import type { CampoTreino, RascunhoTreino } from "@/lib/whatsapp/treinar/esquema";
@@ -36,8 +42,12 @@ type AgentsView = {
     delayMinSeconds: number;
     delayMaxSeconds: number;
     facts: string[];
+    debounceSeconds: number;
   };
   agents: Array<{ agente: Agente; ativo: boolean; instrucoes: string }>;
+  rules: RegrasNegocio;
+  stages: Record<Estagio, ConfigEstagio>;
+  notifyOwner: { ligado: boolean; telefone: string };
 };
 type Doc = {
   id: string;
@@ -77,6 +87,10 @@ export default function WhatsAppAgentsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ ok: boolean; text: string } | null>(null);
   const [factsText, setFactsText] = useState("");
+  // Texto cru de cada caixa das regras; vira estrutura no Salvar.
+  const [rulesText, setRulesText] = useState<RulesText | null>(null);
+  // Mudou algo desde o último Salvar (o teste usa as regras salvas).
+  const [dirty, setDirty] = useState(false);
   // Rascunho do "Treinar com um documento": só na tela até o Salvar.
   const [draft, setDraft] = useState<RascunhoTreino | null>(null);
   const [draftSaved, setDraftSaved] = useState(false);
@@ -91,6 +105,8 @@ export default function WhatsAppAgentsPage() {
       if (r.ok) {
         setView(r.data);
         setFactsText(r.data.profile.facts.join("\n"));
+        setRulesText(rulesToText(r.data.rules));
+        setDirty(false);
         setError(null);
       } else setError(t(r.error));
     },
@@ -107,6 +123,8 @@ export default function WhatsAppAgentsPage() {
     const next = aplicarRascunho(view, d);
     setView(next);
     setFactsText(next.profile.facts.join("\n"));
+    setRulesText(rulesToText(next.rules));
+    setDirty(true);
     setDraft(d);
     setDraftSaved(false);
     setDraftFile(file);
@@ -151,10 +169,17 @@ export default function WhatsAppAgentsPage() {
   function patchProfile(p: Partial<AgentsView["profile"]>) {
     setView((cur) => (cur ? { ...cur, profile: { ...cur.profile, ...p } } : cur));
     setSaved(null);
+    setDirty(true);
+  }
+  function patchView(p: Partial<Pick<AgentsView, "rules" | "stages" | "notifyOwner">>) {
+    setView((cur) => (cur ? { ...cur, ...p } : cur));
+    setSaved(null);
+    setDirty(true);
   }
   function patchAgent(agente: Agente, p: Partial<AgentsView["agents"][number]>) {
     setView((cur) => (cur ? { ...cur, agents: cur.agents.map((a) => (a.agente === agente ? { ...a, ...p } : a)) } : cur));
     setSaved(null);
+    setDirty(true);
   }
 
   async function save() {
@@ -168,12 +193,17 @@ export default function WhatsAppAgentsPage() {
         numberMode: view.numberMode,
         profile: { ...view.profile, facts: factsText.split("\n").map((f) => f.trim()).filter(Boolean) },
         agents: view.agents,
+        rules: rulesText ? textToRules(rulesText, view.rules) : view.rules,
+        stages: view.stages,
+        notifyOwner: view.notifyOwner,
       }),
     });
     setSaving(false);
     if (!r.ok) return setSaved({ ok: false, text: t(r.error) });
     setView(r.data);
     setFactsText(r.data.profile.facts.join("\n"));
+    setRulesText(rulesToText(r.data.rules));
+    setDirty(false);
     setSaved({ ok: true, text: t("Saved.") });
     if (draft && !draftSaved) {
       setDraftSaved(true);
@@ -301,9 +331,25 @@ export default function WhatsAppAgentsPage() {
             </label>
           </section>
 
+          {rulesText && (
+            <RulesPanel
+              text={rulesText}
+              onText={(x) => {
+                setRulesText(x);
+                setSaved(null);
+                setDirty(true);
+              }}
+              rules={view.rules}
+              onRules={(rules) => patchView({ rules })}
+              fromDoc={fromDoc}
+            />
+          )}
+
           {view.agents.map((a) => (
             <AgentCard key={a.agente} agent={a} onChange={(p) => patchAgent(a.agente, p)} fromDoc={fromDoc} docsRefresh={docsRefresh} />
           ))}
+
+          <StagesPanel stages={view.stages} onStages={(stages) => patchView({ stages })} notify={view.notifyOwner} onNotify={(notifyOwner) => patchView({ notifyOwner })} />
 
           <section className="panel space-y-4 rounded-xl p-4 sm:p-5">
             <div>
@@ -333,12 +379,28 @@ export default function WhatsAppAgentsPage() {
                 <input type="time" value={view.profile.quietEnd} onChange={(e) => patchProfile({ quietEnd: e.target.value })} className={INPUT} />
               </label>
               <label className="block space-y-1 sm:col-span-2">
+                <span className="text-sm font-medium">{t("Wait for the customer to finish writing (seconds)")}</span>
+                <input
+                  type="number"
+                  min={3}
+                  max={30}
+                  value={view.profile.debounceSeconds}
+                  onChange={(e) => patchProfile({ debounceSeconds: Number(e.target.value) })}
+                  className={INPUT}
+                />
+                <span className="block text-xs text-muted">{t("Messages in a row (audio too) become one answer only. From 3 to 30 seconds.")}</span>
+              </label>
+              <label className="block space-y-1 sm:col-span-2">
                 <span className="text-sm font-medium">{t("Automatic answers per day on this number, at most")}</span>
                 <input type="number" min={0} max={1000} value={view.profile.maxAutoPerDay} onChange={(e) => patchProfile({ maxAutoPerDay: Number(e.target.value) })} className={INPUT} />
               </label>
             </div>
             <p className="text-xs text-muted">{t("During quiet hours and after the daily limit, answers stay as drafts. The daily AI spending cap is set in /admin.")}</p>
           </section>
+
+          <TestPanel sessionId={view.sessionId} hasCases={view.rules.casosTeste.length > 0} dirty={dirty} />
+
+          <LearningPanel sessionId={view.sessionId} onChanged={() => void load(view.sessionId)} />
 
           <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur lg:left-64">
             <div className="mx-auto flex max-w-3xl items-center justify-end gap-3">
