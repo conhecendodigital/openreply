@@ -37,8 +37,10 @@ export interface TemplateToSend {
 
 export interface ConnectResult {
   status: WaStatus;
-  /** OpenWA: QR pra escanear (data URL). Cloud API: sempre null. */
+  /** OpenWA e uazapi: QR pra escanear (data URL). Cloud API: sempre null. */
   qr: string | null;
+  /** uazapi: código de pareamento (quando a pessoa escolheu conectar pelo número). */
+  pairCode?: string | null;
 }
 
 export interface TypingOptions {
@@ -86,6 +88,8 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 export interface ConnectorCredentials {
   openwa?: { baseUrl: string; apiKey: string };
   cloudApi?: { accessToken: string; graphVersion?: string };
+  /** uazapi: endereço do servidor e token DAQUELA instância (o admintoken nunca vai pro conector de envio). */
+  uazapi?: { serverUrl: string; instanceToken: string };
 }
 
 /** 5511999999999@c.us | 5511999999999@s.whatsapp.net | +55 11 99999-9999 → 5511999999999 */

@@ -8,8 +8,11 @@
  * modelos gerados (ver docs/whatsapp-conector.md, seção "Encaixe com a Fase 0").
  */
 
-/** enum WaProvider do plano. */
-export type WaProvider = "OPENWA" | "CLOUD_API";
+/**
+ * enum WaProvider do plano. UAZAPI (06/10/2026): segundo provedor não oficial,
+ * com proxy gerenciado por cidade (sai por IP do Brasil). Ver docs/whatsapp-uazapi.md.
+ */
+export type WaProvider = "OPENWA" | "CLOUD_API" | "UAZAPI";
 
 /** enum WaStatus do plano. */
 export type WaStatus = "PENDING" | "QR_READY" | "CONNECTED" | "DISCONNECTED" | "RESTRICTED" | "BANNED";
@@ -51,6 +54,8 @@ export interface WaSessionRecord {
   riskAcceptedAt: Date | null;
   /** Cloud API: WABA da coexistência (fica em WaSession quando a Fase 0 juntar). */
   wabaId?: string | null;
+  /** uazapi: token da instância, já decifrado pelo repositório. Nunca logar. */
+  instanceToken?: string | null;
 }
 
 export interface WaContactRecord {
