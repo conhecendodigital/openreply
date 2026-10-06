@@ -191,4 +191,87 @@ export const ptWhatsapp: Record<string, string> = {
   "Something went wrong. Try again in a minute.": "Algo deu errado. Tente de novo daqui a pouco.",
   "Too many messages in a short time. Wait a moment.": "Muitas mensagens em pouco tempo. Espere um pouquinho.",
   "This message could not be sent.": "Essa mensagem não pôde ser enviada.",
+
+  // Treinar com um documento (Agentes)
+  "Train with a document": "Treinar com um documento",
+  "Send the briefing the company filled in (PDF or Word, up to 8 MB). The AI fills in every field below as a draft. Nothing is saved and no agent turns on until you check and click Save.":
+    "Envie o briefing que a empresa preencheu (PDF ou Word, até 8 MB). A IA preenche todos os campos abaixo como rascunho. Nada é salvo e nenhum agente liga até você conferir e clicar em Salvar.",
+  "Reading the document…": "Lendo o documento…",
+  "The AI is reading the whole document. This can take up to 2 minutes. Keep this page open.":
+    "A IA está lendo o documento inteiro. Isso pode levar até 2 minutos. Deixe esta página aberta.",
+  "The file is bigger than 8 MB.": "O arquivo passa de 8 MB.",
+  "Could not read the document.": "Não deu pra ler o documento.",
+  "From the document": "Veio do documento",
+  "Check before saving": "Confira antes de salvar",
+  "What came from the document": "O que veio do documento",
+  "Saved. The agents are still turned off. Use the test cases below before turning them on.":
+    "Salvo. Os agentes continuam desligados. Use os casos de teste abaixo antes de ligar.",
+  "Draft from {file}. Nothing was saved yet. The fields marked From the document were filled in by the AI: read them, fix what is wrong and click Save.":
+    "Rascunho feito a partir de {file}. Nada foi salvo ainda. Os campos marcados com Veio do documento foram preenchidos pela IA: leia, corrija o que estiver errado e clique em Salvar.",
+  "Discard draft": "Descartar rascunho",
+  "Draft from the document. Nothing was saved yet.": "Rascunho do documento. Nada foi salvo ainda.",
+  "The document also went to the Qualification agent knowledge base.": "O documento também foi pra base de conhecimento do agente de Qualificação.",
+  "Pending (A definir)": "Pendências (A definir)",
+  "The document has no answer for these yet. They did not become rules.": "O documento ainda não tem resposta pra estes pontos. Eles não viraram regra.",
+  "Rules the system does not run by itself yet": "Regras que o sistema ainda não executa sozinho",
+  "They went in as written instructions. The agent follows them in the conversation, but nothing happens automatically (no reminder is sent, no message goes to another number).":
+    "Entraram como instrução escrita. O agente segue na conversa, mas nada acontece sozinho (nenhum lembrete é enviado, nenhuma mensagem vai pra outro número).",
+  "Written in: {where}": "Escrito em: {where}",
+  "Possible contradictions": "Possíveis contradições",
+  "The AI did not pick a side. Decide and fix the field.": "A IA não escolheu um lado. Decida e corrija o campo.",
+  "Not found in the document": "Não achei no documento",
+  "A number, price, deadline, time or text that is in a field but not in the document. Check if the AI made it up.":
+    "Número, preço, prazo, horário ou texto que está num campo mas não está no documento. Confira se a IA inventou.",
+  "Approved messages": "Mensagens aprovadas",
+  "They went in word for word. The agent uses the exact text.": "Entraram palavra por palavra. O agente usa o texto exato.",
+  "(not the same as in the document)": "(diferente do documento)",
+  "Test cases from the document": "Casos de teste do documento",
+  "Send these situations from another phone, with the number on drafts, and see if the agent decides like this.":
+    "Mande estas situações de outro celular, com o número em rascunho, e veja se o agente decide assim.",
+  "Expected:": "Esperado:",
+  "Base Comando": "Comando base",
+  "Prices, deadlines and links": "Preços, prazos e links",
+  "Quiet hours": "Horário de silêncio",
+  "Automatic answers per day": "Respostas automáticas por dia",
+  "Qualification instructions": "Instruções da Qualificação",
+  "Customer service instructions": "Instruções do Atendimento",
+  "Support instructions": "Instruções do Suporte",
+  "Approved message": "Mensagem aprovada",
+  "Example of how the company talks": "Exemplo de como a empresa fala",
+  Welcome: "Boas-vindas",
+  "Handing over to the team": "Passar pra equipe",
+  "Outside business hours": "Fora do horário",
+  Closing: "Encerramento",
+  "The document was too long. Only the first part was read. Check if something is missing at the end.":
+    "O documento era grande demais. Só a primeira parte foi lida. Confira se falta algo do final.",
+  "The base Comando passed 8000 characters and the end was cut. Check it.": "O Comando base passou de 8000 caracteres e o final foi cortado. Confira.",
+  "The instructions of the {agent} agent passed 4000 characters and the end was cut. Check them.":
+    "As instruções do agente {agent} passaram de 4000 caracteres e o final foi cortado. Confira.",
+  "The document had more than 30 facts. Only the first 30 came in.": "O documento tinha mais de 30 fatos. Só os 30 primeiros entraram.",
+  "The quiet hours in the document could not be read. Fill them in by hand if you want them.":
+    "Não deu pra ler o horário de silêncio do documento. Preencha à mão se quiser.",
+  "A field mentions something the document marks as A definir. Check that it did not become a rule.":
+    "Um campo fala de algo que o documento marca como A definir. Confira se isso não virou regra.",
+  "Training with a document": "Treinar com um documento",
+  "Documents this agent can consult": "Documentos que esse agente pode consultar",
+  "Up to 30 PDFs or Word documents of 8 MB. They count for every number of this workspace.":
+    "Até 30 PDFs ou documentos do Word de 8 MB. Valem pra todos os números deste workspace.",
+  "Send PDF or Word": "Enviar PDF ou Word",
+  "No document yet.": "Nenhum documento ainda.",
+  "Send a PDF or a Word document (.docx).": "Envie um PDF ou um documento do Word (.docx).",
+  "Could not open this PDF. It may be damaged.": "Não deu pra abrir esse PDF. Ele pode estar corrompido.",
+  "This Word document has a password. Send it without the password.": "Esse documento do Word tem senha. Envie sem a senha.",
+  "Could not open this Word document. It may be damaged.": "Não deu pra abrir esse documento do Word. Ele pode estar corrompido.",
+  "This Word document has no text.": "Esse documento do Word não tem texto.",
+  "This Word document is too big inside.": "Esse documento do Word é grande demais por dentro.",
+  "Too many documents in a short time. Try again in a while.": "Muitos documentos em pouco tempo. Tente de novo daqui a pouco.",
+  'Send the file in the "file" field.': 'Envie o arquivo no campo "file".',
+  "The file is empty.": "O arquivo está vazio.",
+  "There is no AI key in /admin > AI keys yet. Ask the admin to add one.": "Ainda não tem chave de IA em /admin > Chaves de IA. Peça pro admin cadastrar.",
+  "Your daily AI spending cap was reached. Try again tomorrow or ask the admin to raise it in /admin.":
+    "Seu teto diário de gasto com IA foi atingido. Tente amanhã ou peça pro admin aumentar em /admin.",
+  "The workspace daily AI spending cap was reached. Try again tomorrow or ask the admin to raise it in /admin.":
+    "O teto diário de gasto com IA do workspace foi atingido. Tente amanhã ou peça pro admin aumentar em /admin.",
+  "The AI could not organize this document now. Try again in a minute.": "A IA não conseguiu organizar esse documento agora. Tente de novo daqui a pouco.",
+  "API keys cannot train the WhatsApp agents. Do it in the Lead Engine.": "Chave de API não pode treinar os agentes do WhatsApp. Faça isso no Lead Engine.",
 };

@@ -7,14 +7,21 @@
  *   (desligado ou rascunho: você aprova cada resposta no inbox);
  * - instruções de cada agente e o Comando base do negócio;
  * - PDFs do cérebro de cada agente (enviar, ver o status, apagar);
- * - atraso humano, horário de silêncio e limite de envios automáticos.
+ * - atraso humano, horário de silêncio e limite de envios automáticos;
+ * - "Treinar com um documento": o briefing da empresa (PDF ou Word) vira um
+ *   RASCUNHO de todos os campos acima, com o painel "Confira antes de salvar".
+ *   Só vira configuração no Salvar; depois de salvar, o documento vai pro
+ *   cérebro do agente de qualificação. Nenhum agente liga sozinho.
  * IA e chave de API nunca ligam nada sozinhas. A chave é a do /admin.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useT } from "@/components/lang-provider";
+import { FromDocBadge, ReviewPanel, TRAIN_ACCEPT, TrainPanel } from "@/components/whatsapp/treinar";
 import { api, btnPrimary, btnSecondary, formatPhone, INPUT, ServerNotice, StatusPill, useServerStatus, WhatsAppTabs, type WaStatus } from "@/components/whatsapp/ui";
+import { aplicarRascunho } from "@/lib/whatsapp/treinar/aplicar";
+import type { CampoTreino, RascunhoTreino } from "@/lib/whatsapp/treinar/esquema";
 
 type Agente = "qualificacao" | "atendimento" | "suporte";
 type AgentsView = {
@@ -70,6 +77,13 @@ export default function WhatsAppAgentsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ ok: boolean; text: string } | null>(null);
   const [factsText, setFactsText] = useState("");
+  // Rascunho do "Treinar com um documento": só na tela até o Salvar.
+  const [draft, setDraft] = useState<RascunhoTreino | null>(null);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [draftFile, setDraftFile] = useState<File | null>(null);
+  const [fromDoc, setFromDoc] = useState<Set<CampoTreino>>(new Set());
+  const [brainMsg, setBrainMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [docsRefresh, setDocsRefresh] = useState(0);
 
   const load = useCallback(
     async (sessionId?: string | null) => {
@@ -87,6 +101,52 @@ export default function WhatsAppAgentsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- primeira carga
     void load();
   }, [load]);
+
+  function applyDraft(d: RascunhoTreino, file: File) {
+    if (!view) return;
+    const next = aplicarRascunho(view, d);
+    setView(next);
+    setFactsText(next.profile.facts.join("\n"));
+    setDraft(d);
+    setDraftSaved(false);
+    setDraftFile(file);
+    setFromDoc(new Set(d.doDocumento));
+    setSaved(null);
+    setBrainMsg(null);
+  }
+
+  function closeDraft() {
+    const wasSaved = draftSaved;
+    setDraft(null);
+    setDraftFile(null);
+    setFromDoc(new Set());
+    setDraftSaved(false);
+    // Descartar antes de salvar: volta pro que está salvo.
+    if (!wasSaved) void load(view?.sessionId);
+  }
+
+  // Sair da página com rascunho não salvo pede confirmação.
+  useEffect(() => {
+    if (!draft || draftSaved) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [draft, draftSaved]);
+
+  /** Depois de salvar: o documento vai pro cérebro do agente de qualificação (mesmo fluxo dos PDFs). */
+  async function sendDraftToBrain(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const res = await fetch("/api/whatsapp/cerebro/qualificacao/documents", { method: "POST", body: form });
+      const payload = await res.json().catch(() => null);
+      if (!payload?.success) setBrainMsg({ ok: false, text: t(payload?.error ?? "Could not send the PDF.") });
+      else setBrainMsg({ ok: true, text: t("The document also went to the Qualification agent knowledge base.") });
+    } catch {
+      setBrainMsg({ ok: false, text: t("Could not reach the server. Try again.") });
+    }
+    setDocsRefresh((n) => n + 1);
+  }
 
   function patchProfile(p: Partial<AgentsView["profile"]>) {
     setView((cur) => (cur ? { ...cur, profile: { ...cur.profile, ...p } } : cur));
@@ -115,6 +175,15 @@ export default function WhatsAppAgentsPage() {
     setView(r.data);
     setFactsText(r.data.profile.facts.join("\n"));
     setSaved({ ok: true, text: t("Saved.") });
+    if (draft && !draftSaved) {
+      setDraftSaved(true);
+      setFromDoc(new Set());
+      if (draftFile) {
+        const file = draftFile;
+        setDraftFile(null);
+        await sendDraftToBrain(file);
+      }
+    }
   }
 
   const noAiKey = server && !server.ai.anthropic && !server.ai.openai;
@@ -193,33 +262,49 @@ export default function WhatsAppAgentsPage() {
             </fieldset>
           </section>
 
+          <TrainPanel onDraft={applyDraft} disabled={saving} />
+
+          {draft && <ReviewPanel draft={draft} saved={draftSaved} onClose={closeDraft} />}
+          {brainMsg && <p className={`text-sm ${brainMsg.ok ? "text-success" : "text-error"}`}>{brainMsg.text}</p>}
+
           <section className="panel space-y-3 rounded-xl p-4 sm:p-5">
             <h2 className="text-base font-semibold">{t("About your business")}</h2>
             <label className="block space-y-1">
-              <span className="text-sm font-medium">{t("Base Comando: what you sell, how you talk, what the agent may promise")}</span>
+              <span className="text-sm font-medium">
+                {t("Base Comando: what you sell, how you talk, what the agent may promise")}
+                <FromDocBadge field="baseCommand" fields={fromDoc} />
+              </span>
               <textarea
                 value={view.profile.baseCommand}
                 onChange={(e) => patchProfile({ baseCommand: e.target.value })}
-                rows={6}
+                rows={fromDoc.has("baseCommand") ? 18 : 6}
                 maxLength={8000}
                 placeholder={t("Example: We are a dental clinic in Itapecerica da Serra. We answer in a friendly and short way. We never give a price for a treatment before the evaluation.")}
                 className={INPUT}
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-sm font-medium">{t("Prices, deadlines and links the agent may quote (one per line)")}</span>
-              <textarea value={factsText} onChange={(e) => setFactsText(e.target.value)} rows={4} placeholder={t("Example: Evaluation costs R$ 80")} className={INPUT} />
+              <span className="text-sm font-medium">
+                {t("Prices, deadlines and links the agent may quote (one per line)")}
+                <FromDocBadge field="facts" fields={fromDoc} />
+              </span>
+              <textarea value={factsText} onChange={(e) => setFactsText(e.target.value)} rows={fromDoc.has("facts") ? 8 : 4} placeholder={t("Example: Evaluation costs R$ 80")} className={INPUT} />
               <span className="block text-xs text-muted">{t("The agent never quotes a price, deadline, percentage or link that is not here or in the PDFs. If it does, the answer stays as a draft with a warning.")}</span>
             </label>
           </section>
 
           {view.agents.map((a) => (
-            <AgentCard key={a.agente} agent={a} onChange={(p) => patchAgent(a.agente, p)} />
+            <AgentCard key={a.agente} agent={a} onChange={(p) => patchAgent(a.agente, p)} fromDoc={fromDoc} docsRefresh={docsRefresh} />
           ))}
 
           <section className="panel space-y-4 rounded-xl p-4 sm:p-5">
             <div>
-              <h2 className="text-base font-semibold">{t("Human rhythm")}</h2>
+              <h2 className="text-base font-semibold">
+                {t("Human rhythm")}
+                <FromDocBadge field="delay" fields={fromDoc} />
+                <FromDocBadge field="quietHours" fields={fromDoc} />
+                <FromDocBadge field="maxAutoPerDay" fields={fromDoc} />
+              </h2>
               <p className="mt-1 text-sm text-muted">{t("Only used when you let the agent send by itself in a conversation. Drafts you approve go out in a few seconds.")}</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -249,6 +334,7 @@ export default function WhatsAppAgentsPage() {
 
           <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur lg:left-64">
             <div className="mx-auto flex max-w-3xl items-center justify-end gap-3">
+              {draft && !draftSaved && !saved && <p className="mr-auto text-xs text-accent">{t("Draft from the document. Nothing was saved yet.")}</p>}
               {saved && (
                 <p className={`text-sm ${saved.ok ? "text-success" : "text-error"}`} role="status">
                   {saved.text}
@@ -265,7 +351,17 @@ export default function WhatsAppAgentsPage() {
   );
 }
 
-function AgentCard({ agent, onChange }: { agent: AgentsView["agents"][number]; onChange: (p: Partial<AgentsView["agents"][number]>) => void }) {
+function AgentCard({
+  agent,
+  onChange,
+  fromDoc,
+  docsRefresh,
+}: {
+  agent: AgentsView["agents"][number];
+  onChange: (p: Partial<AgentsView["agents"][number]>) => void;
+  fromDoc: Set<CampoTreino>;
+  docsRefresh: number;
+}) {
   const t = useT();
   const info = AGENT_INFO[agent.agente];
   return (
@@ -290,22 +386,25 @@ function AgentCard({ agent, onChange }: { agent: AgentsView["agents"][number]; o
         </label>
       </div>
       <label className="block space-y-1">
-        <span className="text-sm font-medium">{t("Instructions for this agent")}</span>
+        <span className="text-sm font-medium">
+          {t("Instructions for this agent")}
+          <FromDocBadge field={`agent:${agent.agente}`} fields={fromDoc} />
+        </span>
         <textarea
           value={agent.instrucoes}
           onChange={(e) => onChange({ instrucoes: e.target.value })}
-          rows={3}
+          rows={fromDoc.has(`agent:${agent.agente}`) ? 12 : 3}
           maxLength={4000}
           placeholder={t("Example: Ask the person's name and what they need before talking about price.")}
           className={INPUT}
         />
       </label>
-      <KnowledgeDocs agente={agent.agente} />
+      <KnowledgeDocs agente={agent.agente} refresh={docsRefresh} />
     </section>
   );
 }
 
-function KnowledgeDocs({ agente }: { agente: Agente }) {
+function KnowledgeDocs({ agente, refresh }: { agente: Agente; refresh: number }) {
   const t = useT();
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -320,7 +419,7 @@ function KnowledgeDocs({ agente }: { agente: Agente }) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga e atualização enquanto um PDF processa
     void load();
-  }, [load]);
+  }, [load, refresh]);
   const processing = Boolean(docs?.some((d) => d.status === "queued" || d.status === "processing"));
   useEffect(() => {
     if (!processing) return;
@@ -357,15 +456,15 @@ function KnowledgeDocs({ agente }: { agente: Agente }) {
     <div className="space-y-2 rounded-lg border border-border p-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium">{t("PDFs this agent can consult")}</p>
-          <p className="text-xs text-muted">{t("Up to 30 PDFs of 8 MB. They count for every number of this workspace.")}</p>
+          <p className="text-sm font-medium">{t("Documents this agent can consult")}</p>
+          <p className="text-xs text-muted">{t("Up to 30 PDFs or Word documents of 8 MB. They count for every number of this workspace.")}</p>
         </div>
         <label className={`${btnSecondary} shrink-0 cursor-pointer px-3 py-1.5 text-xs ${busy ? "pointer-events-none opacity-50" : ""}`}>
-          {busy ? t("Sending…") : t("Send PDF")}
+          {busy ? t("Sending…") : t("Send PDF or Word")}
           <input
             ref={input}
             type="file"
-            accept="application/pdf"
+            accept={TRAIN_ACCEPT}
             className="sr-only"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -375,7 +474,7 @@ function KnowledgeDocs({ agente }: { agente: Agente }) {
         </label>
       </div>
       {msg && <p className="text-xs text-error">{msg}</p>}
-      {docs && docs.length === 0 && <p className="text-xs text-muted">{t("No PDF yet.")}</p>}
+      {docs && docs.length === 0 && <p className="text-xs text-muted">{t("No document yet.")}</p>}
       {docs && docs.length > 0 && (
         <ul className="divide-y divide-border">
           {docs.map((d) => (
