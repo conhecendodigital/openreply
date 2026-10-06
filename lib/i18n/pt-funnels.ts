@@ -248,6 +248,8 @@ export const ptFunnels: Record<string, string> = {
   Layout: "Formato",
   "Grid (2 columns, good with images)": "Grade (2 colunas, boa com imagens)",
   "Option image size": "Tamanho da imagem das opções",
+  "It is playing without sound": "Tá passando sem som",
+  "Tap here to listen": "Toca aqui pra ouvir",
   "Large photo (on top of the text)": "Foto grande (em cima do texto)",
   "Small icon (next to the text)": "Ícone pequeno (ao lado do texto)",
   Options: "Opções",

@@ -41,16 +41,37 @@ export default function VideoView({ block }: { block: PublicVideo }) {
   );
 }
 
+const LOG10 = Math.log(10);
+/** Same bar as the sales page VSL: log(1+9p)/log(10), so 10% shows as 28% and half as 74%. */
+function quickBar(p: number): number {
+  const q = Math.min(1, Math.max(0, p));
+  return Math.log(1 + 9 * q) / LOG10;
+}
+
+const PULSE_CSS = `
+@keyframes fq-vsl-pulse { 0% { box-shadow: 0 0 0 0 rgb(90 168 255 / 0.55); } 100% { box-shadow: 0 0 0 24px rgb(90 168 255 / 0); } }
+.fq-vsl-pulse { animation: fq-vsl-pulse 1.9s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .fq-vsl-pulse { animation: none; } }
+`;
+
 /**
- * Own video. With autoplay it starts muted by itself (browsers only allow
- * that) and shows "tap to turn on the sound": the tap restarts it from the
- * beginning with sound, like a VSL. Without autoplay it waits for play.
+ * Own video.
+ * - autoplay (the VSL, same as the sales page; owner's rule 05/10): starts
+ *   muted in a loop with "it is playing without sound / tap here to listen".
+ *   The tap turns the sound on and restarts from 0:00. From then on there are
+ *   NO controls: no pause, no mute, no skipping; only a thin blue bar shows
+ *   the progress. Muted, it pauses when less than 20% is on screen; with
+ *   sound it keeps playing on scroll. A hidden tab always pauses it.
+ * - without autoplay: a normal video with the browser controls.
  */
 function FileVideo({ block }: { block: PublicVideo }) {
   const t = useT();
   const ref = useRef<HTMLVideoElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const autoplay = block.autoplay === true;
   const [soundOn, setSoundOn] = useState(false);
+  const soundRef = useRef(false);
+  const onScreen = useRef(true);
   const muted = autoplay && !soundOn;
   const poster = block.posterUrl && !isPlaceholderMedia(block.posterUrl) ? block.posterUrl : undefined;
 
@@ -63,17 +84,57 @@ function FileVideo({ block }: { block: PublicVideo }) {
     void v.play().catch(() => undefined);
   }, [autoplay, block.embedUrl]);
 
+  // Plays or pauses by tab and screen visibility (VSL only).
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || !autoplay) return;
+    const sync = () => {
+      if (document.hidden) return void v.pause();
+      if (!soundRef.current && !onScreen.current) return void v.pause();
+      if (v.ended) return;
+      void v.play().catch(() => undefined);
+    };
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        onScreen.current = entry.intersectionRatio >= 0.2;
+        sync();
+      },
+      { threshold: [0, 0.2, 0.5] }
+    );
+    io.observe(v);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      io.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [autoplay, block.embedUrl]);
+
+  // The thin progress bar, only after the sound is on.
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || !autoplay || !soundOn) return;
+    let frame = 0;
+    const draw = () => {
+      if (barRef.current && v.duration > 0) barRef.current.style.transform = `scaleX(${quickBar(v.currentTime / v.duration)})`;
+      frame = requestAnimationFrame(draw);
+    };
+    frame = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame);
+  }, [autoplay, soundOn]);
+
   const unmute = () => {
     const v = ref.current;
+    soundRef.current = true;
     setSoundOn(true);
     if (!v) return;
+    v.loop = false;
     v.muted = false;
     v.currentTime = 0;
     void v.play().catch(() => undefined);
   };
 
-  return (
-    <>
+  if (!autoplay) {
+    return (
       <video
         ref={ref}
         src={block.embedUrl}
@@ -82,30 +143,54 @@ function FileVideo({ block }: { block: PublicVideo }) {
         aria-label={block.title || t("Video")}
         playsInline
         preload="metadata"
-        autoPlay={autoplay}
-        muted={muted}
-        loop={autoplay && muted}
-        controls={!muted}
+        controls
         controlsList="nodownload"
         className="absolute inset-0 h-full w-full object-contain"
       />
-      {muted && (
+    );
+  }
+
+  return (
+    <>
+      <style>{PULSE_CSS}</style>
+      <video
+        ref={ref}
+        src={block.embedUrl}
+        poster={poster}
+        title={block.title || t("Video")}
+        aria-label={block.title || t("Video")}
+        playsInline
+        preload="auto"
+        autoPlay
+        muted={muted}
+        loop={muted}
+        controls={false}
+        disablePictureInPicture
+        disableRemotePlayback
+        controlsList="nodownload nofullscreen noremoteplayback noplaybackrate"
+        onContextMenu={(e) => e.preventDefault()}
+        className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
+      />
+      {muted ? (
         <button
           type="button"
           onClick={unmute}
-          className="absolute inset-0 flex items-center justify-center bg-black/30 text-white"
-          aria-label={t("Tap to turn on the sound")}
+          className="absolute inset-0 flex items-center justify-center bg-black/25 text-white"
+          aria-label={t("Tap here to listen")}
         >
-          <span className="flex flex-col items-center gap-2 rounded-2xl bg-black/70 px-5 py-4 text-center text-base font-bold">
-            <svg aria-hidden="true" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 5 6 9H2v6h4l5 4V5Z" />
-              <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-              <path d="M19 5a10 10 0 0 1 0 14" />
+          <span className="fq-vsl-pulse flex flex-col items-center gap-2 rounded-2xl bg-[#0a77fe]/90 px-6 py-4 text-center">
+            <span className="text-sm font-semibold opacity-90">{t("It is playing without sound")}</span>
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M11 5L6 9H3v6h3l5 4V5z" fill="currentColor" stroke="none" />
+              <path d="M16 9l5 6M21 9l-5 6" strokeLinecap="round" />
             </svg>
-            {t("Your video already started")}
-            <span className="text-sm font-semibold">{t("Tap to turn on the sound")}</span>
+            <span className="text-lg font-bold">{t("Tap here to listen")}</span>
           </span>
         </button>
+      ) : (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-1 bg-white/15">
+          <div ref={barRef} className="h-full origin-left bg-[#0a77fe]" style={{ transform: "scaleX(0)" }} />
+        </div>
       )}
     </>
   );
