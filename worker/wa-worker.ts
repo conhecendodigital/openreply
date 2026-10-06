@@ -42,7 +42,9 @@ const agent = new Worker<WaAgentJob>(
   WA_AGENT_QUEUE,
   async (job) => {
     const result = await processAgentJob(job.data, deps);
-    console.log(`[WA Agent] ${job.data.kind} ${job.data.conversationId} ${result.acao}`);
+    // The reason is a fixed system phrase (never message text), so it is safe to log.
+    const motivo = "motivo" in result && typeof result.motivo === "string" ? ` (${result.motivo.slice(0, 120)})` : "";
+    console.log(`[WA Agent] ${job.data.kind} ${job.data.conversationId} ${result.acao}${motivo}`);
     return { acao: result.acao };
   },
   { connection: getRedisConnection(), concurrency: 1, lockDuration: 120_000 }
