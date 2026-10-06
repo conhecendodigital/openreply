@@ -549,7 +549,7 @@ export const pt: Record<string, string> = {
   Discarded: "Descartado",
   Expired: "Expirado",
   "The 24-hour window closed. The person needs to message you again before anything can be sent.":
-    "A janela de 24h fechou. A pessoa precisa te mandar mensagem de novo antes de qualquer envio.",
+    "Esperando a pessoa responder. Depois da DM da automação, o Instagram só libera mais mensagens quando ela responde no direct (ou, se ela já tinha falado, quando passam 24h da última mensagem dela).",
   "You took over this conversation, so automations and the AI stay quiet.":
     "Você assumiu essa conversa, então as automações e a IA ficam quietas.",
   "There is already a draft waiting for this person.": "Já tem um rascunho esperando pra essa pessoa.",
@@ -562,7 +562,7 @@ export const pt: Record<string, string> = {
   "Only a person can approve a draft.": "Só uma pessoa pode aprovar um rascunho.",
   "Something went wrong. Try again.": "Algo deu errado. Tente de novo.",
   "Network error": "Erro de conexão",
-  "24h window closed": "Janela de 24h fechada",
+  "24h window closed": "Esperando a pessoa responder",
   "Window open · {h}h left": "Janela aberta · faltam {h}h",
   "you replied in the Direct": "você respondeu pelo Direct",
   "you replied from the phone": "você respondeu pelo celular",
@@ -580,7 +580,7 @@ export const pt: Record<string, string> = {
   "Proposed reply": "Resposta proposta",
   "At most 1000 characters": "No máximo 1000 caracteres",
   "The 24-hour window closed. Instagram won't deliver this until the person messages you again.":
-    "A janela de 24h fechou. O Instagram não entrega isso até a pessoa te mandar mensagem de novo.",
+    "Esperando a pessoa responder. O Instagram só entrega isso depois que ela te mandar uma mensagem no direct.",
   "You took over this conversation. You can still send this draft yourself.":
     "Você assumiu essa conversa. Ainda dá pra enviar esse rascunho você mesmo.",
   "Save edit": "Salvar edição",
