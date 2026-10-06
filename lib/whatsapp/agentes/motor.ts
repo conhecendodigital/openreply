@@ -18,12 +18,12 @@ import { lerSaida, montarComando } from "./comando";
 import { abrirChave } from "./credenciais";
 import { descreverInventadas, afirmacoesInventadas } from "./guardas";
 import { PERGUNTAS_CHECAR, perguntarJev, type JevOpcoes } from "./jev";
-import { custoMaximoUsdMicro, custoUsdMicro, escolherModelo } from "./modelos";
+import { custoMaximoUsdMicro, custoUsdMicro, escolherModelo, type Preco } from "./modelos";
 import { janelaAberta, resolverModo, takeoverAtivo, TAKEOVER_HORAS_PADRAO } from "./modo";
 import { chamarModelo, ErroModelo, type ChamarModelo } from "./provedores";
 import { autoEnviosHoje, conferirTeto, emSilencio, limitesDoAmbiente, mensagemTeto } from "./teto";
 import { triar, ultimaDoContato, type DecisaoTriagem } from "./triagem";
-import type { AgentRunRecord, AgentStore, BrainRetriever, Limites, RunStatus } from "./types";
+import type { AgenteTipo, AgentRunRecord, AgentStore, BrainRetriever, IaProvider, Limites, RunStatus, Uso } from "./types";
 
 export const MAX_TOKENS_SAIDA = 600;
 
@@ -34,6 +34,24 @@ export interface DepsMotor {
   chamar?: ChamarModelo;
   limites?: Limites;
   rng?: Sorteio;
+  /** Tabela de preços (a do /admin). Sem ela, a tabela fixa de modelos.ts. */
+  precos?: Record<string, Preco>;
+  /**
+   * Cada chamada paga ao modelo (ou barrada pelo teto), pro relatório de gastos
+   * de IA (lib/ai/usage.ts recordAiUsage). Erro aqui nunca derruba o motor.
+   */
+  registrarUso?: (uso: {
+    ownerUserId: string;
+    workspaceId: string;
+    conversationId: string;
+    contactId: string;
+    agente: AgenteTipo;
+    provider: IaProvider;
+    modelo: string;
+    uso: Uso;
+    runId: string | null;
+    bloqueado: boolean;
+  }) => Promise<void>;
   /** Avisa o usuário (sino, e-mail). Opcional. */
   notificar?: (aviso: { ownerUserId: string; conversationId: string; tipo: "handoff" | "teto" | "erro_chave"; mensagem: string }) => Promise<void>;
 }
@@ -112,7 +130,7 @@ export async function processarMensagem(
   // 2. Modelo e chave
   const config = configs.find((c) => c.agente === tri.agente && c.ativo) ?? configs.find((c) => c.ativo)!;
   base.agente = config.agente;
-  const escolha = escolherModelo(config, tri);
+  const escolha = escolherModelo(config, tri, deps.precos);
   base.provider = escolha.provider;
   base.model = escolha.modelo;
   const cred = await store.credencialAtiva(ctx.ownerUserId, escolha.provider);
@@ -161,7 +179,7 @@ export async function processarMensagem(
 
   // 4. Teto (pior caso antes de gastar)
   const caracteres = comando.sistemaFixo.length + comando.sistemaVariavel.length + comando.mensagens.reduce((s, m) => s + m.content.length, 0);
-  const custoPrevisto = custoMaximoUsdMicro(escolha.modelo, caracteres, MAX_TOKENS_SAIDA);
+  const custoPrevisto = custoMaximoUsdMicro(escolha.modelo, caracteres, MAX_TOKENS_SAIDA, deps.precos);
   const teto = await conferirTeto(
     store,
     {
@@ -177,6 +195,7 @@ export async function processarMensagem(
   if (!teto.ok) {
     const motivo = mensagemTeto(teto.motivo);
     const runId = await registrar("blocked", { blockedReason: motivo });
+    await usar(deps, ctx, config.agente, escolha.provider, escolha.modelo, { tokensIn: 0, tokensOut: 0, cacheRead: 0, cacheWrite: 0 }, runId, true);
     await deps.notificar?.({ ownerUserId: ctx.ownerUserId, conversationId: ctx.conversation.id, tipo: "teto", mensagem: motivo });
     return { acao: "ignorado", motivo, runId };
   }
@@ -213,8 +232,9 @@ export async function processarMensagem(
     tokensOut: resposta.uso.tokensOut,
     cacheRead: resposta.uso.cacheRead,
     cacheWrite: resposta.uso.cacheWrite,
-    custoUsdMicro: custoUsdMicro(escolha.modelo, resposta.uso),
+    custoUsdMicro: custoUsdMicro(escolha.modelo, resposta.uso, deps.precos),
   });
+  await usar(deps, ctx, config.agente, escolha.provider, escolha.modelo, resposta.uso, runReservado, false);
 
   const saida = lerSaida(resposta.texto);
   if (!saida) {
@@ -265,7 +285,8 @@ export async function processarMensagem(
     }
   }
   if (modo.modo === "AUTO" && !motivoRascunho) {
-    const envios = planejarRitmo(bolhas, deps.rng);
+    const atraso = ctx.profile?.atrasoInicialMs;
+    const envios = planejarRitmo(bolhas, deps.rng, atraso ? { esperaInicialMinMs: atraso.min, esperaInicialMaxMs: atraso.max } : {});
     if (!janelaAberta(ultima.sentAt, now, duracaoTotalMs(envios))) {
       motivoRascunho = "A janela de 24h fecha antes do envio terminar.";
     } else {
@@ -281,6 +302,35 @@ export async function processarMensagem(
   }
   const runId = await registrar("draft", { output, blockedReason: motivoRascunho });
   return { acao: "rascunho", runId, bolhas, alerta: motivoRascunho };
+}
+
+async function usar(
+  deps: DepsMotor,
+  ctx: { ownerUserId: string; workspaceId: string; conversation: { id: string }; contact: { id: string } },
+  agente: AgenteTipo,
+  provider: IaProvider,
+  modelo: string,
+  uso: Uso,
+  runId: string | null,
+  bloqueado: boolean
+) {
+  if (!deps.registrarUso) return;
+  try {
+    await deps.registrarUso({
+      ownerUserId: ctx.ownerUserId,
+      workspaceId: ctx.workspaceId,
+      conversationId: ctx.conversation.id,
+      contactId: ctx.contact.id,
+      agente,
+      provider,
+      modelo,
+      uso,
+      runId,
+      bloqueado,
+    });
+  } catch {
+    // O relatório não pode derrubar a resposta.
+  }
 }
 
 async function passarPraHumano(
@@ -302,7 +352,7 @@ async function passarPraHumano(
 
 /* ---------- Aprovação do rascunho ---------- */
 
-export type FalhaAprovacao = "nao_encontrado" | "nao_pendente" | "janela_fechada" | "vazio";
+export type FalhaAprovacao = "nao_encontrado" | "nao_pendente" | "janela_fechada" | "vazio" | "falha_envio";
 
 export async function aprovarRascunho(
   deps: Pick<DepsMotor, "store" | "rng">,
@@ -321,14 +371,24 @@ export async function aprovarRascunho(
   if (!janelaAberta(ultima?.sentAt ?? null, now, duracaoTotalMs(envios))) {
     return { ok: false, erro: "janela_fechada", mensagem: "Passaram 24h da última mensagem do contato. Agora só ele pode puxar a conversa." };
   }
-  await deps.store.atualizarRun(run.id!, {
-    status: "approved",
-    approvedBy: input.aprovadoPor,
-    output: { bolhas, motivo: run.output?.motivo ?? null },
-  });
-  const jobId = await deps.store.agendarEnvio({ runId: run.id!, conversationId: run.conversationId, sessionId: run.sessionId, envios });
+  const output = { bolhas, motivo: run.output?.motivo ?? null };
+  if (deps.store.marcarAprovado) {
+    // Atômico: só o primeiro clique passa.
+    if (!(await deps.store.marcarAprovado(run.id!, input.aprovadoPor, output))) {
+      return { ok: false, erro: "nao_pendente", mensagem: "Esse rascunho já foi tratado." };
+    }
+  } else {
+    await deps.store.atualizarRun(run.id!, { status: "approved", approvedBy: input.aprovadoPor, output });
+  }
+  // "scheduled" antes de entrar na fila: o envio confere podeEnviar, que só aceita run agendado.
   await deps.store.atualizarRun(run.id!, { status: "scheduled" });
-  return { ok: true, jobId, bolhas };
+  try {
+    const jobId = await deps.store.agendarEnvio({ runId: run.id!, conversationId: run.conversationId, sessionId: run.sessionId, envios });
+    return { ok: true, jobId, bolhas };
+  } catch {
+    await deps.store.atualizarRun(run.id!, { status: "draft", approvedBy: null });
+    return { ok: false, erro: "falha_envio", mensagem: "Não deu pra colocar o envio na fila agora. Tente de novo." };
+  }
 }
 
 export async function rejeitarRascunho(store: AgentStore, input: { runId: string; ownerUserId: string }): Promise<boolean> {

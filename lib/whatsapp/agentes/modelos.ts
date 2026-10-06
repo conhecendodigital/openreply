@@ -31,8 +31,23 @@ export const PRECOS: Record<string, Preco> = {
 };
 
 /** Modelos que a tela pode oferecer. Qualquer outro é recusado (preço desconhecido quebra o teto). */
-export function modeloConhecido(modelo: string): boolean {
-  return Object.prototype.hasOwnProperty.call(PRECOS, modelo);
+export function modeloConhecido(modelo: string, tabela: Record<string, Preco> = PRECOS): boolean {
+  return Object.prototype.hasOwnProperty.call(tabela, modelo);
+}
+
+/**
+ * Tabela de preços do /admin (lib/ai/catalog.ts, editável) no formato do motor.
+ * Só conversa (anthropic e openai); TypeSafe/Jev fica fora.
+ */
+export function precosDaPlataforma(
+  prices: Record<string, { provider: string; input: number; output: number; cacheRead: number; cacheWrite: number }>
+): Record<string, Preco> {
+  const out: Record<string, Preco> = {};
+  for (const [modelo, p] of Object.entries(prices)) {
+    if (p.provider !== "anthropic" && p.provider !== "openai") continue;
+    out[modelo] = { provider: p.provider, entrada: p.input, saida: p.output, cacheLeitura: p.cacheRead, cacheEscrita: p.cacheWrite };
+  }
+  return Object.keys(out).length ? out : PRECOS;
 }
 
 export interface Escolha {
@@ -41,10 +56,15 @@ export interface Escolha {
   motivo: "padrao" | "dificil";
 }
 
-export function escolherModelo(config: AgenteConfig, sinais: { dificil: boolean; incerto: boolean }): Escolha {
+export function escolherModelo(
+  config: AgenteConfig,
+  sinais: { dificil: boolean; incerto: boolean },
+  tabela: Record<string, Preco> = PRECOS
+): Escolha {
   const padrao = config.provider === "anthropic" ? MODELO_HAIKU : MODELO_GPT_MINI;
   const dificilPadrao = config.provider === "anthropic" ? MODELO_SONNET : MODELO_GPT_MINI;
-  const valido = (m: string | null | undefined) => (m && modeloConhecido(m) && PRECOS[m].provider === config.provider ? m : null);
+  const valido = (m: string | null | undefined) =>
+    m && modeloConhecido(m, tabela) && tabela[m].provider === config.provider ? m : null;
   const base = valido(config.modelo) ?? padrao;
   if (sinais.dificil || sinais.incerto) {
     return { provider: config.provider, modelo: valido(config.modeloDificil) ?? dificilPadrao, motivo: "dificil" };
@@ -53,8 +73,8 @@ export function escolherModelo(config: AgenteConfig, sinais: { dificil: boolean;
 }
 
 /** Custo em micro-dólar (1 dólar = 1.000.000), inteiro pra somar no banco sem erro de ponto flutuante. */
-export function custoUsdMicro(modelo: string, uso: Uso): number {
-  const p = PRECOS[modelo];
+export function custoUsdMicro(modelo: string, uso: Uso, tabela: Record<string, Preco> = PRECOS): number {
+  const p = tabela[modelo] ?? PRECOS[modelo];
   if (!p) return 0;
   // $/1M tokens * tokens = micro-dólar direto.
   const total = p.entrada * uso.tokensIn + p.saida * uso.tokensOut + p.cacheLeitura * uso.cacheRead + p.cacheEscrita * uso.cacheWrite;
@@ -67,6 +87,11 @@ export function estimarTokens(texto: string): number {
 }
 
 /** Pior caso de uma chamada (sem cache, saída cheia), usado antes de chamar. */
-export function custoMaximoUsdMicro(modelo: string, caracteresEntrada: number, maxTokensSaida: number): number {
-  return custoUsdMicro(modelo, { tokensIn: Math.ceil(caracteresEntrada / 3.5), tokensOut: maxTokensSaida, cacheRead: 0, cacheWrite: 0 });
+export function custoMaximoUsdMicro(
+  modelo: string,
+  caracteresEntrada: number,
+  maxTokensSaida: number,
+  tabela: Record<string, Preco> = PRECOS
+): number {
+  return custoUsdMicro(modelo, { tokensIn: Math.ceil(caracteresEntrada / 3.5), tokensOut: maxTokensSaida, cacheRead: 0, cacheWrite: 0 }, tabela);
 }

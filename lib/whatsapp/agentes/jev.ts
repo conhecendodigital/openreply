@@ -35,6 +35,8 @@ export interface JevOpcoes {
   timeoutMs?: number;
   tentativas?: number;
   esperar?: (ms: number) => Promise<void>;
+  /** Cada chamada que deu certo (tokens de entrada), pro relatório de gastos de IA. */
+  aoUsar?: (tokens: number) => Promise<void> | void;
 }
 
 const esperaPadrao = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -101,6 +103,7 @@ export async function perguntarJev(
       } else {
         const dados = (await res.json()) as { answers?: Record<string, unknown>; usage?: { input_tokens?: number } };
         const { respostas, incerto } = interpretar(dados.answers ?? {});
+        await Promise.resolve(opcoes.aoUsar?.(dados.usage?.input_tokens ?? 0)).catch(() => {});
         return { ok: true, respostas, incerto, tokens: dados.usage?.input_tokens ?? 0, ms: Date.now() - inicio };
       }
     } catch (e) {

@@ -1,5 +1,5 @@
 /**
- * Acesso ao banco do cérebro (tabelas de prisma/migrations-wa/cerebro/).
+ * Acesso ao banco do cérebro (tabelas da migração 20261015130000_wa_cerebro).
  * Toda consulta filtra por workspaceId no código, e a RLS confere de novo.
  */
 import { randomUUID } from "node:crypto";
@@ -67,8 +67,40 @@ export interface ChunkSearch {
   limit: number;
 }
 
+/**
+ * Como a coluna "embedding" foi criada (migração 20261015130000_wa_cerebro):
+ * vector(1536) com pgvector, ou real[] quando o Postgres não tem a extensão.
+ */
+export type VectorMode = "pgvector" | "array";
+
+/** Olha o tipo da coluna no banco. Na dúvida, pgvector (o padrão do plano). */
+export async function detectVectorMode(db: SqlExecutor): Promise<VectorMode> {
+  const rows = await db.query<{ t: string | null }>(
+    `SELECT format_type(atttypid, atttypmod) AS t FROM pg_attribute
+     WHERE attrelid = to_regclass('whatsapp."WaKnowledgeChunk"') AND attname = 'embedding'`
+  );
+  const t = rows[0]?.t ?? "";
+  return t === "real[]" ? "array" : "pgvector";
+}
+
+/** '{0.1,0.2}' pra coluna real[] (mesma checagem do literal do pgvector). */
+function toArrayLiteral(vector: number[]): string {
+  return `{${toVectorLiteral(vector).slice(1, -1)}}`;
+}
+
 export class CerebroStore {
-  constructor(private readonly db: SqlExecutor) {}
+  constructor(
+    private readonly db: SqlExecutor,
+    private readonly vectorMode: VectorMode = "pgvector"
+  ) {}
+
+  private get vecCast(): string {
+    return this.vectorMode === "array" ? "real[]" : "vector";
+  }
+
+  private vecLiteral(vector: number[]): string {
+    return this.vectorMode === "array" ? toArrayLiteral(vector) : toVectorLiteral(vector);
+  }
 
   // ─── Documentos ────────────────────────────────────────────────────────────
 
@@ -161,10 +193,10 @@ export class CerebroStore {
           params.push(
             doc.id, doc.ownerUserId, doc.workspaceId, doc.agentKind, doc.sessionId,
             chunk.position, chunk.page, chunk.content, chunk.tokenEstimate,
-            info.embeddingModel, toVectorLiteral(chunk.embedding)
+            info.embeddingModel, this.vecLiteral(chunk.embedding)
           );
           const p = (n: number) => `$${base + n}`;
-          return `(${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, ${p(10)}, ${p(11)}::vector)`;
+          return `(${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, ${p(10)}, ${p(11)}::${this.vecCast})`;
         });
         await tx.query(
           `INSERT INTO ${T_CHUNK} ("documentId", "ownerUserId", "workspaceId", "agentKind", "sessionId",
@@ -195,6 +227,9 @@ export class CerebroStore {
 
   /** Os `limit` pedaços mais próximos (cosseno), sem limiar; o limiar fica em search.ts. */
   async nearestChunks(search: ChunkSearch): Promise<KnowledgeHit[]> {
+    // Sem pgvector: a mesma conta (distância de cosseno) numa função SQL, sem índice.
+    const distance =
+      this.vectorMode === "array" ? `whatsapp.wa_cosine_distance(c."embedding", $1::real[])` : `c."embedding" <=> $1::vector`;
     const rows = await this.db.query<{
       chunkId: string;
       documentId: string;
@@ -204,15 +239,15 @@ export class CerebroStore {
       distance: number | string;
     }>(
       `SELECT c."id" AS "chunkId", c."documentId", d."fileName", c."page", c."content",
-              (c."embedding" <=> $1::vector) AS "distance"
+              (${distance}) AS "distance"
        FROM ${T_CHUNK} c
        JOIN ${T_DOC} d ON d."id" = c."documentId"
        WHERE c."workspaceId" = $2 AND c."agentKind" = $3 AND c."embeddingModel" = $4
          AND d."status" = 'ready'
          AND (c."sessionId" IS NULL OR c."sessionId" = $5)
-       ORDER BY c."embedding" <=> $1::vector
+       ORDER BY ${distance}
        LIMIT $6`,
-      [toVectorLiteral(search.vector), search.workspaceId, search.agentKind, search.embeddingModel,
+      [this.vecLiteral(search.vector), search.workspaceId, search.agentKind, search.embeddingModel,
         search.sessionId ?? null, search.limit]
     );
     return rows.map((row) => ({
@@ -281,8 +316,8 @@ export class SqlUsageRecorder implements UsageRecorder {
   async record(entry: AiUsageEntry): Promise<void> {
     await this.db.query(
       `INSERT INTO ${T_USAGE} ("ownerUserId", "workspaceId", "kind", "provider", "model",
-         "tokensIn", "tokensOut", "costMicroUsd", "refId")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         "tokensIn", "tokensOut", "costMicroUsd", "refId", "agent")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'cerebro')`,
       [entry.ownerUserId, entry.workspaceId, entry.kind, entry.provider, entry.model,
         Math.max(0, Math.round(entry.tokensIn)), Math.max(0, Math.round(entry.tokensOut)),
         Math.max(0, Math.round(entry.costMicroUsd)), entry.refId ?? null]

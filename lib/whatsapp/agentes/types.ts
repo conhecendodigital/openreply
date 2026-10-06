@@ -75,6 +75,8 @@ export interface AgentProfile {
   fatosPermitidos?: string[];
   /** Fuso do número, pro horário de silêncio. Padrão America/Sao_Paulo. */
   timeZone?: string;
+  /** Atraso humano antes da 1ª bolha no envio automático, em ms (padrão 20 a 90 s). */
+  atrasoInicialMs?: { min: number; max: number } | null;
 }
 
 export interface ExemploTom {
@@ -206,6 +208,12 @@ export interface AgentStore {
   definirTakeover(conversationId: string, ate: Date | null): Promise<void>;
   lerMemoria(contactId: string): Promise<MemoriaContato | null>;
   salvarMemoria(contactId: string, ownerUserId: string, memoria: MemoriaContato): Promise<void>;
+  /**
+   * Opcional: aprova o rascunho de forma atômica (só se ainda for "draft").
+   * false = outra pessoa (ou outro clique) já tratou. Sem isso, dois cliques
+   * ao mesmo tempo agendavam o envio duas vezes.
+   */
+  marcarAprovado?(runId: string, aprovadoPor: string, output: { bolhas: string[]; motivo?: string | null }): Promise<boolean>;
 }
 
 export interface Limites {

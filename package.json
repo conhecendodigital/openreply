@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate deploy",
     "worker": "tsx worker/dm-worker.ts",
     "worker:cerebro": "tsx worker/wa-cerebro-worker.ts",
+    "worker:wa": "tsx worker/wa-worker.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

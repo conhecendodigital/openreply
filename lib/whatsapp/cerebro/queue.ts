@@ -60,11 +60,11 @@ export async function runIngestJob(
   }
 }
 
-export function createCerebroWorker(depsForJob: (job: CerebroIngestJob) => IngestDeps, concurrency = 2) {
+export function createCerebroWorker(depsForJob: (job: CerebroIngestJob) => IngestDeps | Promise<IngestDeps>, concurrency = 2) {
   return new Worker<CerebroIngestJob>(
     CEREBRO_QUEUE_NAME,
     async (job: Job<CerebroIngestJob>) => {
-      const result = await runIngestJob(job.data, job.attemptsMade, depsForJob(job.data), job.opts.attempts ?? ATTEMPTS);
+      const result = await runIngestJob(job.data, job.attemptsMade, await depsForJob(job.data), job.opts.attempts ?? ATTEMPTS);
       // Só códigos e números no log: nada do conteúdo do PDF.
       console.log(`[wa-cerebro] ${job.data.documentId} ${result.status}${"errorCode" in result ? ` ${result.errorCode}` : ""}`);
       return result;
