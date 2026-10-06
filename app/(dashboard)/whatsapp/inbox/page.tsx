@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/components/lang-provider";
+import { MediaReadView } from "@/components/whatsapp-media-read";
 import { api, btnPrimary, btnSecondary, ConfirmBox, formatPhone, ServerNotice, shortTime, useServerStatus, WhatsAppTabs } from "@/components/whatsapp/ui";
 
 type Contact = { id: string; name: string | null; pushName: string | null; phoneE164: string | null; isGroup: boolean };
@@ -40,6 +41,7 @@ type Message = {
   ack: string;
   sentAt: string;
   media: { mime: string | null; filename: string | null } | null;
+  mediaRead?: { kind: string; status: string; text: string | null } | null;
   revoked: boolean;
 };
 type Draft = { runId: string; bubbles: string[]; alert: string | null; agente: string | null; createdAt: string };
@@ -382,7 +384,7 @@ export default function WhatsAppInboxPage() {
                         <p className="italic text-muted">{t("Message deleted")}</p>
                       ) : (
                         <>
-                          {m.media && <div className="mb-1"><MediaView m={m} /></div>}
+                          {m.media && <div className="mb-1"><MediaView m={m} />{m.mediaRead && <MediaReadView read={m.mediaRead} />}</div>}
                           {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                           {!m.body && !m.media && <p className="italic text-muted">{t("Message type not shown here (sticker, location or reaction)")}</p>}
                         </>

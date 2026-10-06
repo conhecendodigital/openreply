@@ -373,4 +373,17 @@ export const ptWhatsapp: Record<string, string> = {
   "This number was already deleted.": "Esse número já foi excluído.",
   "Type the name of the number exactly as it shows to confirm.": "Pra confirmar, digite o nome do número do jeito que aparece.",
   "API keys cannot delete WhatsApp numbers. Do it in the Lead Engine.": "Chave de API não pode excluir número de WhatsApp. Faça isso no Lead Engine.",
+
+  // Leitura de mídia do cliente (áudio, foto, PDF)
+  Transcription: "Transcrição",
+  "What the agent saw in the photo": "O que o agente viu na foto",
+  "What the agent read in the PDF": "O que o agente leu no PDF",
+  "the file is too big": "o arquivo é grande demais",
+  "there is no AI key in /admin": "falta a chave de IA no /admin",
+  "the daily AI spending cap was reached": "o teto diário de gasto com IA foi atingido",
+  "it could not be downloaded or read": "não deu pra baixar ou ler o arquivo",
+  "there is no text in it": "não tem texto nele",
+  "this format is not supported": "esse formato não é aceito",
+  "The agent did not read this file: {reason}.": "O agente não leu esse arquivo: {reason}.",
+  "Customer audio, photos and PDFs": "Áudios, fotos e PDFs dos clientes",
 };

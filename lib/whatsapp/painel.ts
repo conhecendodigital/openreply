@@ -481,6 +481,11 @@ export type MessageView = {
   ack: string;
   sentAt: string;
   media: { mime: string | null; filename: string | null } | null;
+  /**
+   * O que o agente leu da mídia do cliente (transcrição, descrição da foto,
+   * trecho do PDF), pro dono ver o que o agente "entendeu". null = não leu.
+   */
+  mediaRead: { kind: string; status: string; text: string | null } | null;
   revoked: boolean;
 };
 
@@ -538,6 +543,10 @@ export async function getThread(ctx: RlsContext, conversationId: string, deps: P
         ack: m.ack,
         sentAt: m.sentAt.toISOString(),
         media: MEDIA_TYPES.has(m.type) ? { mime: m.mediaMime, filename: m.mediaFilename } : null,
+        mediaRead:
+          !m.fromMe && m.mediaTextKind && m.mediaTextStatus && !m.revokedAt
+            ? { kind: m.mediaTextKind, status: m.mediaTextStatus, text: m.mediaText }
+            : null,
         revoked: Boolean(m.revokedAt),
       })),
       window: {
