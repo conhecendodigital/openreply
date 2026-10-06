@@ -13,12 +13,19 @@
  * confirmação e NUNCA apaga conversas, contatos nem configurações (regra do
  * dono: "não quero que quando canal desconectar já saia apagando tudo"). Só
  * dono ou admin do workspace conecta e desconecta.
+ *
+ * Excluir número (pedido do dono: "ter a opção de excluir o número nas
+ * conexões") é outro botão, só pra dono ou admin, com duas opções: só o número
+ * (conversas ficam guardadas, só leitura) ou número e conversas (pede o nome
+ * digitado). Números excluídos com conversas guardadas aparecem no fim da
+ * página, com a opção de apagar as conversas depois.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/components/lang-provider";
 import {
   api,
+  btn,
   btnDanger,
   btnPrimary,
   btnSecondary,
@@ -52,6 +59,30 @@ type Pairing = { id: string; qr: string | null; pairCode: string | null; proxyWa
 
 type Overview = { configured: boolean; max: number; used: number; remaining: number; source: "server" | "local" };
 
+type Removed = { id: string; provider: Provider; label: string; phoneE164: string | null; displayName: string | null; deletedAt: string; conversationCount: number; messageCount: number };
+
+type DeleteTarget = { id: string; provider: Provider; label: string; phoneE164: string | null; displayName: string | null; alreadyRemoved: boolean };
+
+type DeleteResponse = { mode: "number_only" | "number_and_conversations"; providerOk: boolean; provider: Provider; providerRef: string; label: string };
+
+/** O que a pessoa digita pra confirmar: o nome, ou o número se não tiver nome (igual ao servidor). */
+function confirmLabel(s: { displayName: string | null; phoneE164: string | null }): string {
+  return s.displayName?.trim() || s.phoneE164 || "WhatsApp";
+}
+
+function sameName(typed: string, s: { displayName: string | null; phoneE164: string | null }): boolean {
+  const norm = (v: string) => v.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+  const t = norm(typed);
+  if (!t) return false;
+  if (t === norm(confirmLabel(s))) return true;
+  const digits = t.replace(/\D/g, "");
+  return Boolean(s.phoneE164 && digits.length >= 8 && digits === s.phoneE164.replace(/\D/g, ""));
+}
+
+function providerName(p: Provider): string {
+  return p === "UAZAPI" ? "uazapi" : p === "OPENWA" ? "OpenWA" : "Meta";
+}
+
 type ConnectResponse = { session: Session; qr: string | null; pairCode?: string | null; proxyWarning?: boolean };
 
 /** O QR do WhatsApp troca a cada ~20 s: a tela pergunta de novo a cada 3 s. */
@@ -70,14 +101,31 @@ export default function WhatsAppConnectionsPage() {
   const [reconnecting, setReconnecting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [removed, setRemoved] = useState<Removed[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  // Excluir é só pra dono ou admin do workspace (o servidor confere de novo).
+  const canManage = role === "OWNER" || role === "ADMIN";
 
   const load = useCallback(async () => {
-    const r = await api<{ sessions: Session[] }>("/api/whatsapp/sessions");
+    const r = await api<{ sessions: Session[]; removed?: Removed[] }>("/api/whatsapp/sessions");
     if (r.ok) {
       setSessions(r.data.sessions);
+      setRemoved(r.data.removed ?? []);
       setLoadError(null);
     } else setLoadError(t(r.error));
   }, [t]);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const r = await api<{ currentUserRole: string }>("/api/workspace/members");
+      if (alive && r.ok) setRole(r.data.currentUserRole);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const loadOverview = useCallback(async () => {
     const r = await api<Overview>("/api/whatsapp/uazapi");
@@ -155,6 +203,36 @@ export default function WhatsAppConnectionsPage() {
         ? t("Number disconnected. Conversations, contacts and settings stay saved.")
         : t("The number is marked as disconnected here, but the gateway did not answer. Conversations, contacts and settings stay saved."),
     });
+  }
+
+  async function deleteNumber(target: DeleteTarget, mode: "number_only" | "number_and_conversations", confirmName: string) {
+    setBusy(true);
+    const r = await api<DeleteResponse>(`/api/whatsapp/sessions/${target.id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ mode, confirmName }),
+    });
+    setBusy(false);
+    if (!r.ok) return setNotice({ ok: false, text: t(r.error) });
+    setConfirmDelete(null);
+    if (pairing?.id === target.id) setPairing(null);
+    if (reconnecting === target.id) setReconnecting(null);
+    setSessions((cur) => (cur ?? []).filter((x) => x.id !== target.id));
+    void load();
+    void loadOverview();
+    const name = providerName(r.data.provider);
+    setNotice(
+      !r.data.providerOk
+        ? {
+            ok: false,
+            text: t("The number left the Lead Engine, but the {provider} did not answer. Check the {provider} panel and delete it there too (id {ref}).", {
+              provider: name,
+              ref: r.data.providerRef,
+            }),
+          }
+        : mode === "number_only"
+          ? { ok: true, text: t("Number deleted. Its conversations stay saved in Conversations, only for reading.") }
+          : { ok: true, text: target.alreadyRemoved ? t("Saved conversations deleted.") : t("Number and conversations deleted.") }
+    );
   }
 
   return (
@@ -266,10 +344,67 @@ export default function WhatsAppConnectionsPage() {
                   {t("Disconnect")}
                 </button>
               )}
+              {canManage && (
+                <button
+                  type="button"
+                  className={`${btn} ml-auto text-error hover:bg-error/10`}
+                  disabled={busy}
+                  onClick={() =>
+                    setConfirmDelete({ id: s.id, provider: s.provider, label: confirmLabel(s), phoneE164: s.phoneE164, displayName: s.displayName, alreadyRemoved: false })
+                  }
+                >
+                  {t("Delete number")}
+                </button>
+              )}
             </div>
           </article>
         ))}
       </div>
+
+      {removed.length > 0 && (
+        <section className="space-y-2" aria-labelledby="wa-removed-title">
+          <h2 id="wa-removed-title" className="text-sm font-semibold text-foreground">
+            {t("Deleted numbers with saved conversations")}
+          </h2>
+          <p className="text-sm text-muted">{t("These numbers left Connections. Their conversations stay in Conversations, only for reading.")}</p>
+          <ul className="panel divide-y divide-border rounded-xl">
+            {removed.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{r.displayName || formatPhone(r.phoneE164) || "WhatsApp"}</p>
+                  <p className="text-xs text-muted">
+                    {t("Deleted on {date}", { date: new Date(r.deletedAt).toLocaleDateString() })}
+                    {" · "}
+                    {t("{c} conversations, {m} messages saved", { c: r.conversationCount, m: r.messageCount })}
+                  </p>
+                </div>
+                {canManage && (
+                  <button
+                    type="button"
+                    className={btnDanger}
+                    disabled={busy}
+                    onClick={() =>
+                      setConfirmDelete({ id: r.id, provider: r.provider, label: r.label, phoneE164: r.phoneE164, displayName: r.displayName, alreadyRemoved: true })
+                    }
+                  >
+                    {t("Delete saved conversations")}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {confirmDelete && (
+        <DeleteNumberDialog
+          key={confirmDelete.id}
+          target={confirmDelete}
+          busy={busy}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={(mode, name) => void deleteNumber(confirmDelete, mode, name)}
+        />
+      )}
 
       {confirmOff && (
         <ConfirmBox
@@ -289,6 +424,84 @@ export default function WhatsAppConnectionsPage() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Confirmação do Excluir número. Duas opções; a que apaga as conversas só
+ * libera o botão depois de digitar o nome do número.
+ */
+function DeleteNumberDialog({
+  target,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  target: DeleteTarget;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (mode: "number_only" | "number_and_conversations", confirmName: string) => void;
+}) {
+  const t = useT();
+  const [mode, setMode] = useState<"number_only" | "number_and_conversations">(target.alreadyRemoved ? "number_and_conversations" : "number_only");
+  const [typed, setTyped] = useState("");
+  const wipe = mode === "number_and_conversations";
+  const nameOk = sameName(typed, target);
+  const provider = providerName(target.provider);
+  return (
+    <ConfirmBox
+      title={target.alreadyRemoved ? t("Delete the saved conversations?") : t("Delete this number?")}
+      danger
+      busy={busy}
+      confirmDisabled={wipe && !nameOk}
+      confirmLabel={wipe ? (target.alreadyRemoved ? t("Delete conversations") : t("Delete number and conversations")) : t("Delete only the number")}
+      onCancel={onCancel}
+      onConfirm={() => onConfirm(mode, typed)}
+      body={
+        <>
+          {target.alreadyRemoved ? (
+            <p>{t("Deletes the conversations, messages, media, webhook events and the agent memory and drafts of this number. Other numbers and Instagram are not touched. You cannot undo this.")}</p>
+          ) : (
+            <fieldset className="space-y-2">
+              <legend className="sr-only">{t("What do you want to delete?")}</legend>
+              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${!wipe ? "border-accent bg-accent/5" : "border-border"}`}>
+                <input type="radio" name="wa-delete-mode" className="mt-1 h-4 w-4" checked={!wipe} onChange={() => setMode("number_only")} />
+                <span>
+                  <span className="block font-semibold text-foreground">{t("Delete only the number")}</span>
+                  <span className="block">
+                    {t("The number leaves the {provider} and disappears from Connections. Conversations, contacts and messages stay saved: you can still read them in Conversations, but you cannot send from this number anymore.", { provider })}
+                  </span>
+                </span>
+              </label>
+              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${wipe ? "border-error bg-error/5" : "border-border"}`}>
+                <input type="radio" name="wa-delete-mode" className="mt-1 h-4 w-4" checked={wipe} onChange={() => setMode("number_and_conversations")} />
+                <span>
+                  <span className="block font-semibold text-foreground">{t("Delete number and conversations")}</span>
+                  <span className="block">
+                    {t("The same, and it also deletes the conversations, messages, media, webhook events and the agent memory and drafts of this number. Other numbers and Instagram are not touched. You cannot undo this.")}
+                  </span>
+                </span>
+              </label>
+            </fieldset>
+          )}
+          {!target.alreadyRemoved && target.provider === "UAZAPI" && <p>{t("On the uazapi, the device of your plan is free again.")}</p>}
+          {wipe && (
+            <label className="block space-y-1">
+              <span className="text-foreground">{t("To confirm, type the name of the number: {name}", { name: target.label })}</span>
+              <input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                maxLength={120}
+                autoComplete="off"
+                aria-label={t("Name of the number")}
+                className={INPUT}
+              />
+            </label>
+          )}
+          {!target.alreadyRemoved && <p className="text-xs">{t("If you only want to stop using it for a while, use Disconnect: it deletes nothing.")}</p>}
+        </>
+      }
+    />
   );
 }
 

@@ -142,6 +142,7 @@ export function ConfirmBox({
   confirmLabel,
   danger,
   busy,
+  confirmDisabled,
   onConfirm,
   onCancel,
 }: {
@@ -150,6 +151,8 @@ export function ConfirmBox({
   confirmLabel: string;
   danger?: boolean;
   busy?: boolean;
+  /** Ex.: enquanto a pessoa não digitou o nome pra confirmar. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -163,7 +166,7 @@ export function ConfirmBox({
           <button type="button" onClick={onCancel} disabled={busy} className={btnSecondary}>
             {t("Cancel")}
           </button>
-          <button type="button" onClick={onConfirm} disabled={busy} className={danger ? btnDanger : btnPrimary}>
+          <button type="button" onClick={onConfirm} disabled={busy || confirmDisabled} className={danger ? btnDanger : btnPrimary}>
             {busy ? t("Wait…") : confirmLabel}
           </button>
         </div>
