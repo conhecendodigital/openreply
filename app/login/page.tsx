@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getCampaignTemplate } from "@/lib/templates/campaign-templates";
 import { DemoNotice } from "@/components/demo-notice";
+import LegalCompanyLine from "@/components/legal-company-line";
 import { getT } from "@/lib/i18n/server";
 import { LeadEngineLogo } from "@/components/sidebar";
 import { LangSwitch } from "@/components/lang-provider";
@@ -97,7 +98,7 @@ export default async function LoginPage({
           <span>{t("Language")}</span>
           <LangSwitch />
         </div>
-        <p className="mt-4">© 2026 Lead Engine</p>
+        <LegalCompanyLine className="mt-4" />
       </footer>
     </div>
   );

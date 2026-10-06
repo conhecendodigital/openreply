@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { DemoNotice } from "@/components/demo-notice";
 import PublicSiteHeader from "@/components/public-site-header";
+import LegalCompanyLine from "@/components/legal-company-line";
 import { LeadEngineLogo } from "@/components/sidebar";
 import { getT } from "@/lib/i18n/server";
 import type { TFunction } from "@/lib/i18n";
@@ -415,7 +416,7 @@ export default async function Home() {
             <Link href="/templates" className="hover:underline">{t("Templates")}</Link>
           </nav>
           <p>{t("Uses the official Meta API. Not affiliated with Meta or Instagram.")}</p>
-          <p>© 2026 Lead Engine</p>
+          <LegalCompanyLine />
         </div>
       </footer>
     </div>
