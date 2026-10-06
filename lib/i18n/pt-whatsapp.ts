@@ -120,6 +120,9 @@ export const ptWhatsapp: Record<string, string> = {
   "Turned on": "Ligado",
   "No agent answers on this number. You answer everything in Conversations.": "Nenhum agente responde neste número. Você responde tudo em Conversas.",
   "On, as drafts": "Ligado, em rascunho",
+  "On, automatic": "Ligado, automático",
+  "The agents answer by themselves, with the human delay, quiet hours and daily limit below. They hand the conversation to you only when the lead is qualified or asks for a person. An answer with a price, deadline or phone that is not in your data stays as a draft.":
+    "Os agentes respondem sozinhos, com o atraso humano, o horário de silêncio e o limite por dia lá embaixo. Eles só passam a conversa pra você quando o lead fica qualificado ou pede uma pessoa. Resposta com preço, prazo ou telefone que não está nos seus dados fica como rascunho.",
   "The agents you turn on below write the answer and it waits for you. You approve, edit or discard it in Conversations.":
     "Os agentes que você ligar aqui embaixo escrevem a resposta e ela espera por você. Você aprova, edita ou descarta em Conversas.",
   "Turn on at least one agent below, or nothing happens.": "Ligue pelo menos um agente aqui embaixo, senão nada acontece.",

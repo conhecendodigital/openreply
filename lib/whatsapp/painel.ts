@@ -738,7 +738,7 @@ export async function messageMedia(
 export type AgentsView = {
   sessions: Array<{ id: string; label: string; status: WaStatus }>;
   sessionId: string | null;
-  numberMode: "OFF" | "DRAFT";
+  numberMode: "OFF" | "DRAFT" | "AUTO";
   profile: {
     baseCommand: string;
     quietStart: string;
@@ -780,7 +780,7 @@ export async function getAgents(ctx: RlsContext, sessionId: string | null, deps:
     return {
       sessions: sessions.map((s) => ({ id: s.id, label: s.displayName || s.phoneE164 || "WhatsApp", status: s.status })),
       sessionId: chosen.id,
-      numberMode: chosen.agentMode === "OFF" || chosen.agentMode === "INHERIT" ? "OFF" : "DRAFT",
+      numberMode: chosen.agentMode === "OFF" || chosen.agentMode === "INHERIT" ? "OFF" : chosen.agentMode === "AUTO" ? "AUTO" : "DRAFT",
       profile: profile
         ? {
             baseCommand: profile.baseCommand,
@@ -828,7 +828,7 @@ export async function saveAgents(ctx: RlsContext, input: Record<string, unknown>
     delayMaxSeconds: delayMax,
     fatosPermitidos: facts,
   };
-  const numberMode = input.numberMode === "DRAFT" ? "DRAFT" : "OFF";
+  const numberMode = input.numberMode === "DRAFT" || input.numberMode === "AUTO" ? input.numberMode : "OFF";
   const agentsIn = Array.isArray(input.agents) ? (input.agents as Array<Record<string, unknown>>) : [];
 
   await rls(ctx, deps, async (tx) => {

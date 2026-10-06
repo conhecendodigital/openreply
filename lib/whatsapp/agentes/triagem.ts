@@ -27,7 +27,11 @@ export interface DecisaoTriagem {
 const SO_CONFIRMACAO =
   /^(ok+|okay|blz|beleza|show|top|massa|valeu|vlw|obg|obrigad[oa]s?|muito obrigad[oa]|brigad[oa]|grat[oa]|tmj|certo|entendi|perfeito|combinado|fechado|t[aá] bom|t[aá]|sim|ss|kk+|haha+|rs+|amém|amem|deus aben[cç]oe|👍|🙏|❤️|😊)[\s!.,]*$/i;
 
-const SENSIVEL =
+const PEDE_PESSOA =
+  /\b(falar|conversar|fala|quero|chama|chamar|passa|passar)\b.{0,20}\b(com )?(um |uma |o |a )?(humano|pessoa|atendente|gerente|dono|respons[aá]vel|algu[eé]m de verdade)\b/i;
+
+/** Kept for reference and tests; no longer transfers by itself (2026-10-06). */
+export const SENSIVEL =
   /\b(reembolso|estorno|devolu[cç][aã]o|cancelar|cancelamento|procon|advogad[oa]|processo|reclame ?aqui|golpe|fraude|denunciar|denúncia|chargeback|absurdo|palha[cç]ada|falar com (um|uma)? ?(humano|pessoa|atendente|gerente|dono))\b/i;
 
 // Pares substitutos (emoji) e símbolos comuns, sem flag "u" (alvo ES2017).
@@ -46,7 +50,9 @@ export function triagemLocal(texto: string): Pick<DecisaoTriagem, "acao" | "moti
   if (!t) return { acao: "nao_precisa", motivo: "mensagem sem texto" };
   if (SO_EMOJI.test(t)) return { acao: "nao_precisa", motivo: "só emoji" };
   if (t.length <= 40 && SO_CONFIRMACAO.test(t)) return { acao: "nao_precisa", motivo: "só confirmação ou agradecimento" };
-  if (SENSIVEL.test(t)) return { acao: "humano", motivo: "assunto sensível (reclamação, reembolso ou pedido de pessoa)" };
+  // 2026-10-06 (Matheus: "só transferir quando qualificar"): só o pedido explícito
+  // de falar com uma pessoa transfere. Reclamação e reembolso o agente responde com cuidado.
+  if (PEDE_PESSOA.test(t)) return { acao: "humano", motivo: "pediu pra falar com uma pessoa" };
   return null;
 }
 
@@ -80,9 +86,11 @@ export async function triar(
     return { ...local, agente: padrao, dificil: false, incerto: false, fonte: "regra", jevTokens: 0 };
   }
   if (!texto.trim()) {
-    // Áudio, figurinha, imagem sem legenda: o agente não entende, humano vê.
+    // 2026-10-06: áudio, foto e documento o agente responde (sem transferir);
+    // figurinha e reação não pedem resposta.
+    const semResposta = !ultima || ultima.type === "sticker" || ultima.type === "reaction";
     return {
-      acao: ultima ? "humano" : "nao_precisa",
+      acao: semResposta ? "nao_precisa" : "responder",
       motivo: ultima ? `mensagem do tipo ${ultima.type} sem texto` : "sem mensagem do contato",
       agente: padrao,
       dificil: false,
@@ -99,11 +107,14 @@ export async function triar(
   );
 
   if (!r.ok) {
+    // Jev desligado de propósito (sem chave, LGPD) não é dúvida: o agente responde
+    // e o envio automático segue, com as travas de conteúdo valendo.
+    const desligado = r.erro === "sem_chave";
     return {
       acao: "responder",
       agente: padrao,
       dificil: true,
-      incerto: true,
+      incerto: !desligado,
       fonte: "fallback",
       motivo: `Jev indisponível (${r.erro})`,
       jevTokens: 0,

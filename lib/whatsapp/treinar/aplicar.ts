@@ -7,7 +7,7 @@
 import type { RascunhoTreino } from "./esquema";
 
 export interface VistaAgentesTreino {
-  numberMode: "OFF" | "DRAFT";
+  numberMode: "OFF" | "DRAFT" | "AUTO";
   profile: {
     baseCommand: string;
     quietStart: string;

@@ -243,10 +243,31 @@ export async function processarMensagem(
   }
   const bolhas = quebrarEmBolhas(saida.bolhas);
   if (saida.passarPraHumano || bolhas.length === 0) {
-    return passarPraHumano(deps, ctx.ownerUserId, ctx.conversation.id, now, registrar, saida.motivo || "o agente não soube responder", {
+    // 2026-10-06 (Matheus): transfere quando o lead fica qualificado (ou pede uma
+    // pessoa); o resumo pra equipe vai no motivo e no aviso.
+    const motivoHumano = saida.qualificado
+      ? `lead qualificado${saida.resumoEquipe ? `: ${saida.resumoEquipe}` : ""}`
+      : saida.motivo || "o agente não soube responder";
+    const resultado = await passarPraHumano(deps, ctx.ownerUserId, ctx.conversation.id, now, registrar, motivoHumano.slice(0, 1500), {
       bolhas,
       motivo: saida.motivo,
     });
+    // No automático, a mensagem de encaminhamento ainda sai pro cliente (aprovada
+    // pelo sistema, então passa pela pausa) e depois o agente fica parado ali.
+    if (modo.modo === "AUTO" && bolhas.length > 0) {
+      const atraso = ctx.profile?.atrasoInicialMs;
+      const envios = planejarRitmo(bolhas, deps.rng, atraso ? { esperaInicialMinMs: atraso.min, esperaInicialMaxMs: atraso.max } : {});
+      if (janelaAberta(ultima.sentAt, now, duracaoTotalMs(envios))) {
+        const runId = await store.registrarRun({ ...base, status: "scheduled", output: { bolhas, motivo: saida.motivo || null } });
+        await store.atualizarRun(runId, { approvedBy: "sistema:encaminhamento" });
+        try {
+          await store.agendarEnvio({ runId, conversationId: ctx.conversation.id, sessionId: ctx.session.id, envios });
+        } catch {
+          await store.atualizarRun(runId, { status: "draft", blockedReason: "Não deu pra agendar a mensagem de encaminhamento; ficou como rascunho." });
+        }
+      }
+    }
+    return resultado;
   }
   const output = { bolhas, motivo: saida.motivo || null };
 
@@ -263,7 +284,8 @@ export async function processarMensagem(
     if (sim("cara_ia") >= LIMIAR_CHECAGEM) alertas.push("A resposta parece escrita por robô. Ajuste o tom antes de enviar.");
     if (sim("guru") >= LIMIAR_CHECAGEM) alertas.push("A resposta promete demais. Confira antes de enviar.");
     if (sim("responde") <= 1 - LIMIAR_CHECAGEM) alertas.push("A resposta talvez não responda o que o cliente perguntou.");
-  } else if (modo.modo === "AUTO") {
+  } else if (modo.modo === "AUTO" && checagem.erro !== "sem_chave") {
+    // Jev fora do ar (não desligado de propósito): melhor rascunho.
     alertas.push("Não deu pra conferir a resposta agora, então ela ficou como rascunho.");
   }
 

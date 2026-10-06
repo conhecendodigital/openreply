@@ -118,8 +118,10 @@ describe("triagem", () => {
     expect(triagemLocal("ok")?.acao).toBe("nao_precisa");
     expect(triagemLocal("Muito obrigada!!")?.acao).toBe("nao_precisa");
     expect(triagemLocal("👍👍")?.acao).toBe("nao_precisa");
-    expect(triagemLocal("quero o reembolso agora")?.acao).toBe("humano");
+    // 2026-10-06: só o pedido de uma pessoa transfere; reembolso o agente responde.
+    expect(triagemLocal("quero o reembolso agora")).toBeNull();
     expect(triagemLocal("quero falar com um atendente")?.acao).toBe("humano");
+    expect(triagemLocal("me passa pra uma pessoa")?.acao).toBe("humano");
     expect(triagemLocal("quanto custa?")).toBeNull();
   });
 
@@ -144,14 +146,26 @@ describe("triagem", () => {
     expect(d).toMatchObject({ acao: "responder", incerto: true, dificil: true });
   });
 
-  it("sem Jev segue com fallback incerto", async () => {
+  it("Jev desligado de propósito (sem chave) responde sem ficar em dúvida", async () => {
     const d = await triar([msg("m1", "vocês entregam sábado?")], store.configs, { apiKey: "" });
-    expect(d).toMatchObject({ acao: "responder", fonte: "fallback", incerto: true });
+    expect(d).toMatchObject({ acao: "responder", fonte: "fallback", incerto: false });
   });
 
-  it("áudio sem texto vai pra humano", async () => {
-    const d = await triar([msg("m1", "", false, 1, { type: "audio", body: null })], store.configs, { apiKey: CHAVE_JEV });
-    expect(d.acao).toBe("humano");
+  it("Jev fora do ar continua incerto", async () => {
+    const f = vi.fn(async () => new Response("erro", { status: 500 }));
+    const d = await triar([msg("m1", "vocês entregam sábado?")], store.configs, {
+      apiKey: CHAVE_JEV,
+      fetchImpl: f as unknown as typeof fetch,
+      esperar: async () => {},
+    });
+    expect(d).toMatchObject({ acao: "responder", incerto: true });
+  });
+
+  it("áudio sem texto o agente responde (não transfere); figurinha não pede resposta", async () => {
+    const audio = await triar([msg("m1", "", false, 1, { type: "audio", body: null })], store.configs, { apiKey: CHAVE_JEV });
+    expect(audio.acao).toBe("responder");
+    const figurinha = await triar([msg("m1", "", false, 1, { type: "sticker", body: null })], store.configs, { apiKey: CHAVE_JEV });
+    expect(figurinha.acao).toBe("nao_precisa");
   });
 });
 
@@ -278,8 +292,9 @@ describe("modo rascunho", () => {
     expect([...store.runs.values()][0].status).toBe("draft");
   });
 
-  it("AUTO no número inteiro continua rascunho; AUTO na conversa ou etiqueta envia", () => {
-    expect(resolverModo(contexto({ numero: "AUTO" }), AGORA).modo).toBe("DRAFT");
+  it("AUTO no número inteiro envia (06/10); conversa e etiqueta continuam mandando", () => {
+    expect(resolverModo(contexto({ numero: "AUTO" }), AGORA).modo).toBe("AUTO");
+    expect(resolverModo(contexto({ numero: "AUTO", conversa: "DRAFT" }), AGORA).modo).toBe("DRAFT");
     expect(resolverModo(contexto({ conversa: "AUTO" }), AGORA).modo).toBe("AUTO");
     expect(resolverModo(contexto({ etiquetas: ["AUTO"] }), AGORA).modo).toBe("AUTO");
     expect(resolverModo(contexto({ etiquetas: ["AUTO", "DRAFT"] }), AGORA).modo).toBe("DRAFT");
@@ -299,6 +314,34 @@ describe("modo rascunho", () => {
     const [primeira] = store.envios[0].envios;
     expect(primeira.esperaMs).toBeGreaterThanOrEqual(20_000);
     expect(primeira.esperaMs).toBeLessThanOrEqual(90_000);
+  });
+
+  it("AUTO no número: lead qualificado manda o encaminhamento, pausa a conversa e leva o resumo no aviso", async () => {
+    store.contextos.set("c1", contexto({ numero: "AUTO" }));
+    chamar = modeloFalso({
+      bolhas: ["Perfeito! Já vou passar pro Robério continuar com você."],
+      passar_pra_humano: true,
+      qualificado: true,
+      motivo: "qualificado",
+      resumo_equipe: "Apartamento em Paulínia, já pegou as chaves, tem projeto",
+    });
+    const avisos: string[] = [];
+    const r = await processarMensagem(
+      { ...deps(), notificar: async (a) => void avisos.push(a.mensagem) },
+      { conversationId: "c1", triggerMsgId: "m1", now: AGORA }
+    );
+    expect(r.acao).toBe("humano");
+    // A mensagem de encaminhamento foi agendada mesmo com a pausa (aprovada pelo sistema).
+    expect(store.envios).toHaveLength(1);
+    expect(avisos[0]).toMatch(/lead qualificado: Apartamento em Paulínia/);
+  });
+
+  it("RASCUNHO: lead qualificado só pausa e avisa, sem enviar nada sozinho", async () => {
+    store.contextos.set("c1", contexto({}));
+    chamar = modeloFalso({ bolhas: ["Já passo pro Robério"], passar_pra_humano: true, qualificado: true, resumo_equipe: "Casa em Campinas" });
+    const r = await processarMensagem(deps(), { conversationId: "c1", triggerMsgId: "m1", now: AGORA });
+    expect(r.acao).toBe("humano");
+    expect(store.envios).toHaveLength(0);
   });
 
   it("AUTO com preço inventado vira rascunho com aviso", async () => {
@@ -694,7 +737,18 @@ describe("tom e Comando", () => {
   });
 
   it("lê JSON com texto em volta", () => {
-    expect(lerSaida('```json\n{"bolhas":["oi"],"passar_pra_humano":false}\n```')).toEqual({ bolhas: ["oi"], passarPraHumano: false, motivo: "" });
+    expect(lerSaida('```json\n{"bolhas":["oi"],"passar_pra_humano":false}\n```')).toEqual({
+      bolhas: ["oi"],
+      passarPraHumano: false,
+      motivo: "",
+      qualificado: false,
+      resumoEquipe: "",
+    });
+    expect(lerSaida('{"bolhas":["Já passo pro Robério"],"passar_pra_humano":true,"qualificado":true,"resumo_equipe":"Apto em Paulínia"}')).toMatchObject({
+      passarPraHumano: true,
+      qualificado: true,
+      resumoEquipe: "Apto em Paulínia",
+    });
     expect(lerSaida("sem json")).toBeNull();
   });
 });

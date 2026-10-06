@@ -27,7 +27,7 @@ type Agente = "qualificacao" | "atendimento" | "suporte";
 type AgentsView = {
   sessions: Array<{ id: string; label: string; status: WaStatus }>;
   sessionId: string | null;
-  numberMode: "OFF" | "DRAFT";
+  numberMode: "OFF" | "DRAFT" | "AUTO";
   profile: {
     baseCommand: string;
     quietStart: string;
@@ -258,7 +258,16 @@ export default function WhatsAppAgentsPage() {
                   </span>
                 </span>
               </label>
-              {view.numberMode === "DRAFT" && !anyOn && <p className="text-xs text-warning">{t("Turn on at least one agent below, or nothing happens.")}</p>}
+              <label className="flex items-start gap-3 rounded-lg border border-border p-3">
+                <input type="radio" name="mode" checked={view.numberMode === "AUTO"} onChange={() => setView({ ...view, numberMode: "AUTO" })} className="mt-0.5 h-4 w-4" />
+                <span>
+                  <span className="block text-sm font-semibold">{t("On, automatic")}</span>
+                  <span className="block text-xs text-muted">
+                    {t("The agents answer by themselves, with the human delay, quiet hours and daily limit below. They hand the conversation to you only when the lead is qualified or asks for a person. An answer with a price, deadline or phone that is not in your data stays as a draft.")}
+                  </span>
+                </span>
+              </label>
+              {view.numberMode !== "OFF" && !anyOn && <p className="text-xs text-warning">{t("Turn on at least one agent below, or nothing happens.")}</p>}
             </fieldset>
           </section>
 

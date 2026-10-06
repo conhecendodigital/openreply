@@ -3,8 +3,8 @@
  *
  * Ordem: conversa > etiqueta > número. "Desligado" em qualquer camada ganha.
  * O padrão é RASCUNHO: o agente só envia sozinho (AUTO) quando o usuário liga
- * isso de propósito numa conversa ou numa etiqueta. AUTO no número inteiro
- * vale como rascunho.
+ * isso de propósito na conversa, numa etiqueta ou no número inteiro
+ * ("Ligado, automático", desde 06/10/2026).
  *
  * "Assumir" (botão, ou o usuário responder pelo celular ou pelo inbox) pausa o
  * agente na conversa, cancela os envios já agendados e descarta os rascunhos
@@ -43,6 +43,8 @@ export function resolverModo(ctx: Pick<ConversaContexto, "session" | "conversati
   if (conversa === "DRAFT") return { modo: "DRAFT", motivo: "rascunho na conversa" };
   if (etiquetas.includes("DRAFT")) return { modo: "DRAFT", motivo: "rascunho pela etiqueta" };
   if (etiquetas.includes("AUTO")) return { modo: "AUTO", motivo: "envio automático pela etiqueta" };
+  // 2026-10-06 (Matheus): "Ligado, automático" no número inteiro agora vale de verdade.
+  if (numero === "AUTO") return { modo: "AUTO", motivo: "envio automático no número" };
   return { modo: "DRAFT", motivo: "rascunho (padrão do número)" };
 }
 
