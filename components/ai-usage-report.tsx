@@ -123,6 +123,7 @@ export function AiUsageReport({ scope }: { scope: "admin" | "me" }) {
     suporte: t("Support"),
     cerebro: t("Brain"),
     triagem: t("Triage"),
+    treino: t("Training with a document"),
   };
   const periodName: Record<(typeof PERIODS)[number], string> = {
     today: t("Today"),
