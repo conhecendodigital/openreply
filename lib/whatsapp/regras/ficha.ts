@@ -155,7 +155,9 @@ const IMOVEIS: Array<[string, string]> = [
   ["condominio", "prédio"],
   ["terreno", "terreno"],
 ];
-const NOME_DITO = /\b(?:meu nome e|me chamo|aqui e o|aqui e a|aqui quem fala e|eu sou o|eu sou a)\s+([a-z]{3,}(?:\s+[a-z]{3,})?)/;
+const NOME_DITO = /\b(?:meu nome e|me chamo|aqui e o|aqui e a|aqui quem fala e|eu sou o|eu sou a|sou o|sou a)\s+([a-z]{3,})/;
+/** "sou a dona do apartamento" não é nome. */
+const NAO_E_NOME = new Set(["dona", "dono", "cliente", "responsavel", "proprietaria", "proprietario", "mae", "pai", "filho", "filha", "esposa", "marido", "moradora", "morador", "sindica", "sindico", "arquiteta", "arquiteto", "engenheira", "engenheiro", "corretora", "corretor", "inquilina", "inquilino", "interessada", "interessado"]);
 const SIM = /\b(sim|ja|tenho|temos|possuo|peguei|recebi|pegamos|recebemos|claro|isso)\b/;
 const NAO = /\b(nao|ainda nao|nem|nunca)\b/;
 
@@ -238,7 +240,9 @@ export function preencherPorRegra(defs: CampoFichaDef[], e: EntradaRegra): Recor
       let dito: { valor: string; msgId: string } | null = null;
       for (const m of doCliente) {
         const r = NOME_DITO.exec(normalizarTexto(textoPlano(m)));
-        if (r) dito = { valor: nomeBonito(r[1]), msgId: m.id };
+        const primeiro = r?.[1].split(" ")[0] ?? "";
+        // Só o primeiro nome: sem a pontuação, "sou o Paulo, apartamento..." viraria "Paulo Apartamento".
+        if (r && !NAO_E_NOME.has(primeiro)) dito = { valor: nomeBonito(primeiro), msgId: m.id };
       }
       if (dito) out[d.chave] = { valor: dito.valor, msgId: dito.msgId, origem: "confirmado", em };
       else {
