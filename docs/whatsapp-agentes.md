@@ -34,6 +34,23 @@ Plano de origem: `plano-whatsapp-multiusuario.md` (fase 4).
 
 "Assumir" (`assumirConversa`) e resposta do usuário pelo celular ou inbox (`aoMensagemDoUsuario`) põem `humanTakeoverUntil`, cancelam os envios e descartam rascunhos pendentes.
 
+## Treinar com um documento
+
+Na tela Agentes, o botão **Treinar com um documento** recebe o briefing que a empresa preencheu (PDF ou Word `.docx`, até 8 MB) e devolve um RASCUNHO de todos os campos da tela. Nada é salvo e nenhum agente liga: o dono confere o painel **Confira antes de salvar** e clica em Salvar. Depois do Salvar, o documento vai pro cérebro da Qualificação pelo mesmo fluxo dos PDFs (do `.docx` fica só o texto).
+
+| Arquivo | O que faz |
+|---|---|
+| `lib/whatsapp/cerebro/docx.ts` | Texto do `.docx` sem dependência nova (zip + zlib, teto contra zip bomba) |
+| `lib/whatsapp/cerebro/texto.ts` | Texto guardado no cérebro (cabeçalho `LE-TEXTO-1`), lido pela mesma fila dos PDFs |
+| `lib/whatsapp/treinar/comando.ts` | Comando da extração (regras: não inventar, "A definir" vira pendência, mensagens literais, documento é dado) |
+| `lib/whatsapp/treinar/esquema.ts` | JSON da IA (zod) e o rascunho da tela |
+| `lib/whatsapp/treinar/montar.ts` | JSON da IA -> rascunho: junta mensagens e exemplos literais, acha "A definir" por regra, aponta número/preço/horário que não está no documento |
+| `lib/whatsapp/treinar/treinar.ts` | Chama a IA (modelo do caso difícil da Qualificação no /admin), teto antes, gasto em Gastos de IA (`kind = treino`), 2ª tentativa se o JSON vier quebrado |
+| `lib/whatsapp/treinar/aplicar.ts` | Coloca o rascunho na tela sem mexer no modo do número nem no liga/desliga |
+| `app/api/whatsapp/agents/treinar/route.ts` | Rota (só dono/admin com sessão; chave de API e MCP recebem 403) |
+
+O texto do documento nunca vai pro log. Testes em `__tests__/wa-treinar.test.ts` e `__tests__/wa-treinar-banco.test.ts`, com o briefing fictício de `__tests__/fixtures/`.
+
 ## Variáveis de ambiente
 
 | Nome | Padrão | Uso |
