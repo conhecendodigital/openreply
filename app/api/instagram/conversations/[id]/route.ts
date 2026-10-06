@@ -11,6 +11,7 @@ import {
 } from "@/lib/meta/message-media";
 import { prisma } from "@/lib/db/client";
 import { saveKnownUsernames } from "@/lib/contacts/profile";
+import { previewTextsByMid } from "@/lib/messages/preview";
 
 export interface ThreadTemplate {
   title: string;
@@ -154,6 +155,13 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
       if (media.length > 0) m.media = media;
     })
   ).catch((err) => console.warn("[Conversation Messages] Webhook media lookup failed:", err));
+  // Ours with no text and not stored: a campaign card the API returns empty.
+  // Show the text we sent (send ledger) instead of a blank bubble.
+  const mineBlank = missing.filter((m) => m.fromMe && !m.text && (m.media?.length ?? 0) === 0);
+  if (mineBlank.length > 0) {
+    const texts = await previewTextsByMid(account, mineBlank.map((m) => m.id));
+    for (const m of mineBlank) m.text = texts.get(m.id) ?? m.text;
+  }
   for (const m of missing) byId.set(m.id, m);
 
   const messages = [...byId.values()].sort(

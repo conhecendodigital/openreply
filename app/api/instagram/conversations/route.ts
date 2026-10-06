@@ -14,6 +14,7 @@ import {
 } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
 import { extractMessageMedia, mediaLabel } from "@/lib/meta/message-media";
+import { previewTextsByMid } from "@/lib/messages/preview";
 
 export interface ConversationListItem {
   id: string;
@@ -77,6 +78,23 @@ export async function GET(request: NextRequest) {
           : null,
       };
     });
+
+    // A campaign card (button template) comes back with an empty text: show
+    // the text inside the card (stored from the echo) or what we sent.
+    const blanks = raw
+      .map((c, i) => ({ i, last: c.messages?.data?.[0] }))
+      .filter(({ i, last }) => last?.id && !conversations[i].lastMessage?.text);
+    if (blanks.length > 0) {
+      const texts = await previewTextsByMid(
+        account,
+        blanks.map(({ last }) => last?.id as string)
+      );
+      for (const { i, last } of blanks) {
+        const text = texts.get(last?.id as string);
+        const preview = conversations[i].lastMessage;
+        if (text && preview) preview.text = text;
+      }
+    }
 
     // The participants already carry the @: save it on contacts that have
     // none (people who came by DM), no extra Meta call. Never throws.

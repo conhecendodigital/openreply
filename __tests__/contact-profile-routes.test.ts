@@ -10,7 +10,8 @@ const h = vi.hoisted(() => ({
   prisma: {
     commentModeration: { findMany: vi.fn(), count: vi.fn(async () => 1), groupBy: vi.fn(async () => []) },
     contact: { findMany: vi.fn(), updateMany: vi.fn(async () => ({ count: 1 })) },
-    directMessage: { findMany: vi.fn(async () => []) },
+    directMessage: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
+    outboundMessage: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
   },
   getConversations: vi.fn(),
 }));
@@ -91,6 +92,53 @@ describe("conversations list", () => {
       where: { id: "ct_1", username: null },
       data: expect.objectContaining({ username: "ana.lima" }),
     });
+  });
+});
+
+describe("conversations list: campaign card preview (06/10)", () => {
+  const thread = (id: string, mid: string, message = "") => ({
+    id,
+    participants: { data: [{ id: "ig_owner", username: "omatheus.ai" }, { id: `p_${id}`, username: null }] },
+    messages: { data: [{ id: mid, message, from: { id: "ig_owner" }, created_time: "2026-10-06T12:00:00Z" }] },
+  });
+
+  it("an empty card shows the template title, then what we sent, never '(sem texto)'", async () => {
+    h.getConversations.mockResolvedValue([
+      thread("t1", "mid_card"),
+      thread("t2", "mid_ledger"),
+      thread("t3", "mid_text", "Oi, tudo bem?"),
+      thread("t4", "mid_unknown"),
+    ]);
+    h.prisma.contact.findMany.mockResolvedValue([]);
+    h.prisma.directMessage.findMany.mockResolvedValueOnce([
+      { mid: "mid_card", text: null, template: { title: "Oi ana, pega o material", buttons: [{ title: "Acessar" }] } },
+    ]);
+    h.prisma.outboundMessage.findMany.mockResolvedValueOnce([{ mid: "mid_ledger", text: "Aqui está o link" }]);
+
+    const res = await conversations(new NextRequest(new URL("/api/instagram/conversations", "http://localhost")));
+    const list = (await res.json()).data.conversations as { lastMessage: { text: string } }[];
+    expect(list.map((c) => c.lastMessage.text)).toEqual([
+      "Oi ana, pega o material",
+      "Aqui está o link",
+      "Oi, tudo bem?",
+      "",
+    ]);
+    // Only the blank ones are looked up, scoped to this account.
+    expect(h.prisma.directMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { accountId: "ig_owner", mid: { in: ["mid_card", "mid_ledger", "mid_unknown"] } } })
+    );
+    expect(h.prisma.outboundMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { instagramAccountId: "acc_row", mid: { in: ["mid_ledger", "mid_unknown"] } } })
+    );
+  });
+
+  it("the list still loads when the lookup fails", async () => {
+    h.getConversations.mockResolvedValue([thread("t1", "mid_card")]);
+    h.prisma.contact.findMany.mockResolvedValue([]);
+    h.prisma.directMessage.findMany.mockRejectedValueOnce(new Error("db"));
+    const res = await conversations(new NextRequest(new URL("/api/instagram/conversations", "http://localhost")));
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.conversations[0].lastMessage.text).toBe("");
   });
 });
 

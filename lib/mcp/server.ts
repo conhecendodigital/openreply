@@ -374,7 +374,8 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "listar_conversas",
-    description: "Lista as conversas da DM com a última mensagem de cada uma.",
+    description:
+      "Lista as conversas da DM com a última mensagem de cada uma. DM em cartão (botão) mostra o texto de dentro do cartão.",
     inputSchema: { type: "object", properties: {} },
     async run(_args, call) {
       const res = await api(call, "GET", "/api/instagram/conversations");
