@@ -100,6 +100,9 @@ export async function GET(request: NextRequest) {
     });
     const connectionFields = {
       status: "ACTIVE" as const,
+      // App-scoped id (the `id` of /me): Meta's deauthorize and data deletion
+      // callbacks identify the account by this one (lib/meta/data-callbacks.ts).
+      appScopedId: userInfo.id ? String(userInfo.id) : null,
       accessToken: encryptedToken,
       tokenExpiresAt,
       webhookSubscribed,
