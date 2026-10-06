@@ -134,8 +134,10 @@ describe("migração 20261017120000_dm_formato_texto", () => {
     await db?.close();
   });
 
-  it("é a última e só aditiva (nenhum DROP, DELETE, UPDATE ou mudança de tipo)", () => {
-    expect(migrationNames().at(-1)).toBe(NAME);
+  it("vem depois da uazapi e é só aditiva (nenhum DROP, DELETE, UPDATE ou mudança de tipo)", () => {
+    // Migrações novas podem vir depois (ex.: 20261018120000_wa_excluir_numero); a ordem com a anterior é o que importa.
+    const names = migrationNames();
+    expect(names.indexOf(NAME)).toBeGreaterThan(names.indexOf("20261016120000_wa_uazapi"));
     const code = sql.replace(/--.*$/gm, "");
     expect(code).not.toMatch(/\b(DROP|DELETE|UPDATE|TRUNCATE|ALTER COLUMN)\b/i);
   });
