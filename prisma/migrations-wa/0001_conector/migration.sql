@@ -18,9 +18,10 @@ CREATE INDEX IF NOT EXISTS "WaMessage_conversationId_sentBy_sentAt_idx"
 CREATE TABLE IF NOT EXISTS whatsapp."WaSendBlock" (
   "id"             TEXT PRIMARY KEY,
   "ownerUserId"    TEXT NOT NULL,
+  "workspaceId"    TEXT NOT NULL,
   "sessionId"      TEXT NOT NULL,
   "conversationId" TEXT NOT NULL,
-  "sentBy"         whatsapp."SentBy" NOT NULL,
+  "sentBy"         whatsapp."WaSentBy" NOT NULL, -- nome do enum na Fase 0 (não "SentBy")
   "reason"         TEXT NOT NULL,
   "agentRunId"     TEXT,
   "preview"        TEXT,
@@ -31,7 +32,14 @@ CREATE INDEX IF NOT EXISTS "WaSendBlock_ownerUserId_createdAt_idx"
 
 ALTER TABLE whatsapp."WaSendBlock" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whatsapp."WaSendBlock" FORCE ROW LEVEL SECURITY;
+-- Mesma regra das tabelas whatsapp.* da Fase 0: membro do workspace ATIVO faz
+-- tudo; admin só lê, e só com registro de auditoria (app.admin_audit_ok).
+-- (Antes: dono OU admin com acesso total, sem auditoria.)
 DROP POLICY IF EXISTS owner_or_admin ON whatsapp."WaSendBlock";
-CREATE POLICY owner_or_admin ON whatsapp."WaSendBlock" FOR ALL TO le_app
-  USING ("ownerUserId" = app.current_user_id() OR app.is_admin())
-  WITH CHECK ("ownerUserId" = app.current_user_id() OR app.is_admin());
+DROP POLICY IF EXISTS ws_member ON whatsapp."WaSendBlock";
+DROP POLICY IF EXISTS admin_audited_read ON whatsapp."WaSendBlock";
+CREATE POLICY ws_member ON whatsapp."WaSendBlock" FOR ALL TO PUBLIC
+  USING (app.in_current_workspace("workspaceId"))
+  WITH CHECK (app.in_current_workspace("workspaceId"));
+CREATE POLICY admin_audited_read ON whatsapp."WaSendBlock" FOR SELECT TO PUBLIC
+  USING (app.admin_audit_ok("workspaceId"));

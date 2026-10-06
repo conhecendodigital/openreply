@@ -77,5 +77,16 @@ Parte do plano "Inbox de WhatsApp + Lead Engine multiusuário". Este branch entr
 
 - Telas (Canais com QR, inbox, termo de risco) e o agente (`wa-agent`).
 - Worker de mídia (`WaMedia`): o webhook só guarda id, tipo e nome do arquivo; o base64 do OpenWA não vai pra fila.
-- Puxar histórico do OpenWA ao conectar (`GET /chats/:chatId/messages`).
+- Puxar histórico do OpenWA ao conectar (`GET /api/sessions/:id/messages/:chatId/history?limit=`; não existe `/chats/:chatId/messages`).
 - Os `WaAgentRun.blockedReason` usam os mesmos códigos: `fora_da_janela_24h`, `sem_mensagem_do_contato`, `humano_assumiu`, `sessao_desconectada`.
+
+## Revisão 06/10 (o que a Fase 0 real mudou)
+
+O `feat/multiusuario` criou o schema `whatsapp` diferente do plano. Ao escrever o `prisma-repository.ts`:
+
+- **Escopo é o workspace, não o dono.** `WaContact`, `WaConversation`, `WaMessage`, `WaLabel` e `WaConversationLabel` têm `workspaceId` e **não** têm `ownerUserId` (só `WaSession` tem os dois). A RLS é `app.in_current_workspace("workspaceId")` (membro do workspace ativo) e o admin só lê com `AdminAccessLog` (`app.admin_audit_ok`). Os records daqui (`ownerUserId` em contato, conversa e mensagem) viram o `workspaceId` da sessão; o `ownerUserId` do job serve pra montar o `RlsContext` (`userId` = dono da sessão, `workspaceId` = da sessão).
+- **Enums:** `whatsapp."WaSentBy"` e `whatsapp."WaAgentMode"` (não `SentBy`/`AgentMode`). A migração deste branch já usa `WaSentBy`.
+- **Tabelas que a Fase 0 não criou:** `WaWebhookEvent` (idempotência), `WaAgentRun`, `WaAgentProfile`, `AiCredential`, `WaMedia` e a função `app.resolve_wa_session`. Precisam entrar no `schema.prisma` antes deste branch rodar (o webhook acha a sessão com `withSystemRole`).
+- `WaSendBlock` agora tem `workspaceId` e a mesma RLS das outras (o repositório preenche pelo `WaSession`).
+- `WaSession.webhookSecretEnc` é opcional na Fase 0: sessão OpenWA sem segredo é recusada no webhook (`verifyHmacSignature` devolve false sem segredo). Gere com `randomBytes(32).toString("base64url")`; `registerWebhook` recusa menos de 32 caracteres e URL sem HTTPS.
+- Eventos reais do OpenWA 0.24: "pronto" chega como `session.status` com `data.status = "ready"`; `GET /qr` responde 400 enquanto não há QR.
