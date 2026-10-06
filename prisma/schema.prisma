@@ -38,6 +38,7 @@ model User {
   workspaceMembers WorkspaceMember[]
   sentInvitations  WorkspaceInvitation[] @relation("WorkspaceInvitationsSent")
   waSessions       WaSession[]
+  waKnowledgeDocs  WaKnowledgeDocument[]
 
   @@schema("public")
 }
@@ -124,6 +125,13 @@ model Workspace {
   waMessages         WaMessage[]
   waLabels           WaLabel[]
   waAiUsage          WaAiUsage[]
+  waSendBlocks       WaSendBlock[]
+  waAgentProfiles    WaAgentProfile[]
+  waAgentRuns        WaAgentRun[]
+  waAgentConfigs     WaAgentConfig[]
+  waKnowledgeDocs    WaKnowledgeDocument[]
+  waKnowledgeChunks  WaKnowledgeChunk[]
+  waContactMemories  WaContactMemory[]
 
   @@index([ownerId])
   @@schema("public")
@@ -1766,6 +1774,10 @@ model WaSession {
   /// Números que o admin pode ver sem abrir conteúdo.
   conversationCount Int         @default(0)
   messageCount      Int         @default(0)
+  /// Cloud API (coexistência): WABA do número. OpenWA não usa.
+  wabaId            String?
+  /// Cloud API: token de negócio cifrado (AES-256-GCM). OpenWA não usa.
+  accessTokenEnc    String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -1774,6 +1786,8 @@ model WaSession {
   contacts      WaContact[]
   conversations WaConversation[]
   messages      WaMessage[]
+  agentProfile  WaAgentProfile?
+  agentConfigs  WaAgentConfig[]
 
   @@index([workspaceId])
   @@index([ownerUserId])
@@ -1801,6 +1815,7 @@ model WaContact {
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session       WaSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   conversations WaConversation[]
+  memories      WaContactMemory[]
 
   @@unique([sessionId, jid])
   @@index([workspaceId, name])
@@ -1829,6 +1844,7 @@ model WaConversation {
   contact   WaContact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
   messages  WaMessage[]
   labels    WaConversationLabel[]
+  agentRuns WaAgentRun[]
 
   @@unique([sessionId, contactId])
   @@index([workspaceId, archivedAt, pinnedAt(sort: Desc), lastMessageAt(sort: Desc)])
@@ -1854,6 +1870,13 @@ model WaMessage {
   editedAt          DateTime?
   revokedAt         DateTime?
   createdAt         DateTime  @default(now())
+  /// Run do agente que mandou (sentBy = AGENT).
+  agentRunId        String?
+  /// Mídia: tipo e nome do arquivo. Os bytes ficam no gateway (o inbox busca por /api/whatsapp/media/<id>).
+  mediaMime         String?
+  mediaFilename     String?
+  /// Cloud API: id da mídia na Meta.
+  mediaRef          String?
 
   workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session      WaSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -1862,6 +1885,7 @@ model WaMessage {
   /// Webhook repetido não duplica.
   @@unique([sessionId, providerMessageId])
   @@index([conversationId, sentAt(sort: Desc)])
+  @@index([conversationId, sentBy, sentAt(sort: Desc)])
   @@schema("whatsapp")
 }
 
@@ -1968,5 +1992,213 @@ model WaAiUsage {
   @@index([ownerUserId, createdAt(sort: Desc)], map: "WaAiUsage_owner_created_idx")
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([createdAt])
+  @@schema("whatsapp")
+}
+
+// ---------------------------------------------------------------------------
+// WhatsApp, fase 1 (06/10/2026): conector, cérebro e agentes. Migrações
+// 20261015120000_wa_conector, 20261015130000_wa_cerebro e
+// 20261015140000_wa_agentes. Mesma RLS das tabelas whatsapp.* da Fase 0.
+// ---------------------------------------------------------------------------
+
+/// Evento cru do webhook: idempotência (dedupeKey) e reprocessamento. Só o
+/// papel de sistema lê e grava. Apagado depois de 30 dias.
+model WaWebhookEvent {
+  id          String     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  sessionId   String?
+  ownerUserId String?
+  provider    WaProvider
+  eventType   String
+  dedupeKey   String     @unique
+  payload     Json
+  /// received | queued
+  status      String     @default("received")
+  createdAt   DateTime   @default(now())
+
+  @@index([createdAt])
+  @@schema("whatsapp")
+}
+
+/// Envio barrado (24h, "Assumir", número desconectado, agente cancelado).
+model WaSendBlock {
+  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  ownerUserId    String
+  workspaceId    String
+  sessionId      String
+  conversationId String
+  sentBy         WaSentBy
+  reason         String
+  agentRunId     String?
+  preview        String?
+  createdAt      DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([conversationId])
+  @@schema("whatsapp")
+}
+
+/// Perfil do agente por número (1 por WaSession).
+model WaAgentProfile {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  ownerUserId     String
+  sessionId       String    @unique
+  /// Comando base: o que o negócio faz e o que pode prometer.
+  baseCommand     String    @default("")
+  styleSummary    String?
+  styleExamples   Json?
+  /// {"start":"21:00","end":"08:00"}
+  quietHours      Json?
+  maxAutoPerDay   Int       @default(50)
+  /// Preços, prazos e links que o agente pode citar.
+  fatosPermitidos Json?
+  timeZone        String    @default("America/Sao_Paulo")
+  /// Atraso humano antes da 1ª bolha (envio automático).
+  delayMinSeconds Int       @default(20)
+  delayMaxSeconds Int       @default(90)
+  learnedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session   WaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@schema("whatsapp")
+}
+
+/// Cada resposta do agente (rascunho, envio, bloqueio, erro), com custo.
+model WaAgentRun {
+  id             String      @id @default(cuid())
+  workspaceId    String
+  ownerUserId    String
+  sessionId      String
+  conversationId String
+  triggerMsgId   String
+  /// qualificacao | atendimento | suporte
+  agente         String?
+  mode           WaAgentMode
+  /// pending | draft | approved | scheduled | sent | rejected | blocked | error | skipped | handoff
+  status         String
+  output         Json?
+  blockedReason  String?
+  provider       String?
+  model          String?
+  tokensIn       Int         @default(0)
+  tokensOut      Int         @default(0)
+  cacheRead      Int         @default(0)
+  cacheWrite     Int         @default(0)
+  /// 1 dólar = 1.000.000. Run "pending" guarda a reserva do pior caso.
+  custoUsdMicro  Int         @default(0)
+  triagem        Json?
+  approvedBy     String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @default(now()) @updatedAt
+
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation WaConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([ownerUserId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([conversationId, status])
+  @@schema("whatsapp")
+}
+
+/// Os 3 agentes de cada número. Nascem desligados.
+model WaAgentConfig {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  ownerUserId   String
+  sessionId     String
+  /// qualificacao | atendimento | suporte
+  agente        String
+  ativo         Boolean  @default(false)
+  provider      String?
+  modelo        String?
+  modeloDificil String?
+  instrucoes    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session   WaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, agente])
+  @@index([workspaceId])
+  @@schema("whatsapp")
+}
+
+/// PDF do cérebro de um agente. O código usa SQL cru (lib/whatsapp/cerebro/store.ts).
+model WaKnowledgeDocument {
+  id              String    @id
+  ownerUserId     String
+  workspaceId     String
+  agentKind       String
+  sessionId       String?
+  fileName        String
+  sizeBytes       Int
+  sha256          String
+  data            Bytes?
+  pageCount       Int?
+  status          String    @default("queued")
+  errorCode       String?
+  chunkCount      Int       @default(0)
+  embeddingModel  String?
+  embeddingTokens Int       @default(0)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  processedAt     DateTime? @db.Timestamptz(6)
+
+  owner     User               @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  chunks    WaKnowledgeChunk[]
+
+  @@unique([workspaceId, agentKind, sha256], map: "WaKnowledgeDocument_ws_agent_sha_key")
+  @@index([workspaceId, agentKind, createdAt(sort: Desc)], map: "WaKnowledgeDocument_ws_agent_idx")
+  @@schema("whatsapp")
+}
+
+/// Pedaço de PDF com embedding. Com pgvector a coluna é vector(1536); sem ele, real[].
+model WaKnowledgeChunk {
+  id             String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  documentId     String
+  ownerUserId    String
+  workspaceId    String
+  agentKind      String
+  sessionId      String?
+  position       Int
+  page           Int
+  content        String
+  tokenEstimate  Int
+  embeddingModel String
+  embedding      Unsupported("vector(1536)")
+  createdAt      DateTime                    @default(now()) @db.Timestamptz(6)
+
+  document  WaKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, position])
+  @@index([workspaceId, agentKind, embeddingModel], map: "WaKnowledgeChunk_ws_agent_idx")
+  @@schema("whatsapp")
+}
+
+/// Memória curta por contato (o agente lê antes de responder).
+model WaContactMemory {
+  contactId   String
+  workspaceId String
+  ownerUserId String
+  nome        String?
+  interesse   String?
+  objecao     String?
+  etapa       String   @default("novo")
+  observacao  String?
+  version     Int      @default(1)
+  updatedAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact   WaContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, contactId])
   @@schema("whatsapp")
 }
