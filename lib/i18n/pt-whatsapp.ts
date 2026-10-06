@@ -331,4 +331,43 @@ export const ptWhatsapp: Record<string, string> = {
   "This number has no uazapi token saved. Connect it again as a new number.": "Este número não tem o token da uazapi salvo. Conecte de novo como número novo.",
   "The saved uazapi token could not be opened (ENCRYPTION_KEY changed?).": "O token salvo da uazapi não abriu (a ENCRYPTION_KEY mudou?).",
   "A disconnected number still uses its device: use Connect again on it.": "Número desconectado continua usando o dispositivo dele: use Conectar de novo nele.",
+
+  // Excluir número (Conexões) e número excluído (Conversas)
+  "Delete number": "Excluir número",
+  "Delete this number?": "Excluir este número?",
+  "What do you want to delete?": "O que você quer excluir?",
+  "Delete only the number": "Excluir só o número",
+  "Delete number and conversations": "Excluir número e conversas",
+  "The number leaves the {provider} and disappears from Connections. Conversations, contacts and messages stay saved: you can still read them in Conversations, but you cannot send from this number anymore.":
+    "O número sai do provedor ({provider}) e some de Conexões. Conversas, contatos e mensagens continuam guardados: você ainda lê tudo em Conversas, mas não consegue mais mandar mensagem por esse número.",
+  "The same, and it also deletes the conversations, messages, media, webhook events and the agent memory and drafts of this number. Other numbers and Instagram are not touched. You cannot undo this.":
+    "O mesmo, e também apaga as conversas, mensagens, mídias, eventos do webhook e a memória e os rascunhos do agente desse número. Os outros números e o Instagram não são mexidos. Não dá pra desfazer.",
+  "Deletes the conversations, messages, media, webhook events and the agent memory and drafts of this number. Other numbers and Instagram are not touched. You cannot undo this.":
+    "Apaga as conversas, mensagens, mídias, eventos do webhook e a memória e os rascunhos do agente desse número. Os outros números e o Instagram não são mexidos. Não dá pra desfazer.",
+  "On the uazapi, the device of your plan is free again.": "Na uazapi, o dispositivo do seu plano fica livre de novo.",
+  "To confirm, type the name of the number: {name}": "Pra confirmar, digite o nome do número: {name}",
+  "Name of the number": "Nome do número",
+  "If you only want to stop using it for a while, use Disconnect: it deletes nothing.":
+    "Se você só quer parar de usar por um tempo, use Desconectar: ele não apaga nada.",
+  "Number deleted. Its conversations stay saved in Conversations, only for reading.":
+    "Número excluído. As conversas dele continuam guardadas em Conversas, só pra leitura.",
+  "Number and conversations deleted.": "Número e conversas excluídos.",
+  "Saved conversations deleted.": "Conversas guardadas apagadas.",
+  "The number left the Lead Engine, but the {provider} did not answer. Check the {provider} panel and delete it there too (id {ref}).":
+    "O número saiu do Lead Engine, mas o provedor ({provider}) não respondeu. Confira no painel do provedor e apague por lá também (id {ref}).",
+  "Deleted numbers with saved conversations": "Números excluídos com conversas guardadas",
+  "These numbers left Connections. Their conversations stay in Conversations, only for reading.":
+    "Esses números saíram de Conexões. As conversas deles continuam em Conversas, só pra leitura.",
+  "Deleted on {date}": "Excluído em {date}",
+  "Delete saved conversations": "Apagar conversas guardadas",
+  "Delete the saved conversations?": "Apagar as conversas guardadas?",
+  "Delete conversations": "Apagar conversas",
+  "Number deleted": "Número removido",
+  "This number was deleted. The conversation stays saved only for reading.":
+    "Esse número foi removido. A conversa continua guardada só pra leitura.",
+  "This number was deleted, so this media is not available anymore.": "Esse número foi removido, então essa mídia não está mais disponível.",
+  "Choose what to delete.": "Escolha o que você quer excluir.",
+  "This number was already deleted.": "Esse número já foi excluído.",
+  "Type the name of the number exactly as it shows to confirm.": "Pra confirmar, digite o nome do número do jeito que aparece.",
+  "API keys cannot delete WhatsApp numbers. Do it in the Lead Engine.": "Chave de API não pode excluir número de WhatsApp. Faça isso no Lead Engine.",
 };

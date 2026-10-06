@@ -259,7 +259,7 @@ describe("Excluir número", () => {
     expect(await repo.findSessionByProvider("OPENWA", "owa-1")).toBeNull();
     const res = await handleWhatsAppWebhook(
       { headers: new Headers(), rawBody: JSON.stringify({ event: "message.received", sessionId: "owa-1", timestamp: Date.now(), data: {} }), ip: "1.2.3.4" },
-      { repo, queue: new FakeQueue(), rateLimitStore: { incr: async () => 1, expire: async () => 1 } }
+      { repo, queue: new FakeQueue(), metaAppSecrets: [], rateLimitStore: { incr: async () => 1, expire: async () => 1 } }
     );
     expect(res.status).toBe(401);
     expect(openwa.calls).toEqual([]);

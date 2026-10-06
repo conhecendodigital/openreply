@@ -33,7 +33,8 @@ Desde 06/10/2026 o dono também pode colar a Server URL, o Admin token e os disp
 4. Mesmo termo de risco e a caixinha "é um número só pra isso, nunca o pessoal".
 5. O servidor cria a instância (`POST /instance/create` com a região), guarda token e segredo só cifrados, registra o webhook e chama `POST /instance/connect` com a região de novo. Depois confere `GET /instance/proxy`: se a uazapi disser que está saindo `direct` (sem proxy), a tela mostra um alerta vermelho.
 6. Número conectado: botão "Reiniciar conexão" (`POST /instance/reset`, sem novo QR). Número desconectado: "Conectar de novo" (QR ou código, na mesma instância e na mesma cidade).
-7. Desconectar: `POST /instance/disconnect`. Nada é apagado no Lead Engine e a instância continua na uazapi (`DELETE /instance` nunca é chamado). Por isso o número desconectado continua ocupando a vaga dele no plano: reconecte em vez de criar outro.
+7. Desconectar: `POST /instance/disconnect`. Nada é apagado no Lead Engine e a instância continua na uazapi (o Desconectar nunca chama `DELETE /instance`). Por isso o número desconectado continua ocupando a vaga dele no plano: reconecte em vez de criar outro.
+8. Excluir número (botão separado, só dono ou admin, com confirmação): `POST /instance/disconnect` e `DELETE /instance`, que libera o dispositivo do plano. Duas opções: "Excluir só o número" (o número some de Conexões; conversas, contatos e mensagens ficam guardados, só leitura em Conversas) ou "Excluir número e conversas" (apaga também conversas, mensagens, mídias, eventos do webhook e memória e rascunhos do agente daquele número; pede o nome digitado). Se a uazapi não responder, o número sai do Lead Engine do mesmo jeito e a tela mostra o id da instância pra conferir no painel da uazapi. Cada exclusão fica registrada em `whatsapp."WaNumberDeletion"` (quem, quando, qual opção, sem conteúdo). O OpenWA faz o mesmo com `POST /api/sessions/:id/logout` e `DELETE /api/sessions/:id`.
 
 ## Webhook e validação da origem
 
@@ -69,7 +70,7 @@ A uazapi não tem chave de idempotência (`track_id` aceita repetido). Então en
 
 ## Rotas da uazapi usadas
 
-`GET /proxy-managed/countries`, `GET /proxy-managed/cities`, `GET /instance/all` (admintoken, vagas), `POST /instance/create` (admintoken), `POST /instance/connect`, `GET /instance/status`, `GET /instance/proxy`, `POST /instance/disconnect`, `POST /instance/reset`, `POST /webhook`, `POST /send/text`, `POST /send/media`, `POST /message/presence`, `POST /message/markread`, `POST /chat/read`, `POST /message/download`.
+`GET /proxy-managed/countries`, `GET /proxy-managed/cities`, `GET /instance/all` (admintoken, vagas), `POST /instance/create` (admintoken), `POST /instance/connect`, `GET /instance/status`, `GET /instance/proxy`, `POST /instance/disconnect`, `POST /instance/reset`, `DELETE /instance` (só no Excluir número), `POST /webhook`, `POST /send/text`, `POST /send/media`, `POST /message/presence`, `POST /message/markread`, `POST /chat/read`, `POST /message/download`.
 
 ## Rotas novas do Lead Engine
 
@@ -86,4 +87,4 @@ A uazapi não tem chave de idempotência (`track_id` aceita repetido). Então en
 - O formato exato de `message.content` na mídia (mimetype e nome do arquivo) varia por tipo; o código lê `mimetype`/`mimeType` e `fileName`/`title`.
 - A uazapi não reentrega webhook que falhou. Se a fila (Redis) cair na hora, o webhook responde 500 e o evento se perde (falta uma reconciliação por `POST /message/find`).
 - `GET /instance/all` conta todas as instâncias do servidor (inclusive criadas no painel da uazapi). Se ela falhar, a conta cai pros números uazapi do Lead Engine.
-- Liberar uma vaga do plano exige apagar a instância (`DELETE /instance`). Isso não foi feito de propósito (regra "desconectar não apaga nada"); se o dono quiser, vira um botão separado com confirmação.
+- Liberar uma vaga do plano exige apagar a instância (`DELETE /instance`). O Desconectar não faz isso (regra "desconectar não apaga nada"); quem faz é o botão separado "Excluir número", com confirmação.

@@ -28,6 +28,8 @@ type Conversation = {
   unreadCount: number;
   hasDraft: boolean;
   paused: boolean;
+  /** Número excluído ("só o número"): só leitura. */
+  numberRemoved?: boolean;
 };
 type Message = {
   id: string;
@@ -43,7 +45,7 @@ type Message = {
 type Draft = { runId: string; bubbles: string[]; alert: string | null; agente: string | null; createdAt: string };
 type Thread = {
   conversation: Conversation & { agentMode: string; humanTakeoverUntil: string | null };
-  session: { id: string; status: string; phoneE164: string | null; displayName: string | null; agentMode: string };
+  session: { id: string; status: string; phoneE164: string | null; displayName: string | null; agentMode: string; removed?: boolean };
   messages: Message[];
   window: { open: boolean; closesAt: string | null };
   draft: Draft | null;
@@ -226,7 +228,8 @@ export default function WhatsAppInboxPage() {
   const active = thread && thread.conversation.id === activeId ? thread : null;
   const activeItem = useMemo(() => list?.find((c) => c.id === activeId) ?? null, [list, activeId]);
   const paused = Boolean(active?.conversation.humanTakeoverUntil && new Date(active.conversation.humanTakeoverUntil) > new Date());
-  const agentOnForNumber = active ? active.session.agentMode !== "OFF" && active.session.agentMode !== "INHERIT" : false;
+  const numberRemoved = Boolean(active?.session.removed);
+  const agentOnForNumber = active && !numberRemoved ? active.session.agentMode !== "OFF" && active.session.agentMode !== "INHERIT" : false;
 
   return (
     <div className="space-y-3">
@@ -301,6 +304,7 @@ export default function WhatsAppInboxPage() {
                         </span>
                       )}
                       {c.paused && <span className="shrink-0 text-[10px] font-semibold text-muted">{t("Paused")}</span>}
+                      {c.numberRemoved && <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-px text-[10px] font-semibold text-zinc-600">{t("Number deleted")}</span>}
                       {c.unreadCount > 0 && (
                         <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-bold text-white" aria-label={t("{n} unread", { n: c.unreadCount })}>
                           {c.unreadCount > 99 ? "99+" : c.unreadCount}
@@ -403,7 +407,7 @@ export default function WhatsAppInboxPage() {
               </div>
 
               <div className="shrink-0 border-t border-border bg-surface p-3">
-                {active?.draft && (
+                {active?.draft && !numberRemoved && (
                   <DraftCard
                     key={active.draft.runId}
                     draft={active.draft}
@@ -414,7 +418,11 @@ export default function WhatsAppInboxPage() {
                     }}
                   />
                 )}
-                {active && !active.window.open ? (
+                {numberRemoved ? (
+                  <p className="rounded-lg bg-surface-hover px-3 py-2 text-sm text-foreground" role="status">
+                    {t("This number was deleted. The conversation stays saved only for reading.")}
+                  </p>
+                ) : active && !active.window.open ? (
                   <p className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-foreground" role="status">
                     {t("The 24 hour window is closed. WhatsApp only lets you answer within 24 hours of the contact's last message. When they write again, you can answer.")}
                   </p>
