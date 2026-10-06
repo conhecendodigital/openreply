@@ -61,7 +61,7 @@ Parte do plano "Inbox de WhatsApp + Lead Engine multiusuário". Este branch entr
    | `updateSessionStatus` | `WaSession.status`, `phoneE164`, `lastEventAt`, `connectedAt` quando virar CONNECTED |
    | `upsertContact` | `WaContact` `upsert` por `@@unique([sessionId, jid])` |
    | `upsertConversation` | `WaConversation` `upsert` por `@@unique([sessionId, contactId])` |
-   | `insertMessage` | `WaMessage` `create`; P2002 em `[sessionId, providerMessageId]` = já existe (não troca `sentBy`) |
+   | `insertMessage` | `WaMessage` `create`; P2002 em `[sessionId, providerMessageId]` = já existe (não troca `sentBy`, exceto USER_PHONE → AGENT/USER_APP quando o eco do OpenWA chegou antes do envio gravar) |
    | `touchConversation` | `lastMessageAt`, `lastMessagePreview`, `unreadCount + 1` (só se a mensagem for mais nova) |
    | `updateMessageAck` | `WaMessage.ack` só pra frente: `updateMany where ack in (os anteriores)` |
    | `getConversation` / `getContact` | leitura simples |

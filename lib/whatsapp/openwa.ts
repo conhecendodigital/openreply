@@ -70,7 +70,10 @@ export const OPENWA_WEBHOOK_EVENTS = [
   "message.edited",
   "message.revoked",
   "session.qr",
-  "session.ready",
+  // O OpenWA não tem "session.ready" (o POST /webhooks recusa evento fora de
+  // WEBHOOK_EVENTS com 400). "Pronto" chega como session.status { status: "ready" }.
+  "session.status",
+  "session.authenticated",
   "session.disconnected",
   "session.restriction",
 ] as const;

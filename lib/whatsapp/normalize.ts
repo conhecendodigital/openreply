@@ -190,10 +190,13 @@ export function normalizeOpenWAEnvelope(env: OpenWAEnvelope): NormalizedEvent[] 
       return [event];
     }
     case "session.qr":
+    case "session.status":
     case "session.ready":
     case "session.authenticated":
     case "session.disconnected":
     case "session.restriction": {
+      // session.status { status: "ready" | "qr_ready" | ... } é o evento real do OpenWA 0.24;
+      // "session.ready" fica só por compatibilidade (o gateway não emite).
       const status =
         env.event === "session.qr"
           ? "QR_READY"
@@ -201,7 +204,7 @@ export function normalizeOpenWAEnvelope(env: OpenWAEnvelope): NormalizedEvent[] 
             ? "RESTRICTED"
             : env.event === "session.disconnected"
               ? "DISCONNECTED"
-              : env.event === "session.ready"
+              : env.event === "session.ready" || env.event === "session.authenticated"
                 ? "CONNECTED"
                 : mapOpenWAStatus(d.status);
       const phone = str(d.phone);
