@@ -35,7 +35,12 @@ import {
   type RunStatus,
   type SentBy,
 } from "@/lib/whatsapp/agentes/types";
-import { renderMemory } from "@/lib/whatsapp/cerebro/memory";
+import { dropSensitive, emptyMemory, mergeMemory, renderMemory } from "@/lib/whatsapp/cerebro/memory";
+import { lerRegras, regrasPreenchidas } from "@/lib/whatsapp/regras/esquema";
+import { estagioValido, type Classificacao, type Estagio } from "@/lib/whatsapp/regras/estagio";
+import { MAX_EXEMPLOS, type ExemploAprendido } from "@/lib/whatsapp/regras/exemplos";
+import { lerFicha, type FichaLead } from "@/lib/whatsapp/regras/ficha";
+import type { CasoAprendizado } from "@/lib/whatsapp/agentes/types";
 import { createPrismaSqlExecutor, type PrismaRawLike } from "@/lib/whatsapp/cerebro/sql";
 import { CerebroStore } from "@/lib/whatsapp/cerebro/store";
 import { enqueuePlanned } from "@/lib/whatsapp/outbound";
@@ -45,6 +50,22 @@ import type { BubblePlan } from "@/lib/whatsapp/pacing";
 
 /** Últimas mensagens que o agente lê. */
 export const HISTORICO_MAX = 40;
+/** Casos guardados por número pro relatório (os mais antigos saem). */
+export const MAX_CASOS = 500;
+
+function soDigitos(s: string): string {
+  return s.replace(/\D/g, "");
+}
+
+/** Mesmo telefone (com ou sem +55, com ou sem o 9). */
+export function mesmoTelefone(a: string, b: string): boolean {
+  const x = soDigitos(a);
+  const y = soDigitos(b);
+  if (x.length < 8 || y.length < 8) return false;
+  const semPais = (d: string) => (d.length > 11 && d.startsWith("55") ? d.slice(2) : d);
+  const sem9 = (d: string) => (d.length === 11 && d[2] === "9" ? d.slice(0, 2) + d.slice(3) : d);
+  return sem9(semPais(x)) === sem9(semPais(y));
+}
 
 export interface PrismaAgentStoreDeps {
   /** Repositório e fila do conector (envio passa pela regra das 24h de lá). */
@@ -198,6 +219,12 @@ export class PrismaAgentStore implements AgentStore {
           agentMode: c.agentMode,
           humanTakeoverUntil: c.humanTakeoverUntil,
           labelModes: c.labels.map((l) => l.label.agentMode),
+          lead: {
+            ficha: lerFicha(c.leadFicha),
+            estagio: estagioValido(c.leadStage) ? c.leadStage : null,
+            manual: c.leadStageManual,
+            motivo: c.leadStageMotivo,
+          },
         },
         contact: { id: c.contact.id, isGroup: c.contact.isGroup, name: c.contact.name, pushName: c.contact.pushName },
         profile: profile
@@ -214,6 +241,8 @@ export class PrismaAgentStore implements AgentStore {
               fatosPermitidos: stringList(profile.fatosPermitidos),
               timeZone: profile.timeZone,
               atrasoInicialMs: { min: profile.delayMinSeconds * 1000, max: profile.delayMaxSeconds * 1000 },
+              regras: regrasDoPerfil(profile.regrasNegocio),
+              avisarResponsavel: avisoDe(profile.avisarResponsavel),
             }
           : null,
         historico: mensagens.reverse().map((m) => ({ ...m, sentBy: m.sentBy as SentBy })),
@@ -414,9 +443,188 @@ export class PrismaAgentStore implements AgentStore {
   }
 
   /**
-   * Não grava nada por enquanto: atualizar a memória pede uma chamada de IA a
-   * mais (updateContactMemory do cérebro). Fica pra quando o dono quiser
-   * pagar por isso (pendência registrada no documento de entrega).
+   * Não grava nada aqui: a memória do cérebro é atualizada por
+   * gravarMemoriaContato, com o que a chamada barata da ficha do lead devolve.
    */
   async salvarMemoria(): Promise<void> {}
+
+  /* ---------------- Regras duras, ficha, estágio e aprendizado ---------------- */
+
+  async exemplosAprendidos(sessionId: string): Promise<ExemploAprendido[]> {
+    const rows = await this.rls((tx) =>
+      tx.waAgentExample.findMany({ where: { sessionId, workspaceId: this.workspaceId }, orderBy: { createdAt: "desc" }, take: MAX_EXEMPLOS })
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      sessionId: r.sessionId,
+      agente: isAgente(r.agente) ? r.agente : null,
+      origem: r.origem === "assumir" ? "assumir" : "edicao",
+      origemId: r.origemId,
+      pergunta: r.pergunta,
+      resposta: r.resposta,
+      rascunho: r.rascunho,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  async registrarExemplo(ex: ExemploAprendido): Promise<void> {
+    await this.rls(async (tx) => {
+      await tx.waAgentExample.createMany({
+        data: [
+          {
+            workspaceId: this.workspaceId,
+            ownerUserId: this.ownerUserId,
+            sessionId: ex.sessionId,
+            agente: ex.agente,
+            origem: ex.origem,
+            origemId: ex.origemId.slice(0, 200),
+            pergunta: ex.pergunta.slice(0, 600),
+            resposta: ex.resposta.slice(0, 1200),
+            rascunho: ex.rascunho ? ex.rascunho.slice(0, 1200) : null,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      // Limite por número: os mais antigos saem.
+      const velhos = await tx.waAgentExample.findMany({
+        where: { sessionId: ex.sessionId, workspaceId: this.workspaceId },
+        orderBy: { createdAt: "desc" },
+        skip: MAX_EXEMPLOS,
+        select: { id: true },
+      });
+      if (velhos.length) await tx.waAgentExample.deleteMany({ where: { id: { in: velhos.map((v) => v.id) } } });
+    });
+  }
+
+  async registrarCaso(c: CasoAprendizado): Promise<void> {
+    await this.rls(async (tx) => {
+      await tx.waAgentLearningCase.createMany({
+        data: [
+          {
+            workspaceId: this.workspaceId,
+            ownerUserId: this.ownerUserId,
+            sessionId: c.sessionId,
+            tipo: c.tipo,
+            regra: c.regra?.slice(0, 200) ?? null,
+            assunto: c.assunto?.slice(0, 120) ?? null,
+            pergunta: c.pergunta?.slice(0, 600) || null,
+            resposta: c.resposta?.slice(0, 1200) || null,
+            conversaHash: c.conversaHash ?? null,
+            origemId: c.origemId.slice(0, 200),
+          },
+        ],
+        skipDuplicates: true,
+      });
+      const velhos = await tx.waAgentLearningCase.findMany({
+        where: { sessionId: c.sessionId, workspaceId: this.workspaceId },
+        orderBy: { createdAt: "desc" },
+        skip: MAX_CASOS,
+        select: { id: true },
+      });
+      if (velhos.length) await tx.waAgentLearningCase.deleteMany({ where: { id: { in: velhos.map((v) => v.id) } } });
+    });
+  }
+
+  async salvarFicha(conversationId: string, ficha: FichaLead): Promise<void> {
+    await this.rls((tx) =>
+      tx.waConversation.updateMany({ where: { id: conversationId, workspaceId: this.workspaceId }, data: { leadFicha: ficha as never } })
+    );
+  }
+
+  async salvarEstagio(input: { conversationId: string; sessionId: string; de: Estagio | null; nova: Classificacao; manual: boolean; porUserId: string | null }): Promise<void> {
+    await gravarEstagio(this.rls.bind(this), this.workspaceId, input);
+  }
+
+  async gravarMemoriaContato(contactId: string, update: Partial<Record<"nome" | "interesse" | "objecao" | "etapa" | "observacao", unknown>>): Promise<void> {
+    const db = createPrismaSqlExecutor(this.app as unknown as PrismaRawLike, { userId: this.ownerUserId, workspaceId: this.workspaceId });
+    const store = new CerebroStore(db);
+    const scope = { ownerUserId: this.ownerUserId, workspaceId: this.workspaceId };
+    const limpo = dropSensitive(update);
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      const atual = await store.getMemory(this.workspaceId, contactId);
+      const antes = atual
+        ? { nome: atual.nome, interesse: atual.interesse, objecao: atual.objecao, etapa: atual.etapa, observacao: atual.observacao }
+        : emptyMemory();
+      const nova = mergeMemory(antes, limpo);
+      if (await store.saveMemory(scope, contactId, nova, atual ? atual.version : null)) return;
+    }
+  }
+
+  /**
+   * Resumo do lead qualificado pro WhatsApp do responsável, pelo mesmo número.
+   * Só sai se o responsável já tem conversa com esse número e a janela de 24h
+   * está aberta (a regra do conector vale aqui também).
+   */
+  async avisarResponsavel(input: { sessionId: string; telefone: string; texto: string }): Promise<{ ok: true } | { ok: false; motivo: string }> {
+    const digitos = soDigitos(input.telefone);
+    if (digitos.length < 10) return { ok: false, motivo: "o telefone do responsável está incompleto" };
+    const candidatos = await this.rls((tx) =>
+      tx.waContact.findMany({
+        where: { sessionId: input.sessionId, workspaceId: this.workspaceId, isGroup: false, phoneE164: { contains: digitos.slice(-8) } },
+        select: { phoneE164: true, conversations: { select: { id: true }, take: 1 } },
+        take: 10,
+      })
+    );
+    const contato = candidatos.find((c) => c.phoneE164 && mesmoTelefone(c.phoneE164, input.telefone));
+    const conversationId = contato?.conversations[0]?.id;
+    if (!conversationId) return { ok: false, motivo: "o responsável ainda não mandou mensagem pra esse número" };
+    const result = await enqueuePlanned(
+      { ownerUserId: this.ownerUserId, sessionId: input.sessionId, conversationId, sentBy: "AGENT", content: { type: "text", text: input.texto } },
+      [{ text: input.texto, waitBeforeTypingMs: 0, typingMs: 1_500 }],
+      { repo: this.deps.repo, queue: this.deps.queue }
+    );
+    if (result.status === "queued") return { ok: true };
+    return { ok: false, motivo: result.reason === "fora_da_janela_24h" ? "passaram 24h da última mensagem do responsável" : "o envio foi barrado" };
+  }
+}
+
+type RlsFn = <T>(fn: (tx: Parameters<Parameters<typeof withRls>[1]>[0]) => Promise<T>) => Promise<T>;
+
+/** Grava o estágio e o histórico juntos (o agente ou o dono). */
+export async function gravarEstagio(
+  rls: RlsFn,
+  workspaceId: string,
+  input: { conversationId: string; sessionId: string; de: Estagio | null; nova: Classificacao; manual: boolean; porUserId: string | null }
+): Promise<void> {
+  const motivo = input.nova.motivo.slice(0, 500) || null;
+  await rls(async (tx) => {
+    const { count } = await tx.waConversation.updateMany({
+      where: { id: input.conversationId, workspaceId },
+      data: {
+        leadStage: input.nova.estagio,
+        leadStageMotivo: motivo,
+        leadStageTipo: input.nova.tipo,
+        leadStageManual: input.manual,
+        leadStageAt: new Date(),
+      },
+    });
+    if (!count) return;
+    await tx.waLeadStageEvent.create({
+      data: {
+        workspaceId,
+        sessionId: input.sessionId,
+        conversationId: input.conversationId,
+        de: input.de,
+        para: input.nova.estagio,
+        motivo,
+        tipo: input.nova.tipo,
+        manual: input.manual,
+        porUserId: input.porUserId,
+      },
+      select: { id: true },
+    });
+  });
+}
+
+/** Regras do perfil (null = o dono ainda não tem regra nenhuma: o motor segue como antes). */
+export function regrasDoPerfil(v: unknown) {
+  if (v === null || v === undefined) return null;
+  const r = lerRegras(v);
+  return regrasPreenchidas(r) ? r : null;
+}
+
+function avisoDe(v: unknown): { ligado: boolean; telefone: string } | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  return { ligado: o.ligado === true, telefone: typeof o.telefone === "string" ? o.telefone.slice(0, 30) : "" };
 }

@@ -18,7 +18,7 @@ import type { PrismaClient } from "@/app/generated/prisma/client";
 import { getAiCredential, getAiSettings } from "@/lib/ai/credentials";
 import { MODEL_JEV } from "@/lib/ai/catalog";
 import { recordAiUsage } from "@/lib/ai/usage";
-import { processarMensagem, podeEnviar, type DepsMotor } from "@/lib/whatsapp/agentes/motor";
+import { aprenderRespostaHumana, processarMensagem, podeEnviar, type DepsMotor } from "@/lib/whatsapp/agentes/motor";
 import { aoMensagemDoContato, aoMensagemDoUsuario } from "@/lib/whatsapp/agentes/modo";
 import { precosDaPlataforma } from "@/lib/whatsapp/agentes/modelos";
 import { PrismaAgentStore } from "@/lib/whatsapp/agentes/store-prisma";
@@ -28,7 +28,9 @@ import { searchKnowledge } from "@/lib/whatsapp/cerebro/search";
 import type { IngestDeps } from "@/lib/whatsapp/ingest";
 import type { ProcessSendDeps } from "@/lib/whatsapp/outbound";
 import type { PrismaWaRepository } from "@/lib/whatsapp/prisma-repository";
-import { enqueueAgentJob, removePendingSend, type WaAgentJob, type WaQueuePort } from "@/lib/whatsapp/queue";
+import { AGENT_INBOUND_DELAY_MS, enqueueAgentJob, removePendingSend, type WaAgentJob, type WaQueuePort } from "@/lib/whatsapp/queue";
+import { getPrisma } from "@/lib/db/client";
+import { withSystemRole } from "@/lib/db/rls";
 import type { WaRepository } from "@/lib/whatsapp/repository";
 
 export interface AgentWorkerDeps {
@@ -100,8 +102,8 @@ export async function motorDeps(job: Pick<WaAgentJob, "ownerUserId" | "workspace
         {
           ownerUserId: u.ownerUserId,
           workspaceId: u.workspaceId,
-          kind: "agent",
-          agent: u.agente,
+          kind: u.kind ?? "agent",
+          agent: u.kind === "ficha" ? null : u.agente,
           provider: u.provider,
           model: u.modelo,
           contactId: u.contactId,
@@ -126,6 +128,8 @@ export async function processAgentJob(job: WaAgentJob, deps: AgentWorkerDeps) {
     // Virou AGENT/USER_APP: era o eco do que o próprio Lead Engine mandou.
     if (!msg || !msg.fromMe || msg.sentBy !== "USER_PHONE") return { acao: "ignorado", motivo: "não foi o dono" };
     const store = storeFor(job.ownerUserId, job.workspaceId, deps);
+    // Antes de pausar: a resposta do dono no lugar do agente vira exemplo do negócio.
+    await aprenderRespostaHumana(store, { conversationId: job.conversationId, mensagemId: job.messageId });
     await aoMensagemDoUsuario(store, job.conversationId, "USER_PHONE");
     return { acao: "pausado", motivo: "o dono respondeu pelo celular" };
   }
@@ -135,15 +139,47 @@ export async function processAgentJob(job: WaAgentJob, deps: AgentWorkerDeps) {
   return processarMensagem(motor, { conversationId: job.conversationId, triggerMsgId: job.messageId });
 }
 
-/** Ganchos do wa-ingest com o workspace da sessão (lido no repositório). */
+export const DEBOUNCE_MIN_S = 3;
+export const DEBOUNCE_MAX_S = 30;
+export const DEBOUNCE_PADRAO_S = 10;
+
+export function debounceMs(segundos: number | null | undefined): number {
+  const n = Number(segundos ?? DEBOUNCE_PADRAO_S);
+  const s = Number.isFinite(n) ? Math.min(DEBOUNCE_MAX_S, Math.max(DEBOUNCE_MIN_S, Math.round(n))) : DEBOUNCE_PADRAO_S;
+  return s * 1000;
+}
+
+/** Janela do número ("Ritmo humano"): só leitura, papel de sistema (o ingest roda sem sessão). */
+export async function debounceDoNumero(sessionId: string, system?: PrismaClient): Promise<number> {
+  try {
+    const p = await withSystemRole((tx) => tx.waAgentProfile.findUnique({ where: { sessionId }, select: { debounceSeconds: true } }), system ?? getPrisma());
+    return debounceMs(p?.debounceSeconds);
+  } catch {
+    return debounceMs(null);
+  }
+}
+
+/**
+ * Ganchos do wa-ingest com o workspace da sessão (lido no repositório).
+ *
+ * Mensagens seguidas do contato: cada uma agenda o agente pra daqui a N
+ * segundos (a janela do número, padrão 10 s, áudio conta igual). Quando o job
+ * de uma mensagem roda e já chegou outra depois, ele não faz nada: só o job da
+ * ÚLTIMA responde, e responde tudo junto (o histórico junta as mensagens
+ * seguidas do cliente numa só). Se chegar mensagem depois de a resposta ser
+ * agendada, o envio que esperava é cancelado e o agente responde de novo com
+ * tudo (aoMensagemDoContato): nada sai duplicado.
+ */
 export function agentIngestHooks(
   repo: Pick<WaRepository, "getSession">,
-  enqueue: (job: WaAgentJob) => Promise<void> = enqueueAgentJob
+  enqueue: (job: WaAgentJob, delayMs?: number) => Promise<void> = enqueueAgentJob,
+  janela: (sessionId: string) => Promise<number> = (id) => debounceDoNumero(id)
 ): Pick<IngestDeps, "onInboundMessage" | "onOwnerMessage"> {
   const jobFor = async (kind: WaAgentJob["kind"], info: { ownerUserId: string; sessionId: string; conversationId: string; messageId: string }) => {
     const session = await repo.getSession(info.sessionId);
     if (!session) return;
-    await enqueue({ kind, ownerUserId: info.ownerUserId, workspaceId: session.workspaceId, sessionId: info.sessionId, conversationId: info.conversationId, messageId: info.messageId });
+    const delay = kind === "inbound" ? await janela(info.sessionId).catch(() => AGENT_INBOUND_DELAY_MS) : undefined;
+    await enqueue({ kind, ownerUserId: info.ownerUserId, workspaceId: session.workspaceId, sessionId: info.sessionId, conversationId: info.conversationId, messageId: info.messageId }, delay);
   };
   return {
     onInboundMessage: (info) => jobFor("inbound", info),

@@ -10,6 +10,7 @@
  *
  * Saída pedida em JSON: {"bolhas": [...], "passar_pra_humano": bool, "motivo": "..."}.
  */
+import type { SinaisModelo } from "@/lib/whatsapp/regras/detectar";
 import { limparDadosPessoais } from "./tom";
 import type { AgenteConfig, AgenteTipo, AgentProfile, MemoriaContato, TrechoCerebro, WaMessageLite } from "./types";
 import type { MensagemChat } from "./provedores";
@@ -28,7 +29,7 @@ const PAPEIS: Record<AgenteTipo, string> = {
 
 const REGRAS = `REGRAS (siga todas):
 1. Escreva como o dono do negócio escreve no WhatsApp: mensagens curtas, conversa de gente, sem tom de robô, sem tom de guru, sem travessão, sem lista com marcador, sem negrito.
-2. Responda só o que foi perguntado. De 1 a 3 bolhas curtas (cada uma com no máximo 2 frases).
+2. Responda só o que foi perguntado. De 1 a 3 bolhas curtas (cada uma com no máximo 2 frases), uma ideia por bolha, sem cortar frase no meio. Faça no máximo uma pergunta, sempre na última bolha.
 3. Preço, prazo, porcentagem, link, endereço e condição de pagamento: só cite se estiver escrito em "O QUE O NEGÓCIO FAZ", em "FATOS CADASTRADOS" ou nos "TRECHOS DOS DOCUMENTOS". Se não estiver, diga com naturalidade que isso a equipe confirma (ou que é visto na conversa com o responsável) e siga a conversa. Não passe pra humano só por isso.
 4. Nunca prometa resultado, nunca garanta ganho, nunca invente política, estoque ou desconto.
 5. Você conduz a conversa sozinho do começo ao fim. Reclamação, dúvida difícil, cancelamento ou cliente bravo: responda com calma e empatia, sem prometer nada que não esteja nos dados. Só marque passar_pra_humano: true em dois casos: (a) o contato ficou QUALIFICADO pelas regras do negócio (as instruções do agente dizem o que é qualificado; em geral: está na região atendida, quer um serviço que o negócio faz e você já tem as informações mínimas pedidas); (b) a pessoa pediu claramente pra falar com uma pessoa. Nesses dois casos escreva em "bolhas" a mensagem de encaminhamento pro cliente (use a mensagem de encaminhamento do negócio, se houver) e em "resumo_equipe" o resumo pra equipe com as informações que o negócio pede.
@@ -49,6 +50,20 @@ export interface EntradaComando {
   memoria: MemoriaContato | null;
   historico: WaMessageLite[];
   nomesDoContato: string[];
+  /**
+   * Regras duras, ficha do lead e exemplos aprendidos (lib/whatsapp/regras),
+   * já em texto. `regras` e `formato` vão na parte FIXA (cache); o resto na variável.
+   */
+  extras?: {
+    regras?: string;
+    formato?: string;
+    /** "O que você já sabe" (dado do cliente: vai em <dados>). */
+    sabe?: string;
+    /** "O que ainda falta perguntar" (das regras). */
+    falta?: string;
+    /** Exemplos de como a empresa responde (dado da equipe: vai em <dados>). */
+    exemplos?: string;
+  };
 }
 
 export interface ComandoMontado {
@@ -147,11 +162,14 @@ export function historicoParaChat(historico: WaMessageLite[], limite = HISTORICO
 export function montarComando(e: EntradaComando): ComandoMontado {
   const p = e.profile;
   const fatos = (p?.fatosPermitidos ?? []).filter((f) => f.trim());
+  const x = e.extras ?? {};
   const fixo = [
     PAPEIS[e.agente],
     e.config.instrucoes?.trim() ? `INSTRUÇÃO DO DONO PRA ESSE AGENTE: ${e.config.instrucoes.trim()}` : "",
     REGRAS,
+    x.formato ?? "",
     `O QUE O NEGÓCIO FAZ (escrito pelo dono):\n${p?.baseCommand?.trim() || "(o dono ainda não escreveu)"}`,
+    x.regras ?? "",
     fatos.length ? `FATOS CADASTRADOS (preços, prazos e links que você pode citar):\n${fatos.map((f) => `- ${f}`).join("\n")}` : "",
     blocoTom(p),
   ]
@@ -176,6 +194,11 @@ export function montarComando(e: EntradaComando): ComandoMontado {
   const variavel = [
     trechos.length ? `TRECHOS DOS DOCUMENTOS DO NEGÓCIO:\n${blocoDeDados("PDF do negócio", trechos.join("\n\n"))}` : "TRECHOS DOS DOCUMENTOS DO NEGÓCIO: nenhum trecho encontrado pra essa mensagem.",
     blocoMemoria,
+    x.sabe ? `O QUE VOCÊ JÁ SABE DESSE CLIENTE (ficha do lead, só o que ele disse; não pergunte de novo):\n${blocoDeDados("ficha do lead", x.sabe)}` : "",
+    x.falta ?? "",
+    x.exemplos
+      ? `EXEMPLOS DE COMO A EMPRESA RESPONDE (respostas reais da equipe em conversas parecidas; copie o jeito e a decisão, nunca os dados, preços ou nomes):\n${blocoDeDados("exemplos aprendidos", x.exemplos)}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -196,6 +219,26 @@ export interface SaidaAgente {
   qualificado: boolean;
   /** Resumo pra equipe quando transfere (informações que o negócio pede). */
   resumoEquipe: string;
+  /** O que o modelo disse que entendeu (o código confere no texto do cliente). */
+  sinais: SinaisModelo;
+}
+
+function textoCurto(v: unknown, max = 120): string {
+  return typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
+
+function lerSinais(d: Record<string, unknown>): SinaisModelo {
+  const lo = d.local_obra && typeof d.local_obra === "object" ? (d.local_obra as Record<string, unknown>) : null;
+  const localObra = lo ? { cidade: textoCurto(lo.cidade, 80), uf: textoCurto(lo.uf, 2), bairro: textoCurto(lo.bairro, 80) } : null;
+  const servico = d.servico === "aceito" || d.servico === "recusado" || d.servico === "excecao" || d.servico === "desconhecido" ? d.servico : null;
+  const coletado: Record<string, string> = {};
+  if (d.coletado && typeof d.coletado === "object") {
+    for (const [k, v] of Object.entries(d.coletado as Record<string, unknown>).slice(0, 20)) {
+      const t = textoCurto(v, 200);
+      if (t) coletado[k.slice(0, 80)] = t;
+    }
+  }
+  return { localObra: localObra && (localObra.cidade || localObra.bairro) ? localObra : null, servico, excecao: textoCurto(d.excecao, 160), coletado };
 }
 
 /** Lê o JSON do modelo, mesmo com texto em volta ou cerca de código. */
@@ -212,6 +255,7 @@ export function lerSaida(texto: string): SaidaAgente | null {
       motivo: typeof d.motivo === "string" ? d.motivo.slice(0, 500) : "",
       qualificado: d.qualificado === true,
       resumoEquipe: typeof d.resumo_equipe === "string" ? d.resumo_equipe.slice(0, 2000) : "",
+      sinais: lerSinais(d),
     };
   } catch {
     return null;

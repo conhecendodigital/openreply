@@ -13,6 +13,11 @@
  */
 
 /** Igual ao enum AgentMode do plano. */
+import type { ExemploAprendido } from "@/lib/whatsapp/regras/exemplos";
+import type { RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
+import type { FichaLead } from "@/lib/whatsapp/regras/ficha";
+import type { Classificacao, Estagio } from "@/lib/whatsapp/regras/estagio";
+
 export type AgentMode = "INHERIT" | "OFF" | "DRAFT" | "AUTO";
 /** Igual ao enum SentBy do plano. */
 export type SentBy = "CONTACT" | "USER_APP" | "USER_PHONE" | "AGENT";
@@ -51,6 +56,8 @@ export interface ConversaContexto {
     humanTakeoverUntil: Date | null;
     /** Modo de cada etiqueta aplicada na conversa. */
     labelModes: AgentMode[];
+    /** Ficha do lead e estágio no CRM (regras duras). Opcional: sem isso o motor segue como antes. */
+    lead?: { ficha: FichaLead; estagio: Estagio | null; manual: boolean; motivo: string | null };
   };
   contact: {
     id: string;
@@ -81,6 +88,10 @@ export interface AgentProfile {
   timeZone?: string;
   /** Atraso humano antes da 1ª bolha no envio automático, em ms (padrão 20 a 90 s). */
   atrasoInicialMs?: { min: number; max: number } | null;
+  /** Regras duras do negócio (lib/whatsapp/regras). null = sem regras: o motor segue como antes. */
+  regras?: RegrasNegocio | null;
+  /** Mandar o resumo do lead qualificado pro WhatsApp do responsável (desligado por padrão). */
+  avisarResponsavel?: { ligado: boolean; telefone: string } | null;
 }
 
 export interface ExemploTom {
@@ -191,6 +202,19 @@ export interface EnvioPlanejado {
   digitandoMs: number;
 }
 
+/** Caso pro relatório "O que o agente aprendeu". Sem dado pessoal (texto já limpo). */
+export interface CasoAprendizado {
+  sessionId: string;
+  tipo: "descartado" | "regra_bloqueou" | "regra_corrigiu" | "fora_da_area" | "servico_recusado";
+  regra?: string | null;
+  assunto?: string | null;
+  pergunta?: string | null;
+  resposta?: string | null;
+  conversaHash?: string | null;
+  /** Não registra o mesmo caso duas vezes. */
+  origemId: string;
+}
+
 export interface AgentStore {
   carregarContexto(conversationId: string): Promise<ConversaContexto | null>;
   configAgentes(ownerUserId: string, sessionId: string): Promise<AgenteConfig[]>;
@@ -218,6 +242,21 @@ export interface AgentStore {
    * ao mesmo tempo agendavam o envio duas vezes.
    */
   marcarAprovado?(runId: string, aprovadoPor: string, output: { bolhas: string[]; motivo?: string | null }): Promise<boolean>;
+
+  /* ---- Regras duras, ficha, estágio e aprendizado (todos opcionais) ---- */
+
+  /** Exemplos aprendidos do número (os mais novos primeiro). */
+  exemplosAprendidos?(sessionId: string): Promise<ExemploAprendido[]>;
+  /** Guarda um exemplo (respeita o limite por número; o mesmo origemId não duplica). */
+  registrarExemplo?(ex: ExemploAprendido): Promise<void>;
+  registrarCaso?(caso: CasoAprendizado): Promise<void>;
+  salvarFicha?(conversationId: string, ficha: FichaLead): Promise<void>;
+  /** Grava o estágio e o histórico (porUserId null = o agente). */
+  salvarEstagio?(input: { conversationId: string; sessionId: string; de: Estagio | null; nova: Classificacao; manual: boolean; porUserId: string | null }): Promise<void>;
+  /** Atualiza a memória do contato (nome, interesse, objeção, etapa, observação). */
+  gravarMemoriaContato?(contactId: string, update: Partial<Record<"nome" | "interesse" | "objecao" | "etapa" | "observacao", unknown>>): Promise<void>;
+  /** Manda o resumo do lead qualificado pro WhatsApp do responsável, pelo próprio número. */
+  avisarResponsavel?(input: { sessionId: string; telefone: string; texto: string }): Promise<{ ok: true } | { ok: false; motivo: string }>;
 }
 
 export interface Limites {

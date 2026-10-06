@@ -120,8 +120,8 @@ export interface WaAgentJob {
   messageId: string;
 }
 
-/** Espera pra juntar mensagens seguidas do contato antes de rodar o agente. */
-export const AGENT_INBOUND_DELAY_MS = 4_000;
+/** Espera pra juntar mensagens seguidas do contato antes de rodar o agente (padrão; o número pode mudar de 3 a 30 s). */
+export const AGENT_INBOUND_DELAY_MS = 10_000;
 /** Espera pro eco do próprio envio virar AGENT/USER_APP antes de decidir que foi o dono. */
 export const AGENT_OWNER_DELAY_MS = 30_000;
 
@@ -142,7 +142,8 @@ export function getWaAgentQueue(): Queue<WaAgentJob> {
   return agentQueue;
 }
 
-export async function enqueueAgentJob(job: WaAgentJob): Promise<void> {
-  const delay = job.kind === "owner" ? AGENT_OWNER_DELAY_MS : AGENT_INBOUND_DELAY_MS;
+/** delayMs: janela de juntar mensagens do número (inbound). Sem ela, o padrão. */
+export async function enqueueAgentJob(job: WaAgentJob, delayMs?: number): Promise<void> {
+  const delay = job.kind === "owner" ? AGENT_OWNER_DELAY_MS : delayMs && delayMs > 0 ? Math.round(delayMs) : AGENT_INBOUND_DELAY_MS;
   await getWaAgentQueue().add(job.kind, job, { jobId: `waa_${job.kind}_${safeJobKey(job.messageId)}`, delay });
 }

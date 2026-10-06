@@ -480,7 +480,8 @@ describe("quebra de mensagens e ritmo", () => {
     const e = planejarRitmo(["oi!", "o bolo de pote sai R$ 12,00 e tem de chocolate, ninho e morango"], () => 0);
     expect(e[0].esperaMs).toBe(20_000);
     expect(e[0].digitandoMs).toBe(1_500);
-    expect(e[1].esperaMs).toBe(1_000);
+    // Pausa curta + um pouco pelo tamanho da bolha anterior ("oi!" = 3 caracteres).
+    expect(e[1].esperaMs).toBe(1_000 + 3 * 8);
     expect(e[1].digitandoMs).toBeGreaterThan(e[0].digitandoMs);
     expect(duracaoTotalMs(e)).toBe(e.reduce((s, x) => s + x.esperaMs + x.digitandoMs, 0));
     const max = planejarRitmo(["x"], () => 0.9999);
@@ -737,7 +738,7 @@ describe("tom e Comando", () => {
   });
 
   it("lê JSON com texto em volta", () => {
-    expect(lerSaida('```json\n{"bolhas":["oi"],"passar_pra_humano":false}\n```')).toEqual({
+    expect(lerSaida('```json\n{"bolhas":["oi"],"passar_pra_humano":false}\n```')).toMatchObject({
       bolhas: ["oi"],
       passarPraHumano: false,
       motivo: "",

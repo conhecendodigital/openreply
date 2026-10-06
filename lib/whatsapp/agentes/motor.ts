@@ -13,17 +13,39 @@
  * O envio de verdade é do conector: ele chama podeEnviar() antes de cada bolha,
  * então "Assumir" segura até um envio que já estava na fila.
  */
+import { createHash } from "node:crypto";
+import { temRegras, type RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
+import { detectarServico } from "@/lib/whatsapp/regras/detectar";
+import { classificarLead, decidirMudanca } from "@/lib/whatsapp/regras/estagio";
+import { exemploDaEdicao, exemploDaRespostaHumana, exemplosParecidos, limparExemplo, MAX_PERGUNTA, MAX_RESPOSTA, perguntaAntes, textoExemplos } from "@/lib/whatsapp/regras/exemplos";
+import {
+  camposDaFicha,
+  conferirExtracao,
+  fichaVazia,
+  juntarFicha,
+  lerSaidaFicha,
+  MAX_TOKENS_FICHA,
+  mensagemFicha,
+  preencherPorRegra,
+  resumoDaFicha,
+  SISTEMA_FICHA,
+  type CampoFichaDef,
+  type FichaLead,
+} from "@/lib/whatsapp/regras/ficha";
+import { blocoFicha, blocoRegras, formatoExtra } from "@/lib/whatsapp/regras/prompt";
+import { normalizarTexto } from "@/lib/whatsapp/regras/texto";
+import { avisoDasViolacoes, localDaConversa, mensagemDeCorrecaoRegras, verificarResposta, type Verificacao, type Violacao } from "@/lib/whatsapp/regras/verificar";
 import { duracaoTotalMs, planejarRitmo, quebrarEmBolhas, type Sorteio } from "./bolhas";
-import { lerSaida, montarComando, textoPlano } from "./comando";
+import { lerSaida, montarComando, textoPlano, type ComandoMontado, type SaidaAgente } from "./comando";
 import { abrirChave } from "./credenciais";
 import { descreverInventadas, afirmacoesInventadas } from "./guardas";
 import { PERGUNTAS_CHECAR, perguntarJev, type JevOpcoes } from "./jev";
 import { custoMaximoUsdMicro, custoUsdMicro, escolherModelo, type Preco } from "./modelos";
 import { janelaAberta, resolverModo, takeoverAtivo, TAKEOVER_HORAS_PADRAO } from "./modo";
-import { chamarModelo, ErroModelo, type ChamarModelo } from "./provedores";
+import { chamarModelo, ErroModelo, type ChamarModelo, type RespostaModelo } from "./provedores";
 import { autoEnviosHoje, conferirTeto, emSilencio, limitesDoAmbiente, mensagemTeto } from "./teto";
 import { triar, ultimaDoContato, type DecisaoTriagem } from "./triagem";
-import type { AgenteTipo, AgentRunRecord, AgentStore, BrainRetriever, IaProvider, Limites, RunStatus, Uso } from "./types";
+import type { AgenteConfig, AgenteTipo, AgentRunRecord, AgentStore, AiCredentialRecord, BrainRetriever, ConversaContexto, IaProvider, Limites, RunStatus, Uso } from "./types";
 
 export const MAX_TOKENS_SAIDA = 600;
 
@@ -51,7 +73,11 @@ export interface DepsMotor {
     uso: Uso;
     runId: string | null;
     bloqueado: boolean;
+    /** agent (padrão) | ficha (atualização da ficha do lead, modelo barato). */
+    kind?: "agent" | "ficha";
   }) => Promise<void>;
+  /** false = a ficha do lead só usa regra (sem a chamada barata de IA). */
+  fichaComIa?: boolean;
   /** Avisa o usuário (sino, e-mail). Opcional. */
   notificar?: (aviso: { ownerUserId: string; conversationId: string; tipo: "handoff" | "teto" | "erro_chave"; mensagem: string }) => Promise<void>;
 }
@@ -155,18 +181,35 @@ export async function processarMensagem(
     return { acao: "ignorado", motivo, runId };
   }
 
-  // 3. Contexto: cérebro + memória + tom
+  // 3a. Ficha do lead (regras duras): por regra, e um modelo barato pro que falta (com evidência).
+  const regrasPerfil = ctx.profile?.regras ?? null;
+  const regras = temRegras(regrasPerfil) ? regrasPerfil : null;
+  const defs = camposDaFicha(regrasPerfil);
+  const nomesContato = [ctx.contact.name, ctx.contact.pushName].filter((n): n is string => Boolean(n));
+  const leadAtual = ctx.conversation.lead ?? { ficha: fichaVazia(), estagio: null, manual: false, motivo: null };
+  let ficha = leadAtual.ficha;
+  let fichaMudou = false;
+  if (defs.length && regrasPerfil) {
+    const r = await atualizarFicha(deps, ctx, { regras: regrasPerfil, defs, ficha: leadAtual.ficha, config, cred, limites, now });
+    ficha = r.ficha;
+    fichaMudou = r.mudou;
+  }
+
+  // 3. Contexto: cérebro + memória + tom + exemplos aprendidos
   const consulta = ctx.historico
     .filter((m) => !m.fromMe)
     .slice(-3)
     .map((m) => textoPlano(m).slice(0, 1500))
     .join("\n");
-  const [trechos, memoria] = await Promise.all([
+  const [trechos, memoria, aprendidos] = await Promise.all([
     deps.cerebro
       .buscar({ ownerUserId: ctx.ownerUserId, sessionId: ctx.session.id, agente: config.agente, consulta, limite: 6 })
       .catch(() => []),
     store.lerMemoria(ctx.contact.id),
+    store.exemplosAprendidos ? store.exemplosAprendidos(ctx.session.id).catch(() => []) : Promise.resolve([]),
   ]);
+  const exemplos = exemplosParecidos(aprendidos, consulta, config.agente);
+  const fb = blocoFicha(ficha, defs);
   const comando = montarComando({
     agente: config.agente,
     config,
@@ -174,7 +217,14 @@ export async function processarMensagem(
     trechos,
     memoria,
     historico: ctx.historico,
-    nomesDoContato: [ctx.contact.name, ctx.contact.pushName].filter((n): n is string => Boolean(n)),
+    nomesDoContato: nomesContato,
+    extras: {
+      regras: blocoRegras(regrasPerfil, ctx.profile?.baseCommand ?? ""),
+      formato: formatoExtra(regrasPerfil),
+      sabe: fb.sabe,
+      falta: regras ? fb.falta : "",
+      exemplos: exemplos.length ? textoExemplos(exemplos) : "",
+    },
   });
 
   // 4. Teto (pior caso antes de gastar)
@@ -236,18 +286,89 @@ export async function processarMensagem(
   });
   await usar(deps, ctx, config.agente, escolha.provider, escolha.modelo, resposta.uso, runReservado, false);
 
-  const saida = lerSaida(resposta.texto);
+  let saida: SaidaAgente | null = lerSaida(resposta.texto);
   if (!saida) {
     const runId = await registrar("error", { blockedReason: "A IA devolveu uma resposta fora do formato." });
     return { acao: "erro", motivo: "resposta fora do formato", runId };
   }
-  const bolhas = quebrarEmBolhas(saida.bolhas);
-  if (saida.passarPraHumano || bolhas.length === 0) {
+
+  // 5b. Regras duras: confere por regra; se quebrou, pede UMA correção; se continuar errada, vira rascunho com o aviso.
+  let verificacao: Verificacao | null = null;
+  let alertaRegra: string | null = null;
+  const conversaHash = hashConversa(ctx.conversation.id);
+  const perguntaCliente = limparExemplo(perguntaAntes(ctx.historico, ctx.historico.length), nomesContato, MAX_PERGUNTA);
+  if (regras) {
+    const verificar = (s: SaidaAgente) =>
+      verificarResposta({ regras, agente: config.agente, historico: ctx.historico, saida: { ...s, bolhas: quebrarEmBolhas(s.bolhas) }, ficha, defs, nomesDoContato: nomesContato });
+    verificacao = verificar(saida);
+    if (verificacao.violacoes.length) {
+      const primeiras = verificacao.violacoes;
+      const corr = await corrigirUmaVez(deps, ctx, { escolha, cred, limites, comando, textoAnterior: resposta.texto, violacoes: primeiras, now, agente: config.agente, runId: runReservado });
+      if (corr) {
+        Object.assign(base, {
+          tokensIn: base.tokensIn + corr.uso.tokensIn,
+          tokensOut: base.tokensOut + corr.uso.tokensOut,
+          cacheRead: base.cacheRead + corr.uso.cacheRead,
+          cacheWrite: base.cacheWrite + corr.uso.cacheWrite,
+          custoUsdMicro: base.custoUsdMicro + custoUsdMicro(escolha.modelo, corr.uso, deps.precos),
+        });
+        const s2 = lerSaida(corr.texto);
+        if (s2) {
+          saida = s2;
+          verificacao = verificar(s2);
+        }
+      }
+      const codigos = (v: Violacao[]) => [...new Set(v.map((x) => x.regra))].join(",");
+      if (verificacao.violacoes.length) {
+        alertaRegra = avisoDasViolacoes(verificacao.violacoes);
+        await caso(store, { sessionId: ctx.session.id, tipo: "regra_bloqueou", regra: codigos(verificacao.violacoes), assunto: verificacao.local.cidade, pergunta: perguntaCliente, resposta: limparExemplo(saida.bolhas.join("\n"), nomesContato, MAX_RESPOSTA), conversaHash, origemId: `bloqueou:${input.triggerMsgId}` });
+      } else {
+        await caso(store, { sessionId: ctx.session.id, tipo: "regra_corrigiu", regra: codigos(primeiras), assunto: verificacao.local.cidade, pergunta: perguntaCliente, conversaHash, origemId: `corrigiu:${input.triggerMsgId}` });
+      }
+    }
+    if (verificacao.local.status === "fora" && verificacao.local.cidade && !verificacao.excecaoLocal) {
+      await caso(store, { sessionId: ctx.session.id, tipo: "fora_da_area", assunto: verificacao.local.cidade, pergunta: perguntaCliente, conversaHash, origemId: `fora:${conversaHash}:${normalizarTexto(verificacao.local.cidade)}` });
+    }
+    if (verificacao.servico.status === "recusado") {
+      const assunto = verificacao.servico.termo ?? verificacao.servico.descricao ?? "serviço recusado";
+      await caso(store, { sessionId: ctx.session.id, tipo: "servico_recusado", assunto, pergunta: perguntaCliente, conversaHash, origemId: `servico:${conversaHash}:${normalizarTexto(assunto)}` });
+    }
+  }
+
+  // 5c. Estágio do lead no CRM (regras + ficha; sem regra, o que o agente disse).
+  const resumoFicha = defs.length ? resumoDaFicha(ficha, defs) : "";
+  const classificacao = classificarLead({
+    regras: regrasPerfil,
+    verificacao,
+    agente: config.agente,
+    qualificadoPeloModelo: !regras && saida.qualificado,
+    resumoQualificado: resumoFicha ? resumoFicha.replace(/\n/g, "; ") : saida.resumoEquipe.slice(0, 300),
+  });
+  const mudanca = decidirMudanca(leadAtual, classificacao, fichaMudou);
+  if (mudanca && store.salvarEstagio) {
+    await store
+      .salvarEstagio({ conversationId: ctx.conversation.id, sessionId: ctx.session.id, de: leadAtual.estagio, nova: mudanca, manual: false, porUserId: null })
+      .catch(() => undefined);
+  }
+
+  if (regras && verificacao && !alertaRegra) {
+    // Quem decide se transfere é a regra, não o modelo.
+    const d = verificacao.decisao;
+    saida = {
+      ...saida,
+      passarPraHumano: d === "qualificar" || d === "analisar" || d === "humano",
+      qualificado: d === "qualificar",
+      motivo: d === "analisar" ? `para analisar: ${verificacao.motivo}` : saida.motivo,
+    };
+  }
+  const bolhas = alertaRegra ? bolhasDoRascunho(saida, verificacao, defs) : quebrarEmBolhas(saida.bolhas);
+  if (!alertaRegra && (saida.passarPraHumano || bolhas.length === 0)) {
     // 2026-10-06 (Matheus): transfere quando o lead fica qualificado (ou pede uma
-    // pessoa); o resumo pra equipe vai no motivo e no aviso.
-    const motivoHumano = saida.qualificado
-      ? `lead qualificado${saida.resumoEquipe ? `: ${saida.resumoEquipe}` : ""}`
+    // pessoa, ou um caso vai pra análise); o resumo da ficha vai no motivo e no aviso.
+    let motivoHumano = saida.qualificado
+      ? `lead qualificado${resumoFicha ? `: ${resumoFicha.replace(/\n/g, "; ")}` : saida.resumoEquipe ? `: ${saida.resumoEquipe}` : ""}`
       : saida.motivo || "o agente não soube responder";
+    if (saida.qualificado) motivoHumano += await avisarResponsavel(store, ctx, resumoFicha || saida.resumoEquipe);
     const resultado = await passarPraHumano(deps, ctx.ownerUserId, ctx.conversation.id, now, registrar, motivoHumano.slice(0, 1500), {
       bolhas,
       motivo: saida.motivo,
@@ -272,7 +393,7 @@ export async function processarMensagem(
   const output = { bolhas, motivo: saida.motivo || null };
 
   // 6. Travas de conteúdo e checagem do Jev
-  const alertas: string[] = [];
+  const alertas: string[] = alertaRegra ? [alertaRegra] : [];
   const inventadas = afirmacoesInventadas(bolhas.join("\n"), comando.fontesPermitidas);
   if (inventadas.length) alertas.push(descreverInventadas(inventadas));
   const checagem = await perguntarJev({ ultima_mensagem_do_cliente: textoPlano(ultima).slice(0, 1500), resposta: bolhas.join("\n") }, PERGUNTAS_CHECAR, deps.jev);
@@ -334,7 +455,8 @@ async function usar(
   modelo: string,
   uso: Uso,
   runId: string | null,
-  bloqueado: boolean
+  bloqueado: boolean,
+  kind: "agent" | "ficha" = "agent"
 ) {
   if (!deps.registrarUso) return;
   try {
@@ -349,9 +471,159 @@ async function usar(
       uso,
       runId,
       bloqueado,
+      kind,
     });
   } catch {
     // O relatório não pode derrubar a resposta.
+  }
+}
+
+function hashConversa(conversationId: string): string {
+  return createHash("sha256").update(`wa-conversa:${conversationId}`).digest("hex").slice(0, 16);
+}
+
+async function caso(store: AgentStore, c: Parameters<NonNullable<AgentStore["registrarCaso"]>>[0]) {
+  if (!store.registrarCaso) return;
+  try {
+    await store.registrarCaso(c);
+  } catch {
+    // O relatório não pode derrubar a resposta.
+  }
+}
+
+/** Rascunho quando a regra continuou quebrada: a pergunta certa, se a regra diz qual é. */
+function bolhasDoRascunho(saida: SaidaAgente, v: Verificacao | null, defs: CampoFichaDef[]): string[] {
+  const codigos = new Set(v?.violacoes.map((x) => x.regra) ?? []);
+  const perguntaLocal = defs.find((d) => d.tipo === "cidade")?.pergunta;
+  if (codigos.has("qualificado_sem_local") || codigos.has("nao_perguntou_local")) {
+    return [perguntaLocal && perguntaLocal.trim().endsWith("?") ? perguntaLocal.trim() : "Em qual cidade vai ser o serviço?"];
+  }
+  if (codigos.has("qualificado_sem_info") && v?.faltando[0]?.pergunta?.trim().endsWith("?")) return [v.faltando[0].pergunta.trim()];
+  const b = quebrarEmBolhas(saida.bolhas);
+  return b.length ? b : ["(o agente não escreveu uma resposta que siga as regras; escreva você)"];
+}
+
+/** Uma correção só, com a regra explicada. null = teto, erro ou sem resposta. */
+async function corrigirUmaVez(
+  deps: DepsMotor,
+  ctx: ConversaContexto,
+  e: {
+    escolha: { provider: IaProvider; modelo: string };
+    cred: AiCredentialRecord;
+    limites: Limites;
+    comando: ComandoMontado;
+    textoAnterior: string;
+    violacoes: Violacao[];
+    now: Date;
+    agente: AgenteTipo;
+    runId: string | null;
+  }
+): Promise<RespostaModelo | null> {
+  const mensagens = [
+    ...e.comando.mensagens,
+    { role: "assistant" as const, content: e.textoAnterior.slice(0, 4000) || "{}" },
+    { role: "user" as const, content: mensagemDeCorrecaoRegras(e.violacoes) },
+  ];
+  const caracteres = e.comando.sistemaFixo.length + e.comando.sistemaVariavel.length + mensagens.reduce((n, m) => n + m.content.length, 0);
+  const previsto = custoMaximoUsdMicro(e.escolha.modelo, caracteres, MAX_TOKENS_SAIDA, deps.precos);
+  const teto = await conferirTeto(
+    deps.store,
+    { ownerUserId: ctx.ownerUserId, workspaceId: ctx.workspaceId, dailyCap: e.cred.dailyCap, custoPrevistoUsdMicro: previsto, now: e.now, timeZone: ctx.profile?.timeZone },
+    e.limites
+  );
+  if (!teto.ok) return null;
+  try {
+    const r = await (deps.chamar ?? chamarModelo)({
+      provider: e.escolha.provider,
+      modelo: e.escolha.modelo,
+      apiKey: abrirChave(e.cred),
+      sistemaFixo: e.comando.sistemaFixo,
+      sistemaVariavel: e.comando.sistemaVariavel,
+      mensagens,
+      maxTokens: MAX_TOKENS_SAIDA,
+      chaveCache: `wa-${ctx.session.id}-${e.agente}`,
+    });
+    await usar(deps, ctx, e.agente, e.escolha.provider, e.escolha.modelo, r.uso, e.runId, false);
+    return r;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ficha do lead: regra primeiro (sem custo); o que faltar, um modelo barato
+ * (o padrão do agente) com teto conferido e gasto em Gastos de IA (kind
+ * "ficha"). O código só aceita campo com evidência na conversa.
+ */
+async function atualizarFicha(
+  deps: DepsMotor,
+  ctx: ConversaContexto,
+  e: { regras: RegrasNegocio; defs: CampoFichaDef[]; ficha: FichaLead; config: AgenteConfig; cred: AiCredentialRecord; limites: Limites; now: Date }
+): Promise<{ ficha: FichaLead; mudou: boolean }> {
+  const { store } = deps;
+  const local = localDaConversa(e.regras, ctx.historico, e.ficha, e.defs);
+  const servico = detectarServico(e.regras, ctx.historico);
+  const porRegra = preencherPorRegra(e.defs, {
+    regras: e.regras,
+    historico: ctx.historico,
+    local,
+    servico,
+    nomesDoContato: { name: ctx.contact.name, pushName: ctx.contact.pushName },
+    now: e.now,
+  });
+  let j = juntarFicha(e.ficha, porRegra, e.now);
+  let mudou = j.mudou;
+  const faltam = e.defs.filter((d) => !j.ficha.campos[d.chave]).map((d) => d.chave);
+  if (faltam.length && deps.fichaComIa !== false) {
+    const escolha = escolherModelo(e.config, { dificil: false, incerto: false }, deps.precos);
+    const mensagem = mensagemFicha(e.defs, faltam, ctx.historico);
+    const previsto = custoMaximoUsdMicro(escolha.modelo, SISTEMA_FICHA.length + mensagem.length, MAX_TOKENS_FICHA, deps.precos);
+    const teto = await conferirTeto(
+      store,
+      { ownerUserId: ctx.ownerUserId, workspaceId: ctx.workspaceId, dailyCap: e.cred.dailyCap, custoPrevistoUsdMicro: previsto, now: e.now, timeZone: ctx.profile?.timeZone },
+      e.limites
+    );
+    if (teto.ok) {
+      try {
+        const r = await (deps.chamar ?? chamarModelo)({
+          provider: escolha.provider,
+          modelo: escolha.modelo,
+          apiKey: abrirChave(e.cred),
+          sistemaFixo: SISTEMA_FICHA,
+          sistemaVariavel: "",
+          mensagens: [{ role: "user", content: mensagem }],
+          maxTokens: MAX_TOKENS_FICHA,
+          chaveCache: `wa-ficha-${ctx.session.id}`,
+        });
+        await usar(deps, ctx, e.config.agente, escolha.provider, escolha.modelo, r.uso, null, false, "ficha");
+        const saida = lerSaidaFicha(r.texto);
+        if (saida) {
+          const nomes = [ctx.contact.name, ctx.contact.pushName].filter((n): n is string => Boolean(n));
+          const j2 = juntarFicha(j.ficha, conferirExtracao(e.defs, saida, ctx.historico, e.now, nomes), e.now);
+          mudou = mudou || j2.mudou;
+          j = j2;
+          if (saida.memoria && store.gravarMemoriaContato) await store.gravarMemoriaContato(ctx.contact.id, saida.memoria).catch(() => undefined);
+        }
+      } catch {
+        // Sem a IA, a ficha fica com o que a regra achou.
+      }
+    }
+  }
+  if (mudou && store.salvarFicha) await store.salvarFicha(ctx.conversation.id, j.ficha).catch(() => undefined);
+  return { ficha: j.ficha, mudou };
+}
+
+/** Aviso opcional pro WhatsApp do responsável. Devolve o texto pra juntar no aviso do painel. */
+async function avisarResponsavel(store: AgentStore, ctx: ConversaContexto, resumo: string): Promise<string> {
+  const cfg = ctx.profile?.avisarResponsavel;
+  if (!cfg?.ligado || !cfg.telefone.trim() || !store.avisarResponsavel) return "";
+  const nome = ctx.contact.name || ctx.contact.pushName || "um contato";
+  const texto = `Lead qualificado no WhatsApp: ${nome}.\n${resumo}`.slice(0, 1500);
+  try {
+    const r = await store.avisarResponsavel({ sessionId: ctx.session.id, telefone: cfg.telefone, texto });
+    return r.ok ? " (resumo enviado pro WhatsApp do responsável)" : ` (não deu pra mandar o resumo pro WhatsApp do responsável: ${r.motivo})`;
+  } catch {
+    return " (não deu pra mandar o resumo pro WhatsApp do responsável)";
   }
 }
 
@@ -406,6 +678,19 @@ export async function aprovarRascunho(
   await deps.store.atualizarRun(run.id!, { status: "scheduled" });
   try {
     const jobId = await deps.store.agendarEnvio({ runId: run.id!, conversationId: run.conversationId, sessionId: run.sessionId, envios });
+    // Edição antes de enviar = exemplo de como a empresa responde (sem dado pessoal).
+    if (input.bolhasEditadas && ctx && deps.store.registrarExemplo) {
+      const ex = exemploDaEdicao({
+        sessionId: run.sessionId,
+        agente: run.agente,
+        runId: run.id!,
+        historico: ctx.historico,
+        original: run.output?.bolhas ?? [],
+        enviado: bolhas,
+        nomesDoContato: [ctx.contact.name, ctx.contact.pushName].filter((n): n is string => Boolean(n)),
+      });
+      if (ex) await deps.store.registrarExemplo(ex).catch(() => undefined);
+    }
     return { ok: true, jobId, bolhas };
   } catch {
     await deps.store.atualizarRun(run.id!, { status: "draft", approvedBy: null });
@@ -417,7 +702,53 @@ export async function rejeitarRascunho(store: AgentStore, input: { runId: string
   const run = await store.buscarRun(input.runId);
   if (!run || run.ownerUserId !== input.ownerUserId || run.status !== "draft") return false;
   await store.atualizarRun(run.id!, { status: "rejected", blockedReason: "você recusou o rascunho" });
+  // Rascunho descartado entra no relatório "O que o agente aprendeu".
+  if (store.registrarCaso) {
+    const ctx = await store.carregarContexto(run.conversationId).catch(() => null);
+    const nomes = ctx ? [ctx.contact.name, ctx.contact.pushName].filter((n): n is string => Boolean(n)) : [];
+    await caso(store, {
+      sessionId: run.sessionId,
+      tipo: "descartado",
+      regra: run.blockedReason?.startsWith("Regra do negócio") ? "rascunho_com_regra" : null,
+      pergunta: ctx ? limparExemplo(perguntaAntes(ctx.historico, ctx.historico.length), nomes, MAX_PERGUNTA) || null : null,
+      resposta: limparExemplo((run.output?.bolhas ?? []).join("\n"), nomes, MAX_RESPOSTA) || null,
+      conversaHash: hashConversa(run.conversationId),
+      origemId: `descartado:${run.id}`,
+    });
+  }
   return true;
+}
+
+/**
+ * A equipe respondeu no lugar do agente (inbox ou celular, o que também pausa
+ * o agente): o par cliente -> resposta vira exemplo do negócio. Só quando o
+ * número tem agente ligado e a resposta veio logo depois de uma mensagem do cliente.
+ */
+export async function aprenderRespostaHumana(
+  store: AgentStore,
+  input: { conversationId: string; mensagemId?: string; texto?: string }
+): Promise<boolean> {
+  if (!store.registrarExemplo) return false;
+  try {
+    const ctx = await store.carregarContexto(input.conversationId);
+    if (!ctx || ctx.contact.isGroup) return false;
+    if (ctx.session.agentMode !== "DRAFT" && ctx.session.agentMode !== "AUTO") return false;
+    const configs = await store.configAgentes(ctx.ownerUserId, ctx.session.id);
+    if (!configs.some((c) => c.ativo)) return false;
+    const ex = exemploDaRespostaHumana({
+      sessionId: ctx.session.id,
+      historico: ctx.historico,
+      mensagemId: input.mensagemId,
+      texto: input.texto,
+      nomesDoContato: [ctx.contact.name, ctx.contact.pushName].filter((n): n is string => Boolean(n)),
+      agente: ctx.conversation.lead?.estagio === "cliente" ? "suporte" : null,
+    });
+    if (!ex) return false;
+    await store.registrarExemplo(ex);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
