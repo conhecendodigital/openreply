@@ -9,6 +9,7 @@ OpenReply uses the official Instagram API to send a private reply to someone who
 - `instagram_business_basic`
 - `instagram_business_manage_comments`
 - `instagram_business_manage_messages`
+- `instagram_business_manage_insights` (requested by the OAuth today, used by Overview and Reports; the screens work without it)
 
 ## Permission justifications
 
@@ -33,12 +34,30 @@ Record on your published app, real accounts, one take, about two to three minute
 
 Reviewers want to see the permission produce a real result for a real user. This flow does that directly.
 
+## Deauthorize and data deletion callbacks
+
+Both are POST routes that receive Meta's `signed_request` (form-urlencoded), check the HMAC-SHA256 signature with `INSTAGRAM_APP_SECRET` (falls back to `FACEBOOK_APP_SECRET`) in constant time, and reject any other algorithm with a 400. The `user_id` in the payload is the app-scoped id (the `id` of `/me`), stored in `InstagramAccount.appScopedId` on every connect; the professional account id (`instagramId`) is also accepted. If no account, or more than one, matches, nothing is changed or deleted.
+
+| Panel field | URL |
+|---|---|
+| Deauthorize callback URL | `https://many.leadenginer.com/api/instagram/deauthorize` |
+| Data deletion request URL | `https://many.leadenginer.com/api/instagram/data-deletion` |
+
+Where to paste: App Dashboard > Instagram > API setup with Instagram login > step "Set up Instagram business login" > Business login settings. The deauthorize URL goes in "Deauthorize callback URL" and the deletion URL in "Data deletion request URL". (In Portuguese: Instagram > Configuração da API com login do Instagram > Configurações de login comercial > "URL de retorno de chamada para cancelar autorização" e "URL de solicitação de exclusão de dados".)
+
+- Deauthorize: the account goes DISCONNECTED, its token is wiped and `webhookSubscribed` is false. Conversations, contacts and automations are kept (same rule as the Disconnect button).
+- Data deletion: deletes everything of that account in one transaction (the same one as "Delete for real", `lib/channels/purge.ts`), including the raw `WebhookEvent` payloads and the account's operational events. Responds `{ "url": "https://many.leadenginer.com/data-deletion/status?code=<CODE>", "confirmation_code": "<CODE>" }`. The request is kept in `DataDeletionRequest`; the public status page shows only the status and dates.
+- Accounts connected before 2026-10-06 have no `appScopedId` until they reconnect. A deletion request for one of them is recorded as NOT_FOUND (nothing deleted) and logged as a WARNING operational event to be handled by hand.
+
+Test it with Meta's tool after deploying, on a test account, never on a production account.
+
 ## Compliance positioning
 
 - The app never scrapes Instagram and never asks for a password.
 - It only sends a reply when someone comments on the connected account's own content.
 - Tokens are encrypted at rest with AES-256-GCM.
-- Users can disconnect Instagram from Settings.
+- Users can disconnect Instagram on the Channels page, delete everything with "Delete for real", or remove the app on Instagram (handled by the callbacks above).
+- Public pages: https://many.leadenginer.com/privacy, /terms, /data-deletion and /meta-review. Company data (DESTRAVE ACADEMY LTDA, CNPJ, address, email) lives in `lib/legal-info.ts`.
 - Per-account rate limiting and deduplication prevent spammy behavior.
 
 ## Business verification
