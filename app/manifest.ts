@@ -8,12 +8,12 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Lead Engine",
     short_name: "Lead Engine",
-    description: "Instagram comment-to-DM automation",
+    description: "Automação de Instagram, Direct e quiz",
     start_url: "/overview",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#18181b",
-    theme_color: "#18181b",
+    background_color: "#ffffff",
+    theme_color: "#ffffff",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

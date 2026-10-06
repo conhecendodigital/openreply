@@ -4,10 +4,23 @@ import "./globals.css";
 import { LangProvider } from "@/components/lang-provider";
 import { getLang } from "@/lib/i18n/server";
 
+const SITE_URL = process.env.NEXTAUTH_URL || "https://many.leadenginer.com";
+const DESCRICAO = "Automação de Instagram, Direct e quiz pela API oficial da Meta.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Lead Engine - Automação de comentário pra DM no Instagram",
-  description:
-    "A free, self-hosted ManyChat alternative. Send an Instagram DM automatically when someone comments a keyword on your post or reel, using the official Meta API.",
+  description: DESCRICAO,
+  applicationName: "Lead Engine",
+  openGraph: {
+    type: "website",
+    siteName: "Lead Engine",
+    title: "Lead Engine",
+    description: DESCRICAO,
+    locale: "pt_BR",
+    images: [{ url: "/og-lead-engine.png", width: 1200, height: 630, alt: "Lead Engine" }],
+  },
+  twitter: { card: "summary_large_image", title: "Lead Engine", description: DESCRICAO, images: ["/og-lead-engine.png"] },
   keywords: [
     "instagram automation",
     "comment to DM",

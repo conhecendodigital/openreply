@@ -49,14 +49,16 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const seo = funnel.settings.seo ?? {};
   const title = seo.title?.trim() || funnel.name;
   const description = seo.description?.trim() || undefined;
-  const image = seo.imageUrl?.trim() && !seo.imageUrl.includes(".invalid") ? seo.imageUrl.trim() : undefined;
+  // No share image of its own: the Lead Engine card, so WhatsApp and Instagram show the brand.
+  const image = seo.imageUrl?.trim() && !seo.imageUrl.includes(".invalid") ? seo.imageUrl.trim() : "/og-lead-engine.png";
   const indexable = !preview && seo.indexable === true;
   return {
-    title,
+    // The browser tab always shows the app name too.
+    title: `${title} · Lead Engine`,
     description,
     robots: { index: indexable, follow: indexable },
-    openGraph: { title, description, type: "website", ...(image ? { images: [{ url: image }] } : {}) },
-    twitter: { card: image ? "summary_large_image" : "summary", title, description, ...(image ? { images: [image] } : {}) },
+    openGraph: { title, description, type: "website", siteName: "Lead Engine", images: [{ url: image }] },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
   };
 }
 
