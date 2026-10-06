@@ -13,6 +13,14 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'le_app') THEN
     RAISE EXCEPTION 'papel le_app não existe: rode a migração da Fase 0 antes desta';
   END IF;
+  -- A Fase 0 real (feat/multiusuario) NÃO criou WaAgentRun, WaAgentProfile nem
+  -- AiCredential: precisam de uma migração antes desta (revisão 06/10).
+  IF to_regclass('whatsapp."WaAgentRun"') IS NULL OR to_regclass('whatsapp."WaAgentProfile"') IS NULL THEN
+    RAISE EXCEPTION 'Faltam whatsapp.WaAgentRun / WaAgentProfile: crie antes (não estão na migração da Fase 0)';
+  END IF;
+  IF to_regprocedure('app.in_current_workspace(text)') IS NULL OR to_regprocedure('app.admin_audit_ok(text)') IS NULL THEN
+    RAISE EXCEPTION 'Funções app.in_current_workspace / app.admin_audit_ok não existem: rode a Fase 0 antes';
+  END IF;
 END $$;
 
 -- 1. WaAgentRun: colunas que o motor grava além do plano
@@ -41,6 +49,7 @@ ALTER TABLE whatsapp."WaAgentProfile"
 CREATE TABLE IF NOT EXISTS whatsapp."WaAgentConfig" (
   "id"            TEXT PRIMARY KEY,
   "ownerUserId"   TEXT NOT NULL,
+  "workspaceId"   TEXT NOT NULL,
   "sessionId"     TEXT NOT NULL REFERENCES whatsapp."WaSession"("id") ON DELETE CASCADE,
   "agente"        TEXT NOT NULL CHECK ("agente" IN ('qualificacao', 'atendimento', 'suporte')),
   "ativo"         BOOLEAN NOT NULL DEFAULT false,
@@ -54,35 +63,23 @@ CREATE TABLE IF NOT EXISTS whatsapp."WaAgentConfig" (
 CREATE UNIQUE INDEX IF NOT EXISTS "WaAgentConfig_sessionId_agente_key" ON whatsapp."WaAgentConfig" ("sessionId", "agente");
 CREATE INDEX IF NOT EXISTS "WaAgentConfig_ownerUserId_idx" ON whatsapp."WaAgentConfig" ("ownerUserId");
 
--- 4. Memória curta por contato
-CREATE TABLE IF NOT EXISTS whatsapp."WaContactMemory" (
-  "contactId"    TEXT PRIMARY KEY REFERENCES whatsapp."WaContact"("id") ON DELETE CASCADE,
-  "ownerUserId"  TEXT NOT NULL,
-  "resumo"       TEXT,
-  "fatos"        JSONB NOT NULL DEFAULT '[]'::jsonb,
-  "ultimoAgente" TEXT,
-  "atualizadoEm" TIMESTAMP(3)
-);
-CREATE INDEX IF NOT EXISTS "WaContactMemory_ownerUserId_idx" ON whatsapp."WaContactMemory" ("ownerUserId");
+-- 4. Memória curta por contato: NÃO é criada aqui. A tabela WaContactMemory é a
+--    do feat/wa-cerebro (por workspace, nome/interesse/objeção/etapa/observação,
+--    com limite de tamanho). Criar outra com o mesmo nome e formato diferente
+--    fazia o "IF NOT EXISTS" ficar com a primeira e o store quebrar em produção.
+--    O AgentStore lê e grava a do cérebro (resumo = renderMemory dela).
 
--- 5. RLS nas tabelas novas: dono ou admin (mesma regra das outras whatsapp.*)
-DO $$
-DECLARE t text;
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'le_app') THEN
-    -- Exceção, não aviso: sem isso as tabelas novas (com chave de IA e memória de
-    -- terceiros) ficavam criadas SEM RLS e a migração "passava".
-    RAISE EXCEPTION 'papel le_app não existe: rode a migração da Fase 0 antes desta';
-  END IF;
-  FOREACH t IN ARRAY ARRAY['WaAgentConfig', 'WaContactMemory']
-  LOOP
-    EXECUTE format('ALTER TABLE whatsapp.%I ENABLE ROW LEVEL SECURITY', t);
-    EXECUTE format('ALTER TABLE whatsapp.%I FORCE ROW LEVEL SECURITY', t);
-    EXECUTE format('DROP POLICY IF EXISTS owner_or_admin ON whatsapp.%I', t);
-    EXECUTE format($p$
-      CREATE POLICY owner_or_admin ON whatsapp.%I FOR ALL TO le_app
-      USING ("ownerUserId" = app.current_user_id() OR app.is_admin())
-      WITH CHECK ("ownerUserId" = app.current_user_id() OR app.is_admin())
-    $p$, t);
-  END LOOP;
-END $$;
+-- 5. RLS: a mesma das tabelas whatsapp.* da Fase 0 (workspace ATIVO + membro;
+--    admin só lê com auditoria). Antes: dono OU admin com escrita total.
+ALTER TABLE whatsapp."WaAgentConfig" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE whatsapp."WaAgentConfig" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS owner_or_admin ON whatsapp."WaAgentConfig";
+DROP POLICY IF EXISTS ws_member ON whatsapp."WaAgentConfig";
+DROP POLICY IF EXISTS admin_audited_read ON whatsapp."WaAgentConfig";
+CREATE POLICY ws_member ON whatsapp."WaAgentConfig" FOR ALL TO PUBLIC
+  USING (app.in_current_workspace("workspaceId"))
+  WITH CHECK (app.in_current_workspace("workspaceId"));
+CREATE POLICY admin_audited_read ON whatsapp."WaAgentConfig" FOR SELECT TO PUBLIC
+  USING (app.admin_audit_ok("workspaceId"));
+-- AiCredential (quando for criada) fica com policy SÓ do dono, sem admin:
+--   USING ("ownerUserId" = app.current_user_id()) WITH CHECK (mesma coisa).

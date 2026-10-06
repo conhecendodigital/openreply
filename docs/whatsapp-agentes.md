@@ -54,7 +54,9 @@ Preço por 1 milhão de tokens em `modelos.ts` (Haiku 4.5: US$ 1 / 5; Sonnet 5: 
 1. **Migração.** `prisma/migrations-wa/agentes/migration.sql` fica fora do `migrate deploy`. Depois que a Fase 0 criar o schema `whatsapp`, copiar pro `prisma/migrations/<data>_wa_agentes/` e pôr no `schema.prisma`:
    - `WaAgentRun`: `workspaceId`, `sessionId`, `agente`, `provider`, `cacheRead`, `cacheWrite`, `custoUsdMicro`, `triagem Json?`, `approvedBy`, e os índices.
    - `WaAgentProfile`: `fatosPermitidos Json?`, `timeZone String @default("America/Sao_Paulo")`.
-   - Modelos novos `WaAgentConfig` (único por `sessionId + agente`) e `WaContactMemory` (chave = `contactId`), os dois com RLS dono ou admin.
+   - Modelo novo `WaAgentConfig` (único por `sessionId + agente`, com `workspaceId`) e RLS da Fase 0 (`app.in_current_workspace`; admin só lê com auditoria).
+   - `WaContactMemory` é a do `feat/wa-cerebro` (chave `workspaceId + contactId`, campos nome/interesse/objeção/etapa/observação). `lerMemoria` devolve `resumo = renderMemory(...)`; `salvarMemoria` grava via `updateContactMemory` do cérebro (o motor hoje só regrava o que leu).
+   - Revisão 06/10: a Fase 0 real **não** criou `WaAgentRun`, `WaAgentProfile` nem `AiCredential`, e usa `workspaceId` (sem `ownerUserId`) em conversa/contato/mensagem. A migração deste branch para com erro claro se faltarem. `AiCredential` com policy só do dono (nem admin).
 2. **AgentStore com Prisma.** Escrever `lib/whatsapp/agentes/store-prisma.ts` implementando `AgentStore` com `dbAs(ownerUserId)` (RLS). Mapas:
    - `carregarContexto`: `WaConversation` + `WaSession.agentMode` + `WaConversationLabel -> WaLabel.agentMode` + `WaContact` + `WaAgentProfile` + últimas ~40 `WaMessage` (ordem crescente).
    - `gastoDoDia`: (inclui runs `pending`, que guardam a reserva do pior caso; somar também `whatsapp."WaAiUsage"` do cérebro e o custo do Jev) `SUM(custoUsdMicro)`, `COUNT(*) WHERE model IS NOT NULL` e `COUNT(*) WHERE status IN ('scheduled','sent') AND approvedBy IS NULL` desde `inicioDoDia`.
