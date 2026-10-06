@@ -10,6 +10,9 @@
  * - Nada aqui liga agente nem muda o modo do número: o rascunho não tem esses campos.
  */
 import { extrairAfirmacoes } from "@/lib/whatsapp/agentes/guardas";
+import { regrasPreenchidas, rotuloCidade } from "@/lib/whatsapp/regras/esquema";
+import { contemTermo, normalizarTexto } from "@/lib/whatsapp/regras/texto";
+import { regrasDaIa } from "./regras";
 import {
   AGENTES_TREINO,
   LIMITE_COMANDO_BASE,
@@ -228,12 +231,18 @@ export function montarRascunho(resp: RespostaIa, arquivo: ArquivoTreino): Rascun
   }
   const atraso = resp.atraso_segundos ? { de: Math.min(resp.atraso_segundos.de, resp.atraso_segundos.ate), ate: Math.max(resp.atraso_segundos.de, resp.atraso_segundos.ate) } : null;
 
+  const regras = regrasDaIa(resp.regras, {
+    casos: resp.casos_de_teste,
+    mensagens: mensagens.filter((m) => m.literal).map((m) => ({ quando: m.quando, texto: m.texto })),
+  });
+
   const doDocumento: CampoTreino[] = ["baseCommand"];
   if (facts.length) doDocumento.push("facts");
   if (quietStart) doDocumento.push("quietHours");
   if (atraso) doDocumento.push("delay");
   if (resp.limite_diario !== null) doDocumento.push("maxAutoPerDay");
   for (const agente of AGENTES_TREINO) if (agents[agente]) doDocumento.push(`agent:${agente}`);
+  if (regrasPreenchidas(regras)) doDocumento.push("rules");
 
   // Conferências.
   const naoAchei = [
@@ -242,6 +251,12 @@ export function montarRascunho(resp: RespostaIa, arquivo: ArquivoTreino): Rascun
     ...AGENTES_TREINO.flatMap((a) => valoresForaDoDocumento(`agent:${a}`, agents[a], documento)),
   ];
   for (const m of mensagens) if (!m.literal) naoAchei.push({ campo: "message", valor: m.texto.slice(0, 160) });
+  // Cidade ou bairro das regras que não aparece no documento: a IA pode ter inventado.
+  const docNorm = normalizarTexto(documento);
+  for (const c of [...regras.cidadesAtendidas, ...regras.cidadesNaoAtendidas]) {
+    if (!contemTermo(docNorm, c.cidade)) naoAchei.push({ campo: "rules", valor: rotuloCidade(c) });
+  }
+  for (const r of regras.regioesCuidado) if (!contemTermo(docNorm, r.nome)) naoAchei.push({ campo: "rules", valor: r.nome });
   for (const e of exemplosFora) naoAchei.push({ campo: "example", valor: e.slice(0, 160) });
 
   const camposComADefinir = [
@@ -266,6 +281,7 @@ export function montarRascunho(resp: RespostaIa, arquivo: ArquivoTreino): Rascun
     doDocumento,
     mensagensAprovadas: mensagens,
     casosDeTeste: resp.casos_de_teste.map((c) => ({ situacao: c.situacao.trim(), decisao: c.decisao.trim(), motivo: c.motivo.trim() })),
+    regras,
     revisar: {
       pendencias: juntarPendencias(resp.pendencias, pendenciasDoTexto(documento)),
       soInstrucao: resp.regras_so_instrucao.map((r) => ({ regra: r.regra.trim(), onde: r.onde })),

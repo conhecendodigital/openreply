@@ -51,9 +51,25 @@ O QUE VAI EM CADA CAMPO
 - horario_silencio: {"inicio":"HH:MM","fim":"HH:MM"} só se o documento disser que o atendimento automático NÃO deve responder num período. Horário comercial não é horário de silêncio. Senão, null.
 - atraso_segundos e limite_diario: só se o documento disser; senão, null.
 - regras_so_instrucao: cada regra que o sistema não faz sozinho (lista acima), dizendo onde você escreveu (comando_base, qualificacao, atendimento ou suporte).
+- regras: as REGRAS DURAS do negócio, estruturadas, que o sistema confere sozinho em cada resposta (além de estarem escritas no comando_base). Só o que o documento diz:
+  cidades_atendidas: [{"cidade": "Nome", "uf": "SP"}] só as cidades que o documento diz que atende normalmente (vale o local do serviço ou da obra). Se o documento atende o Brasil todo ou não limita local, deixe vazio.
+  cidades_nao_atendidas: [{"cidade", "uf"}] cidades que o documento diz que não atende.
+  regioes_cuidado: [{"nome": "bairro ou região", "cidade", "uf", "regra": "o que fazer"}] bairros ou regiões que não são recusados mas vão pra análise ou pedem cuidado.
+  excecoes_local: [{"descricao", "palavras"}] casos fora da região que vão pra análise (ex.: obra grande).
+  servicos_aceitos: ["..."] os serviços aceitos, curtos.
+  servicos_recusados: [{"descricao", "palavras"}] o que a empresa não faz.
+  excecoes_servico: [{"descricao", "palavras"}] o que é atendido mesmo parecendo pedido recusado (ex.: pedras).
+  info_minima: [{"campo": "nome curto da informação", "pergunta": "pergunta curta pro cliente, terminando com ?", "palavras": [...]}] o mínimo pra qualificar, na ordem do documento.
+  horario: texto do horário de atendimento.
+  nunca_prometer: ["preço", "prazo", ...] o que o atendimento nunca afirma ou promete.
+  mensagem_fora_da_area e mensagem_servico_recusado: como responder nesses casos (copie do documento).
+  resumo_equipe: ["Nome", "Cidade da obra", ...] o que o resumo pra equipe precisa ter.
+  responsavel: {"nome": "", "telefone": ""} quem recebe os leads qualificados (telefone como está no documento).
+  "palavras" são expressões curtas (1 a 3 palavras), do jeito que o CLIENTE escreveria, que mostram claramente o item (ex.: para pequeno reparo: "trocar torneira", "vazamento", "pequeno reparo"). Sem palavra genérica que apareça em qualquer pedido.
+- Em cada item de casos_de_teste, "esperado": uma ou mais destas decisões: qualificar, analisar, fora_da_area, servico_recusado, humano, continuar (ex.: obra fora da área que pode ser grande = ["analisar", "fora_da_area"]).
 
 FORMATO DA RESPOSTA: só um JSON, sem nada antes ou depois, sem cerca de código:
-{"comando_base": "...", "fatos": ["..."], "instrucoes": {"qualificacao": "...", "atendimento": "...", "suporte": "..."}, "horario_silencio": null, "atraso_segundos": null, "limite_diario": null, "mensagens_aprovadas": [{"tipo": "boas_vindas|encaminhamento|fora_do_horario|encerramento|outra", "quando": "quando usar", "texto": "texto exato"}], "exemplos_de_fala": ["texto exato"], "pendencias": [{"assunto": "...", "trecho": "..."}], "regras_so_instrucao": [{"regra": "...", "onde": "comando_base|qualificacao|atendimento|suporte"}], "contradicoes": [{"descricao": "..."}], "casos_de_teste": [{"situacao": "...", "decisao": "...", "motivo": "..."}]}`;
+{"comando_base": "...", "fatos": ["..."], "instrucoes": {"qualificacao": "...", "atendimento": "...", "suporte": "..."}, "horario_silencio": null, "atraso_segundos": null, "limite_diario": null, "mensagens_aprovadas": [{"tipo": "boas_vindas|encaminhamento|fora_do_horario|encerramento|outra", "quando": "quando usar", "texto": "texto exato"}], "exemplos_de_fala": ["texto exato"], "pendencias": [{"assunto": "...", "trecho": "..."}], "regras_so_instrucao": [{"regra": "...", "onde": "comando_base|qualificacao|atendimento|suporte"}], "contradicoes": [{"descricao": "..."}], "casos_de_teste": [{"situacao": "...", "decisao": "...", "motivo": "...", "esperado": ["qualificar"]}], "regras": {"cidades_atendidas": [], "cidades_nao_atendidas": [], "regioes_cuidado": [], "excecoes_local": [], "servicos_aceitos": [], "servicos_recusados": [], "excecoes_servico": [], "info_minima": [], "horario": "", "nunca_prometer": [], "mensagem_fora_da_area": "", "mensagem_servico_recusado": "", "resumo_equipe": [], "responsavel": {"nome": "", "telefone": ""}}}`;
 
 /** O documento não pode fechar o bloco nem abrir outro. */
 export function neutralizarDocumento(texto: string): string {

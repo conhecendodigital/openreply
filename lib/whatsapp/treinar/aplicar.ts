@@ -4,6 +4,7 @@
  * liga/desliga de cada agente ficam como estavam (o rascunho nunca liga nada).
  * Campo que o documento não trouxe fica com o valor que já estava na tela.
  */
+import { regrasPreenchidas, type RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
 import type { RascunhoTreino } from "./esquema";
 
 export interface VistaAgentesTreino {
@@ -18,6 +19,10 @@ export interface VistaAgentesTreino {
     facts: string[];
   };
   agents: Array<{ agente: "qualificacao" | "atendimento" | "suporte"; ativo: boolean; instrucoes: string }>;
+  /** Regras duras estruturadas (tela Agentes). */
+  rules?: RegrasNegocio;
+  /** Aviso opcional pro WhatsApp do responsável: o documento só preenche o telefone, nunca liga. */
+  notifyOwner?: { ligado: boolean; telefone: string };
 }
 
 export function aplicarRascunho<V extends VistaAgentesTreino>(view: V, r: RascunhoTreino): V {
@@ -36,5 +41,9 @@ export function aplicarRascunho<V extends VistaAgentesTreino>(view: V, r: Rascun
       maxAutoPerDay: p.maxAutoPerDay ?? view.profile.maxAutoPerDay,
     },
     agents: view.agents.map((a) => ({ ...a, ativo: a.ativo, instrucoes: r.agents[a.agente] || a.instrucoes })),
+    ...(r.regras && regrasPreenchidas(r.regras) ? { rules: r.regras } : {}),
+    ...(view.notifyOwner && r.regras?.responsavel?.telefone && !view.notifyOwner.telefone
+      ? { notifyOwner: { ligado: view.notifyOwner.ligado, telefone: r.regras.responsavel.telefone } }
+      : {}),
   };
 }

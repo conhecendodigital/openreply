@@ -4,6 +4,7 @@
  * usar no servidor, na tela e nos testes.
  */
 import { z } from "zod";
+import type { RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
 
 export const AGENTES_TREINO = ["qualificacao", "atendimento", "suporte"] as const;
 export type AgenteTreino = (typeof AGENTES_TREINO)[number];
@@ -51,7 +52,11 @@ export const RespostaIaSchema = z.object({
   pendencias: lista(z.object({ assunto: z.string().min(1), trecho: texto })),
   regras_so_instrucao: lista(z.object({ regra: z.string().min(1), onde: z.enum(ONDE_REGRA).catch("comando_base") })),
   contradicoes: lista(z.object({ descricao: z.string().min(1) })),
-  casos_de_teste: lista(z.object({ situacao: z.string().min(1), decisao: z.string().min(1), motivo: texto })),
+  casos_de_teste: lista(
+    z.object({ situacao: z.string().min(1), decisao: z.string().min(1), motivo: texto, esperado: z.array(z.string()).catch([]).default([]) })
+  ),
+  /** Regras duras estruturadas (validadas e normalizadas em lib/whatsapp/treinar/regras.ts). */
+  regras: z.unknown().optional(),
 });
 export type RespostaIa = z.infer<typeof RespostaIaSchema>;
 
@@ -62,6 +67,7 @@ export type CampoTreino =
   | "quietHours"
   | "delay"
   | "maxAutoPerDay"
+  | "rules"
   | `agent:${AgenteTreino}`;
 
 export interface RascunhoTreino {
@@ -79,6 +85,8 @@ export interface RascunhoTreino {
   doDocumento: CampoTreino[];
   mensagensAprovadas: Array<{ tipo: TipoMensagem; quando: string; texto: string; literal: boolean }>;
   casosDeTeste: Array<{ situacao: string; decisao: string; motivo: string }>;
+  /** Regras duras estruturadas (cidades, serviços, informações mínimas...). Vazias se o documento não trouxe. */
+  regras: RegrasNegocio;
   revisar: {
     pendencias: Array<{ assunto: string; trecho: string }>;
     soInstrucao: Array<{ regra: string; onde: (typeof ONDE_REGRA)[number] }>;

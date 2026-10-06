@@ -143,7 +143,7 @@ describe("rascunho a partir do JSON", () => {
     expect(r.profile.facts).toContain("Não há taxa de deslocamento");
     expect(r.agents.qualificacao).toContain("Cidade onde vai ser a obra");
     expect(r.agents.suporte).toContain("grupo de WhatsApp da obra");
-    expect(r.doDocumento).toEqual(["baseCommand", "facts", "agent:qualificacao", "agent:atendimento", "agent:suporte"]);
+    expect(r.doDocumento).toEqual(["baseCommand", "facts", "agent:qualificacao", "agent:atendimento", "agent:suporte", "rules"]);
     // Campo que o documento não traz fica null (a tela mantém o valor de antes).
     expect(r.profile).toMatchObject({ quietStart: null, quietEnd: null, delayMinSeconds: null, maxAutoPerDay: null });
   });
