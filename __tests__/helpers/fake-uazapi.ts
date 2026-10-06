@@ -40,13 +40,15 @@ export class FakeUazapi {
   noManagedProxy = false;
   /** Próximo envio dá tempo esgotado (sem resposta). */
   hangNextSend = false;
+  /** QR devolvido pras instâncias novas (data URL). */
+  qrcode = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
   /** Responde 500 no próximo envio. */
   failNextSend = false;
   private seq = 0;
 
-  async start(): Promise<string> {
+  async start(port = 0): Promise<string> {
     this.server = createServer((req, res) => void this.handle(req, res));
-    await new Promise<void>((resolve) => this.server!.listen(0, "127.0.0.1", resolve));
+    await new Promise<void>((resolve) => this.server!.listen(port, "127.0.0.1", resolve));
     this.url = `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`;
     return this.url;
   }
@@ -151,7 +153,7 @@ export class FakeUazapi {
           name: String(body.name),
           token: `tok-${this.seq}-${"z".repeat(24)}`,
           status: "disconnected",
-          qrcode: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+          qrcode: this.qrcode,
           paircode: "",
           region: {
             country: String(body.proxy_managed_country ?? ""),
