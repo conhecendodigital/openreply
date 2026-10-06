@@ -7,6 +7,14 @@
 -- vira uma migração Prisma normal (ver docs/whatsapp-agentes.md).
 -- Só adiciona coisa. Nada é apagado.
 
+-- 0. Para ANTES de criar qualquer tabela se a Fase 0 não rodou (sem le_app não há RLS).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'le_app') THEN
+    RAISE EXCEPTION 'papel le_app não existe: rode a migração da Fase 0 antes desta';
+  END IF;
+END $$;
+
 -- 1. WaAgentRun: colunas que o motor grava além do plano
 ALTER TABLE whatsapp."WaAgentRun"
   ADD COLUMN IF NOT EXISTS "workspaceId"   TEXT,
@@ -62,8 +70,9 @@ DO $$
 DECLARE t text;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'le_app') THEN
-    RAISE NOTICE 'papel le_app não existe ainda: rode a Fase 0 antes';
-    RETURN;
+    -- Exceção, não aviso: sem isso as tabelas novas (com chave de IA e memória de
+    -- terceiros) ficavam criadas SEM RLS e a migração "passava".
+    RAISE EXCEPTION 'papel le_app não existe: rode a migração da Fase 0 antes desta';
   END IF;
   FOREACH t IN ARRAY ARRAY['WaAgentConfig', 'WaContactMemory']
   LOOP

@@ -57,7 +57,7 @@ Preço por 1 milhão de tokens em `modelos.ts` (Haiku 4.5: US$ 1 / 5; Sonnet 5: 
    - Modelos novos `WaAgentConfig` (único por `sessionId + agente`) e `WaContactMemory` (chave = `contactId`), os dois com RLS dono ou admin.
 2. **AgentStore com Prisma.** Escrever `lib/whatsapp/agentes/store-prisma.ts` implementando `AgentStore` com `dbAs(ownerUserId)` (RLS). Mapas:
    - `carregarContexto`: `WaConversation` + `WaSession.agentMode` + `WaConversationLabel -> WaLabel.agentMode` + `WaContact` + `WaAgentProfile` + últimas ~40 `WaMessage` (ordem crescente).
-   - `gastoDoDia`: `SUM(custoUsdMicro)`, `COUNT(*) WHERE model IS NOT NULL` e `COUNT(*) WHERE status IN ('scheduled','sent') AND approvedBy IS NULL` desde `inicioDoDia`.
+   - `gastoDoDia`: (inclui runs `pending`, que guardam a reserva do pior caso; somar também `whatsapp."WaAiUsage"` do cérebro e o custo do Jev) `SUM(custoUsdMicro)`, `COUNT(*) WHERE model IS NOT NULL` e `COUNT(*) WHERE status IN ('scheduled','sent') AND approvedBy IS NULL` desde `inicioDoDia`.
    - `runsPendentes`: `status IN ('draft','scheduled')`.
    - `credencialAtiva`: `AiCredential` mais nova sem `revokedAt` (policy `owner_only`: nem o admin lê).
    - `agendarEnvio` / `cancelarEnvios`: fila `wa-send` do conector (BullMQ, job com atraso). O job de cada bolha chama `podeEnviar`, mostra "digitando..." por `digitandoMs` e envia com `Idempotency-Key = runId:índice`. Quando a última bolha sai, `atualizarRun(runId, { status: "sent" })` e grava `WaMessage` com `sentBy = AGENT` e `agentRunId`.

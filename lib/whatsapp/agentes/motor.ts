@@ -89,7 +89,15 @@ export async function processarMensagem(
     triagem: null,
     createdAt: now,
   };
-  const registrar = (status: RunStatus, extra: Partial<AgentRunRecord>) => store.registrarRun({ ...base, ...extra, status });
+  // Depois da reserva do teto (passo 4) o run já existe: os próximos registros atualizam a mesma linha.
+  let runReservado: string | null = null;
+  const registrar = async (status: RunStatus, extra: Partial<AgentRunRecord>): Promise<string> => {
+    if (runReservado) {
+      await store.atualizarRun(runReservado, { ...base, ...extra, status });
+      return runReservado;
+    }
+    return store.registrarRun({ ...base, ...extra, status });
+  };
 
   // 1. Triagem
   const tri: DecisaoTriagem = await triar(ctx.historico, configs, deps.jev);
@@ -113,6 +121,20 @@ export async function processarMensagem(
     const runId = await registrar("error", { blockedReason: motivo });
     await deps.notificar?.({ ownerUserId: ctx.ownerUserId, conversationId: ctx.conversation.id, tipo: "erro_chave", mensagem: motivo });
     return { acao: "erro", motivo, runId };
+  }
+
+  const limites = deps.limites ?? limitesDoAmbiente();
+  // 3a. Teto já estourado: nem busca no cérebro (a busca gasta embedding com a chave do dono).
+  const tetoAntes = await conferirTeto(
+    store,
+    { ownerUserId: ctx.ownerUserId, workspaceId: ctx.workspaceId, dailyCap: cred.dailyCap, custoPrevistoUsdMicro: 1, now, timeZone: ctx.profile?.timeZone },
+    limites
+  );
+  if (!tetoAntes.ok) {
+    const motivo = mensagemTeto(tetoAntes.motivo);
+    const runId = await registrar("blocked", { blockedReason: motivo });
+    await deps.notificar?.({ ownerUserId: ctx.ownerUserId, conversationId: ctx.conversation.id, tipo: "teto", mensagem: motivo });
+    return { acao: "ignorado", motivo, runId };
   }
 
   // 3. Contexto: cérebro + memória + tom
@@ -139,17 +161,18 @@ export async function processarMensagem(
 
   // 4. Teto (pior caso antes de gastar)
   const caracteres = comando.sistemaFixo.length + comando.sistemaVariavel.length + comando.mensagens.reduce((s, m) => s + m.content.length, 0);
+  const custoPrevisto = custoMaximoUsdMicro(escolha.modelo, caracteres, MAX_TOKENS_SAIDA);
   const teto = await conferirTeto(
     store,
     {
       ownerUserId: ctx.ownerUserId,
       workspaceId: ctx.workspaceId,
       dailyCap: cred.dailyCap,
-      custoPrevistoUsdMicro: custoMaximoUsdMicro(escolha.modelo, caracteres, MAX_TOKENS_SAIDA),
+      custoPrevistoUsdMicro: custoPrevisto,
       now,
       timeZone: ctx.profile?.timeZone,
     },
-    deps.limites ?? limitesDoAmbiente()
+    limites
   );
   if (!teto.ok) {
     const motivo = mensagemTeto(teto.motivo);
@@ -157,6 +180,12 @@ export async function processarMensagem(
     await deps.notificar?.({ ownerUserId: ctx.ownerUserId, conversationId: ctx.conversation.id, tipo: "teto", mensagem: motivo });
     return { acao: "ignorado", motivo, runId };
   }
+  // Reserva o pior caso ANTES de chamar o modelo: duas mensagens processadas ao
+  // mesmo tempo passavam as duas pelo teto (o gasto só era gravado depois da
+  // resposta). O run "pending" entra no gastoDoDia e é trocado pelo custo real.
+  // No store Prisma, conferirTeto + esta reserva devem rodar sob
+  // pg_advisory_xact_lock(hashtext(ownerUserId)) pra fechar a corrida de vez.
+  runReservado = await store.registrarRun({ ...base, status: "pending", custoUsdMicro: custoPrevisto });
 
   // 5. Modelo
   let resposta;
@@ -226,6 +255,8 @@ export async function processarMensagem(
   });
 
   // 7. Rascunho ou envio
+  // Triagem incerta (Jev fora do ar ou em dúvida) nunca sai sozinha: vira rascunho.
+  if (modo.modo === "AUTO" && tri.incerto) alertas.push("A triagem ficou em dúvida, então a resposta ficou como rascunho.");
   let motivoRascunho: string | null = alertas.length ? alertas.join(" ") : null;
   if (modo.modo === "AUTO" && !motivoRascunho) {
     if (emSilencio(now, ctx.profile?.quietHours, ctx.profile?.timeZone)) motivoRascunho = "Horário de silêncio: ficou como rascunho.";

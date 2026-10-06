@@ -148,7 +148,7 @@ export interface GastoDia {
   autoEnvios: number;
 }
 
-export type RunStatus = "draft" | "approved" | "sent" | "rejected" | "blocked" | "error" | "skipped" | "handoff" | "scheduled";
+export type RunStatus = "pending" | "draft" | "approved" | "sent" | "rejected" | "blocked" | "error" | "skipped" | "handoff" | "scheduled";
 
 /** whatsapp.WaAgentRun + colunas novas de prisma/migrations-wa/agentes. */
 export interface AgentRunRecord {
