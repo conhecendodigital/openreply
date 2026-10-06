@@ -5,5 +5,5 @@ export const dynamic = "force-dynamic";
 
 /** uazapi configurada? Quantas vagas de dispositivo sobram. Nunca devolve chave nem token. */
 export async function GET() {
-  return withPainel({ action: "read WhatsApp" }, (_ctx, deps) => uazapiOverview(deps));
+  return withPainel({ action: "read WhatsApp" }, (ctx, deps) => uazapiOverview(deps, ctx.workspaceId));
 }

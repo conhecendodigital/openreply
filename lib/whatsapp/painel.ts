@@ -24,8 +24,8 @@ import { OpenWAConnector } from "@/lib/whatsapp/openwa";
 import { WhatsAppConnectorError } from "@/lib/whatsapp/connector";
 import type { WaQueuePort } from "@/lib/whatsapp/queue";
 import type { WaRepository } from "@/lib/whatsapp/repository";
-import { openwaCredentialsFromEnv } from "@/lib/whatsapp/runtime";
-import { webhookUrl, whatsappStatus } from "@/lib/whatsapp/setup";
+import { IntegrationReadError, resolveOpenwa } from "@/lib/integrations/credentials";
+import { webhookUrl, whatsappStatusFor } from "@/lib/whatsapp/setup";
 import {
   createUazapiSession,
   disconnectUazapi,
@@ -70,22 +70,41 @@ export function rls<T>(ctx: RlsContext, deps: PainelDeps, fn: (tx: Tx) => Promis
   return withRls(ctx, fn, deps.app ?? getAppPrisma());
 }
 
-function gatewayCreds(deps: PainelDeps) {
-  const creds = openwaCredentialsFromEnv(deps.env ?? process.env);
-  if (!creds) throw new PainelError("gateway_off", "The WhatsApp gateway is not configured on the server yet.", 503);
-  return creds;
+/** Chaves salvas em Canais não abriram (banco fora): erro claro, nunca cai pro ambiente às cegas. */
+export function credentialsReadError(): PainelError {
+  return new PainelError("keys_unreadable", "Could not read the keys saved in Channels. Try again in a minute.", 503);
 }
 
-function connectorFor(deps: PainelDeps, providerSessionId: string, riskAcceptedAt: Date | null): GatewayClient {
+/** Gateway OpenWA do workspace: Canais > OPENWA_* do ambiente. */
+async function gatewayCreds(deps: PainelDeps, workspaceId: string | null | undefined) {
+  let creds: Awaited<ReturnType<typeof resolveOpenwa>>;
+  try {
+    creds = await resolveOpenwa(workspaceId, { env: deps.env ?? process.env, system: deps.system });
+  } catch (error) {
+    if (error instanceof IntegrationReadError) throw credentialsReadError();
+    throw error;
+  }
+  if (!creds) {
+    throw new PainelError("gateway_off", "The WhatsApp gateway is not configured yet. Add the URL and the key in Channels, Connections and keys.", 503);
+  }
+  return { baseUrl: creds.baseUrl, apiKey: creds.apiKey };
+}
+
+async function connectorFor(
+  deps: PainelDeps,
+  workspaceId: string | null | undefined,
+  providerSessionId: string,
+  riskAcceptedAt: Date | null
+): Promise<GatewayClient> {
   if (deps.connectorFor) return deps.connectorFor(providerSessionId, riskAcceptedAt);
-  const creds = gatewayCreds(deps);
+  const creds = await gatewayCreds(deps, workspaceId);
   return new OpenWAConnector({ ...creds, sessionId: providerSessionId, riskAcceptedAt });
 }
 
 function gatewayMessage(error: unknown): PainelError {
   if (error instanceof PainelError) return error;
   if (error instanceof WhatsAppConnectorError && error.status === 401) {
-    return new PainelError("gateway_auth", "The gateway refused the server key. Check OPENWA_API_KEY.", 502);
+    return new PainelError("gateway_auth", "The gateway refused the key. Check it in Channels, Connections and keys.", 502);
   }
   return new PainelError("gateway_error", "The WhatsApp gateway did not answer. Try again in a minute.", 502);
 }
@@ -181,8 +200,8 @@ export async function loadSession(ctx: RlsContext, deps: PainelDeps, sessionId: 
 }
 
 /** Status do servidor pra tela (ligado, gateway, IA do /admin). Nunca devolve chave. */
-export async function serverStatus(deps: PainelDeps) {
-  const base = whatsappStatus(deps.env ?? process.env);
+export async function serverStatus(deps: PainelDeps, workspaceId?: string | null) {
+  const base = await whatsappStatusFor(workspaceId, { env: deps.env ?? process.env, system: deps.system });
   let ai = { anthropic: false, openai: false };
   try {
     const rows = await withSystemRole(
@@ -215,7 +234,7 @@ export async function createSession(
   if (env.WHATSAPP_ENABLED !== "1") throw new PainelError("whatsapp_off", "WhatsApp is not turned on on the server yet.", 503);
   const hook = webhookUrl(env);
   if (!hook) throw new PainelError("no_webhook_url", "The server has no public https address for the webhook yet.", 503);
-  const creds = gatewayCreds(deps);
+  const creds = await gatewayCreds(deps, ctx.workspaceId);
   const existing = await rls(ctx, deps, (tx) => tx.waSession.count({ where: { workspaceId: ctx.workspaceId } }));
   if (existing >= 5) throw new PainelError("too_many", "This workspace already has 5 numbers.", 409);
 
@@ -247,7 +266,7 @@ export async function createSession(
       select: SESSION_VIEW_SELECT,
     })
   );
-  const connector = connectorFor(deps, created.providerSessionId, riskAcceptedAt);
+  const connector = await connectorFor(deps, ctx.workspaceId, created.providerSessionId, riskAcceptedAt);
   try {
     await connector.ensureWebhook(hook, secret);
     const started = await connector.connect();
@@ -298,8 +317,8 @@ export async function refreshSession(
   const row = await loadSession(ctx, deps, sessionId);
   if (row.provider === "UAZAPI") return refreshUazapi(ctx, sessionId, deps);
   if (row.provider !== "OPENWA") return { session: toSessionView(row), qr: null };
-  const connector = connectorFor(deps, row.providerSessionId, row.riskAcceptedAt);
   try {
+    const connector = await connectorFor(deps, ctx.workspaceId, row.providerSessionId, row.riskAcceptedAt);
     const info = await connector.getInfo();
     const qr = info.status === "QR_READY" || info.status === "PENDING" ? await connector.getQr() : null;
     const status = qr && info.status === "PENDING" ? "QR_READY" : info.status;
@@ -320,8 +339,8 @@ export async function reconnectSession(
   const row = await loadSession(ctx, deps, sessionId);
   if (row.provider === "UAZAPI") return reconnectUazapi(ctx, sessionId, input, deps);
   if (row.provider !== "OPENWA") throw new PainelError("not_supported", "Only numbers connected by QR code can reconnect here.", 400);
-  const connector = connectorFor(deps, row.providerSessionId, row.riskAcceptedAt);
   try {
+    const connector = await connectorFor(deps, ctx.workspaceId, row.providerSessionId, row.riskAcceptedAt);
     const hook = webhookUrl(deps.env ?? process.env);
     const secretRow = await rls(ctx, deps, (tx) => tx.waSession.findFirst({ where: { id: sessionId }, select: { webhookSecretEnc: true } }));
     if (hook && secretRow?.webhookSecretEnc) {
@@ -347,7 +366,7 @@ export async function disconnectSession(ctx: RlsContext, sessionId: string, deps
   let gatewayOk = true;
   if (row.provider === "OPENWA") {
     try {
-      await connectorFor(deps, row.providerSessionId, row.riskAcceptedAt).disconnect();
+      await (await connectorFor(deps, ctx.workspaceId, row.providerSessionId, row.riskAcceptedAt)).disconnect();
     } catch {
       gatewayOk = false;
     }
@@ -563,7 +582,7 @@ export async function markRead(ctx: RlsContext, conversationId: string, deps: Pa
   // "Lida" no celular do contato: cosmético, nunca trava a tela.
   if (c.unreadCount > 0 && c.session.provider === "OPENWA" && c.session.status === "CONNECTED") {
     try {
-      await connectorFor(deps, c.session.providerSessionId, c.session.riskAcceptedAt).markRead(c.contact.jid, []);
+      await (await connectorFor(deps, ctx.workspaceId, c.session.providerSessionId, c.session.riskAcceptedAt)).markRead(c.contact.jid, []);
     } catch {
       // ignora
     }
@@ -675,7 +694,7 @@ export async function messageMedia(
     const client =
       m.session.provider === "UAZAPI"
         ? await uazapiConnectorFor(ctx, deps, m.session.id)
-        : connectorFor(deps, m.session.providerSessionId, m.session.riskAcceptedAt);
+        : await connectorFor(deps, ctx.workspaceId, m.session.providerSessionId, m.session.riskAcceptedAt);
     media = await client.fetchMedia(m.conversation.contact.jid, m.providerMessageId);
   } catch (error) {
     throw gatewayMessage(error);

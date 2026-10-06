@@ -5,5 +5,5 @@ export const dynamic = "force-dynamic";
 
 /** Se o WhatsApp está ligado no servidor, se o gateway e a IA do /admin estão prontos. Nunca devolve chave. */
 export async function GET() {
-  return withPainel({ action: "read WhatsApp" }, (_ctx, deps) => serverStatus(deps));
+  return withPainel({ action: "read WhatsApp" }, (ctx, deps) => serverStatus(deps, ctx.workspaceId));
 }

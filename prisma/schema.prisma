@@ -132,6 +132,8 @@ model Workspace {
   waKnowledgeDocs    WaKnowledgeDocument[]
   waKnowledgeChunks  WaKnowledgeChunk[]
   waContactMemories  WaContactMemory[]
+  integrationCredentials WorkspaceIntegrationCredential[]
+  integrationAudits      WorkspaceIntegrationAudit[]
 
   @@index([ownerId])
   @@schema("public")
@@ -2257,4 +2259,45 @@ model WaContactMemory {
 
   @@id([workspaceId, contactId])
   @@schema("whatsapp")
+}
+
+/// Canais > Conexões e chaves (06/10/2026): chave de integração do workspace
+/// (uazapi, gateway OpenWA). Um valor por campo, cifrado (ENCRYPTION_KEY).
+/// Só last4 sai. Precedência: este valor > variável de ambiente > nada.
+/// lib/integrations/credentials.ts lê e grava. RLS: só dono/admin do workspace.
+model WorkspaceIntegrationCredential {
+  id          String   @id @default(cuid())
+  workspaceId String
+  /// uazapi | openwa
+  service     String
+  /// uazapi: serverUrl | adminToken | maxInstances; openwa: baseUrl | apiKey
+  field       String
+  valueEnc    String
+  last4       String
+  createdById String
+  updatedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, service, field])
+  @@schema("public")
+}
+
+/// Quem salvou, trocou, removeu ou testou uma chave de integração. Nunca o valor.
+model WorkspaceIntegrationAudit {
+  id          String   @id @default(cuid())
+  workspaceId String
+  actorUserId String
+  service     String
+  field       String?
+  /// saved | replaced | removed | tested
+  action      String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@schema("public")
 }

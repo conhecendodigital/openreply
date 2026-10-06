@@ -11,7 +11,9 @@ import { getPrisma } from "@/lib/db/client";
 import { withSystemRole, type RlsContext } from "@/lib/db/rls";
 import { decryptToken, encryptToken } from "@/lib/meta/oauth";
 import { WhatsAppConnectorError } from "@/lib/whatsapp/connector";
+import { IntegrationReadError, resolveUazapi, type ResolvedUazapi } from "@/lib/integrations/credentials";
 import {
+  credentialsReadError,
   loadSession,
   PainelError,
   rls,
@@ -27,10 +29,8 @@ import {
   listProxyCountries,
   UazapiAdmin,
   UazapiConnector,
-  uazapiFromEnv,
   type ProxyRegion,
   type RegionOption,
-  type UazapiEnv,
 } from "@/lib/whatsapp/uazapi";
 
 /** Limite de números por workspace (igual ao OpenWA). */
@@ -40,10 +40,20 @@ function env(deps: PainelDeps) {
   return deps.env ?? process.env;
 }
 
-function config(deps: PainelDeps): UazapiEnv {
-  const cfg = uazapiFromEnv(env(deps));
+/** uazapi do workspace: Canais > UAZAPI_* do ambiente > null. */
+async function resolved(deps: PainelDeps, workspaceId: string | null | undefined): Promise<ResolvedUazapi | null> {
+  try {
+    return await resolveUazapi(workspaceId, { env: env(deps), system: deps.system });
+  } catch (error) {
+    if (error instanceof IntegrationReadError) throw credentialsReadError();
+    throw error;
+  }
+}
+
+async function config(deps: PainelDeps, workspaceId: string | null | undefined): Promise<ResolvedUazapi> {
+  const cfg = await resolved(deps, workspaceId);
   if (!cfg) {
-    throw new PainelError("uazapi_off", "The uazapi is not configured on the server yet (UAZAPI_SERVER_URL and UAZAPI_ADMIN_TOKEN).", 503);
+    throw new PainelError("uazapi_off", "The uazapi is not configured yet. Add the Server URL and the Admin token in Channels, Connections and keys.", 503);
   }
   return cfg;
 }
@@ -52,7 +62,7 @@ function config(deps: PainelDeps): UazapiEnv {
 export function uazapiMessage(error: unknown): PainelError {
   if (error instanceof PainelError) return error;
   if (error instanceof WhatsAppConnectorError) {
-    if (error.status === 401) return new PainelError("uazapi_auth", "The uazapi refused the server key. Check UAZAPI_ADMIN_TOKEN.", 502);
+    if (error.status === 401) return new PainelError("uazapi_auth", "The uazapi refused the Admin token. Check it in Channels, Connections and keys.", 502);
     if (error.status === 429) return new PainelError("uazapi_busy", "The uazapi asked to wait a little. Try again in a minute.", 429);
   }
   return new PainelError("uazapi_error", "The uazapi did not answer. Try again in a minute.", 502);
@@ -62,7 +72,7 @@ export function uazapiMessage(error: unknown): PainelError {
 
 export type UazapiOverview = {
   configured: boolean;
-  /** Dispositivos do plano (UAZAPI_MAX_INSTANCES, padrão 2). */
+  /** Dispositivos do plano (Canais, ou UAZAPI_MAX_INSTANCES; padrão 2). */
   max: number;
   used: number;
   remaining: number;
@@ -75,8 +85,8 @@ export type UazapiOverview = {
  * então o máximo vem de UAZAPI_MAX_INSTANCES; o usado vem da lista de
  * instâncias do servidor (cada instância ocupa uma vaga, mesmo desconectada).
  */
-export async function uazapiOverview(deps: PainelDeps): Promise<UazapiOverview> {
-  const cfg = uazapiFromEnv(env(deps));
+export async function uazapiOverview(deps: PainelDeps, workspaceId?: string | null): Promise<UazapiOverview> {
+  const cfg = await resolved(deps, workspaceId);
   if (!cfg) return { configured: false, max: 0, used: 0, remaining: 0, source: "local" };
   let used: number;
   let source: UazapiOverview["source"] = "server";
@@ -84,7 +94,9 @@ export async function uazapiOverview(deps: PainelDeps): Promise<UazapiOverview> 
     used = await new UazapiAdmin({ serverUrl: cfg.serverUrl, adminToken: cfg.adminToken }).countInstances();
   } catch {
     source = "local";
-    used = await withSystemRole((tx) => tx.waSession.count({ where: { provider: "UAZAPI" } }), deps.system ?? getPrisma()).catch(() => 0);
+    // Servidor do próprio workspace: só os números dele; servidor do ambiente: todos.
+    const where = cfg.source === "workspace" && workspaceId ? { provider: "UAZAPI" as const, workspaceId } : { provider: "UAZAPI" as const };
+    used = await withSystemRole((tx) => tx.waSession.count({ where }), deps.system ?? getPrisma()).catch(() => 0);
   }
   return { configured: true, max: cfg.maxInstances, used, remaining: Math.max(0, cfg.maxInstances - used), source };
 }
@@ -95,9 +107,10 @@ const CITY = /^[a-z0-9_-]{1,64}$/;
 /** Países e cidades do proxy (listas da própria uazapi). Brasil é o padrão. */
 export async function uazapiRegions(
   input: { country?: unknown; search?: unknown },
-  deps: PainelDeps
+  deps: PainelDeps,
+  workspaceId?: string | null
 ): Promise<{ countries: RegionOption[]; country: string; cities: RegionOption[] }> {
-  const cfg = config(deps);
+  const cfg = await config(deps, workspaceId);
   const country = typeof input.country === "string" && COUNTRY.test(input.country) ? input.country : "br";
   const search = typeof input.search === "string" ? input.search.trim().slice(0, 40) || null : null;
   try {
@@ -123,7 +136,7 @@ const PROXY_REQUIRED =
   "Choose the country and the city of the connection first. Without that, the number would connect from the IP of a server abroad, and WhatsApp blocks numbers like that fast.";
 
 /** Confere a cidade na lista da uazapi (o estado e o nome vêm de lá, não do navegador). */
-async function resolveRegion(cfg: UazapiEnv, raw: unknown): Promise<ProxyRegion & { label: string }> {
+async function resolveRegion(cfg: ResolvedUazapi, raw: unknown): Promise<ProxyRegion & { label: string }> {
   const p = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const country = typeof p.country === "string" ? p.country.trim().toLowerCase() : "";
   const city = typeof p.city === "string" ? p.city.trim() : "";
@@ -185,13 +198,13 @@ export async function createUazapiSession(
   const e = env(deps);
   if (e.WHATSAPP_ENABLED !== "1") throw new PainelError("whatsapp_off", "WhatsApp is not turned on on the server yet.", 503);
   if (!webhookUrl(e)) throw new PainelError("no_webhook_url", "The server has no public https address for the webhook yet.", 503);
-  const cfg = config(deps);
+  const cfg = await config(deps, ctx.workspaceId);
   const method = parseMethod(input);
   const region = await resolveRegion(cfg, input.proxy);
 
   const existing = await rls(ctx, deps, (tx) => tx.waSession.count({ where: { workspaceId: ctx.workspaceId } }));
   if (existing >= MAX_NUMBERS_PER_WORKSPACE) throw new PainelError("too_many", "This workspace already has 5 numbers.", 409);
-  const slots = await uazapiOverview(deps);
+  const slots = await uazapiOverview(deps, ctx.workspaceId);
   if (slots.remaining <= 0) {
     throw new PainelError(
       "no_slots",
@@ -279,7 +292,7 @@ async function loadSecrets(ctx: RlsContext, deps: PainelDeps, sessionId: string)
 
 /** Conector de um número da uazapi já salvo (token aberto só aqui). */
 export async function uazapiConnectorFor(ctx: RlsContext, deps: PainelDeps, sessionId: string): Promise<UazapiConnector> {
-  const cfg = config(deps);
+  const cfg = await config(deps, ctx.workspaceId);
   const s = await loadSecrets(ctx, deps, sessionId);
   return new UazapiConnector({ serverUrl: cfg.serverUrl, instanceToken: s.token });
 }
@@ -303,7 +316,7 @@ export async function reconnectUazapi(
   input: { method?: unknown; phone?: unknown },
   deps: PainelDeps
 ): Promise<UazapiConnectResult> {
-  const cfg = config(deps);
+  const cfg = await config(deps, ctx.workspaceId);
   const method = parseMethod(input);
   const s = await loadSecrets(ctx, deps, sessionId);
   if (!s.region) throw new PainelError("proxy_required", PROXY_REQUIRED, 400);
