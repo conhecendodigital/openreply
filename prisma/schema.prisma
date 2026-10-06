@@ -1940,6 +1940,12 @@ model WaMessage {
   mediaFilename     String?
   /// Cloud API: id da mídia na Meta.
   mediaRef          String?
+  /// O que o agente leu da mídia do cliente: transcrição do áudio, descrição da foto ou trecho do PDF.
+  mediaText         String?
+  /// audio | image | pdf
+  mediaTextKind     String?
+  /// ok | too_large | no_key | cap | failed | no_text | unsupported
+  mediaTextStatus   String?
 
   workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session      WaSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)

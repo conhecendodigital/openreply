@@ -184,8 +184,10 @@ beforeEach(() => {
 describe("migração 20261018130000_wa_excluir_numero (banco vazio)", () => {
   it("vem depois da canais_chaves (as duas no mesmo dia)", () => {
     const names = migrationNames();
-    expect(names.at(-1)).toBe("20261018130000_wa_excluir_numero");
-    expect(names.indexOf("20261018120000_canais_chaves")).toBe(names.length - 2);
+    // Migrações depois desta (ex.: 20261019120000_wa_ler_midia) podem vir; a ordem entre as duas é o que importa.
+    const excluir = names.indexOf("20261018130000_wa_excluir_numero");
+    expect(excluir).toBeGreaterThan(0);
+    expect(names.indexOf("20261018120000_canais_chaves")).toBe(excluir - 1);
   });
 
   it("colunas novas opcionais e a auditoria com RLS forçada", async () => {
