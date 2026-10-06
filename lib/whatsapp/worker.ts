@@ -15,7 +15,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 export interface WaWorkerOptions {
   runtime: WhatsAppRuntime;
-  hooks?: Pick<IngestDeps, "onInboundMessage" | "onSessionEvent">;
+  hooks?: Pick<IngestDeps, "onInboundMessage" | "onOwnerMessage" | "onSessionEvent">;
   limiter?: SendRateLimiter;
 }
 

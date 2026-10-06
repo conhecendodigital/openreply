@@ -227,6 +227,31 @@ describe("webhook OpenWA", () => {
     await handleWhatsAppWebhook({ headers: headersFor(body, "openwa", OPENWA_SECRET), rawBody: body, ip: "1.1.1.1" }, deps(ctx));
     expect(ctx.queue.ingest[0].event).toMatchObject({ kind: "session", status: "QR_READY", qr: "data:image/png;base64,AAA" });
   });
+
+  it("session.status { status: ready } (evento real do OpenWA) vira CONNECTED", async () => {
+    const ctx = setup();
+    const body = JSON.stringify({
+      event: "session.status",
+      timestamp: new Date(NOW).toISOString(),
+      sessionId: "owa-1",
+      idempotencyKey: "st-1",
+      deliveryId: "d",
+      data: { sessionId: "owa-1", status: "ready" },
+    });
+    await handleWhatsAppWebhook({ headers: headersFor(body, "openwa", OPENWA_SECRET), rawBody: body, ip: "1.1.1.1" }, deps(ctx));
+    expect(ctx.queue.ingest[0].event).toMatchObject({ kind: "session", status: "CONNECTED" });
+  });
+
+  it("só assina eventos que o OpenWA aceita no POST /webhooks", async () => {
+    const { OPENWA_WEBHOOK_EVENTS } = await import("@/lib/whatsapp/openwa");
+    // Lista de WEBHOOK_EVENTS do OpenWA 0.24 (src/modules/webhook/dto/webhook.dto.ts).
+    const aceitos = new Set([
+      "message.received", "message.sent", "message.ack", "message.failed", "message.revoked", "message.reaction",
+      "message.edited", "status.received", "session.status", "session.qr", "session.authenticated",
+      "session.disconnected", "session.reconnect_loop", "session.restriction",
+    ]);
+    for (const e of OPENWA_WEBHOOK_EVENTS) expect(aceitos.has(e)).toBe(true);
+  });
 });
 
 describe("webhook Meta (Cloud API + coexistência)", () => {
@@ -328,6 +353,28 @@ describe("ingestão (wa-ingest)", () => {
     const conv = [...ctx.repo.conversations.values()][0];
     expect(conv.unreadCount).toBe(1);
     expect(conv.lastMessagePreview).toBe("Oi, vocês atendem sábado?");
+  });
+
+  it("eco do celular avisa onOwnerMessage; eco que chega antes do envio do agente é corrigido pra AGENT", async () => {
+    const ctx = setup();
+    const owner: string[] = [];
+    const eco = openwaBody({ event: "message.sent", idempotencyKey: "eco-1" }, { id: "out-77", fromMe: true, body: "Oi, Joana!" });
+    await handleWhatsAppWebhook({ headers: headersFor(eco, "openwa", OPENWA_SECRET), rawBody: eco, ip: "1.1.1.1" }, deps(ctx));
+    const res = await processIngestJob(ctx.queue.ingest[0], {
+      repo: ctx.repo,
+      onOwnerMessage: async (i: { messageId: string }) => void owner.push(i.messageId),
+    });
+    expect(res).toMatchObject({ kind: "message", created: true });
+    expect(owner).toHaveLength(1);
+    const msg = [...ctx.repo.messages.values()].find((m) => m.providerMessageId === "out-77")!;
+    expect(msg.sentBy).toBe("USER_PHONE");
+    // O envio do agente grava depois com o mesmo id: a linha passa a ser do agente.
+    await ctx.repo.insertMessage({ ...msg, sentBy: "AGENT", agentRunId: "run_9" });
+    expect(msg.sentBy).toBe("AGENT");
+    expect(msg.agentRunId).toBe("run_9");
+    // E o contrário não acontece: eco atrasado não rebaixa AGENT pra USER_PHONE.
+    await ctx.repo.insertMessage({ ...msg, sentBy: "USER_PHONE", agentRunId: null });
+    expect(msg.sentBy).toBe("AGENT");
   });
 
   it("ack nunca volta (read não vira delivered)", async () => {

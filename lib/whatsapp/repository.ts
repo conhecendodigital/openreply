@@ -7,8 +7,12 @@
  *
  * Regras que toda implementação tem que manter:
  * - recordWebhookEvent é a trava de idempotência (WaWebhookEvent.dedupeKey @unique).
- * - insertMessage não duplica (WaMessage @@unique([sessionId, providerMessageId]))
- *   e, se a linha já existe, não troca sentBy (o envio do app grava primeiro).
+ * - insertMessage não duplica (WaMessage @@unique([sessionId, providerMessageId])).
+ *   Se a linha já existe, não troca sentBy, COM UMA EXCEÇÃO: o eco "message.sent"
+ *   do OpenWA pode chegar antes do envio do app gravar e entra como USER_PHONE.
+ *   Quando o envio do Lead Engine (AGENT ou USER_APP) grava depois, ele corrige
+ *   sentBy e agentRunId. Sem isso a mensagem do agente parecia "o dono respondeu
+ *   pelo celular": pausava o agente (takeover) e entrava no aprendizado de tom.
  * - updateMessageAck nunca volta o ack (read não vira delivered).
  */
 import type {
@@ -157,6 +161,10 @@ export class InMemoryWaRepository implements WaRepository {
   async insertMessage(input: Omit<WaMessageRecord, "id">) {
     for (const m of this.messages.values()) {
       if (m.sessionId === input.sessionId && m.providerMessageId === input.providerMessageId) {
+        if (m.sentBy === "USER_PHONE" && (input.sentBy === "AGENT" || input.sentBy === "USER_APP")) {
+          m.sentBy = input.sentBy;
+          m.agentRunId = input.agentRunId;
+        }
         return { created: false, message: m };
       }
     }

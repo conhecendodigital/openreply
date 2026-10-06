@@ -10,6 +10,15 @@ export interface IngestDeps {
   repo: WaRepository;
   /** Mensagem nova do contato (pra fila do agente / SSE). Não roda em reprocessamento nem histórico. */
   onInboundMessage?: (info: { ownerUserId: string; sessionId: string; conversationId: string; messageId: string }) => Promise<void>;
+  /**
+   * Mensagem nova do DONO pelo celular (eco fromMe, sentBy USER_PHONE). É aqui que
+   * o "Assumir" automático entra (agentes/modo.ts aoMensagemDoUsuario).
+   * ATENÇÃO: no OpenWA o eco "message.sent" do que o próprio Lead Engine enviou
+   * pode chegar ANTES do envio gravar a linha como AGENT/USER_APP. Quem implementar
+   * este gancho tem que esperar uns segundos (job atrasado ~30 s) e reler a
+   * mensagem pelo id: se o sentBy virou AGENT/USER_APP, não é o dono e não pausa.
+   */
+  onOwnerMessage?: (info: { ownerUserId: string; sessionId: string; conversationId: string; messageId: string }) => Promise<void>;
   /** QR e status (pra SSE da página Canais). */
   onSessionEvent?: (info: { ownerUserId: string; sessionId: string; event: NormalizedSessionEvent }) => Promise<void>;
 }
@@ -78,6 +87,14 @@ export async function processIngestJob(job: WaIngestJob, deps: IngestDeps): Prom
       preview: preview(event),
       incrementUnread: !event.fromMe && !event.isHistory,
     });
+    if (event.fromMe && event.sentBy === "USER_PHONE" && !event.isHistory) {
+      await deps.onOwnerMessage?.({
+        ownerUserId: session.ownerUserId,
+        sessionId: session.id,
+        conversationId: conversation.id,
+        messageId: message.id,
+      });
+    }
     if (!event.fromMe && !event.isHistory) {
       await deps.onInboundMessage?.({
         ownerUserId: session.ownerUserId,
