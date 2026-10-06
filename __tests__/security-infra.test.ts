@@ -124,8 +124,8 @@ describe("proxy: chave de API só nas rotas do MCP", () => {
     }
   });
 
-  it("o proxy roda nas rotas /api", () => {
-    expect(proxyConfig.matcher).toContain("/api/:path*");
+  it("o proxy roda em todas as rotas (inclusive /api), menos os arquivos estáticos do build", () => {
+    expect(proxyConfig.matcher).toEqual(["/((?!_next/static|_next/image).*)"]);
   });
 
   it("toda rota do lib/mcp/routes.ts está liberada pra chave (MCP não quebra)", () => {
@@ -361,8 +361,10 @@ describe("quiz (funis)", () => {
     const res = proxy(req("/quizzes/f1"));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/login?callbackUrl=%2Fquizzes%2Ff1");
-    expect(proxyConfig.matcher).toContain("/quizzes/:path*");
-    expect(proxyConfig.matcher.some((m: string) => m.startsWith("/q/"))).toBe(false);
+    // /q passa direto no host do painel (público, sem login).
+    const q = proxy(req("/q/qualquer"));
+    expect(q.headers.get("x-middleware-next")).toBe("1");
+    expect(q.headers.get("location")).toBeNull();
   });
 
   it("/q tem CSP de iframe fechada (só vídeo e Facebook) e mantém frame-ancestors; a regra geral não muda", async () => {
