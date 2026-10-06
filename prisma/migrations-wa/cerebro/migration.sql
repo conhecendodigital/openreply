@@ -110,6 +110,18 @@ CREATE TABLE whatsapp."WaAiUsage" (
 CREATE INDEX "WaAiUsage_owner_created_idx" ON whatsapp."WaAiUsage" ("ownerUserId", "createdAt" DESC);
 
 -- ─── RLS por workspace (segunda tranca, além do filtro no código) ────────────
+-- Mesma regra das tabelas whatsapp.* da Fase 0: só o workspace ATIVO
+-- (app.workspace_id) e só se a pessoa for membro dele; admin só LÊ, e só com
+-- registro de auditoria (app.admin_audit_ok). Antes era "qualquer workspace
+-- da pessoa OU admin com escrita total": uma chave de API do workspace A
+-- alcançava o cérebro do workspace B do mesmo dono, e o admin lia memória de
+-- contato de terceiros sem deixar rastro.
+DO $$
+BEGIN
+  IF to_regprocedure('app.in_current_workspace(text)') IS NULL OR to_regprocedure('app.admin_audit_ok(text)') IS NULL THEN
+    RAISE EXCEPTION 'Funções app.in_current_workspace / app.admin_audit_ok não existem: rode a Fase 0 antes';
+  END IF;
+END $$;
 DO $$
 DECLARE t text;
 BEGIN
@@ -118,9 +130,13 @@ BEGIN
     EXECUTE format('ALTER TABLE whatsapp.%I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE whatsapp.%I FORCE ROW LEVEL SECURITY', t);
     EXECUTE format($p$
-      CREATE POLICY ws_member ON whatsapp.%I FOR ALL TO le_app
-      USING ("workspaceId" IN (SELECT app.my_workspace_ids()) OR app.is_admin())
-      WITH CHECK ("workspaceId" IN (SELECT app.my_workspace_ids()) OR app.is_admin())
+      CREATE POLICY ws_member ON whatsapp.%I FOR ALL TO PUBLIC
+      USING (app.in_current_workspace("workspaceId"))
+      WITH CHECK (app.in_current_workspace("workspaceId"))
+    $p$, t);
+    EXECUTE format($p$
+      CREATE POLICY admin_audited_read ON whatsapp.%I FOR SELECT TO PUBLIC
+      USING (app.admin_audit_ok("workspaceId"))
     $p$, t);
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON whatsapp.%I TO le_app', t);
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'le_system') THEN

@@ -5,7 +5,7 @@
 import { createCerebroWorker } from "@/lib/whatsapp/cerebro/queue";
 import { ingestDepsFor } from "@/lib/whatsapp/cerebro/service";
 
-const worker = createCerebroWorker((job) => ingestDepsFor(job.ownerUserId));
+const worker = createCerebroWorker((job) => ingestDepsFor(job.ownerUserId, job.workspaceId));
 console.log("[wa-cerebro] Worker iniciado");
 
 async function shutdown() {

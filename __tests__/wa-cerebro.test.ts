@@ -370,14 +370,21 @@ describe("executor Prisma: RLS do usuário em toda consulta", () => {
       $transaction: async (fn) => fn(tx),
     };
     const prisma: PrismaRawLike = { $queryRawUnsafe: tx.$queryRawUnsafe, $transaction: async (fn) => fn(tx) };
-    const db = createPrismaSqlExecutor(prisma, { userId: "u_A", settings: { "hnsw.ef_search": "100" } });
+    const db = createPrismaSqlExecutor(prisma, { userId: "u_A", workspaceId: "ws_A", settings: { "hnsw.ef_search": "100" } });
     await db.query("SELECT 1", []);
     expect(log[0]).toEqual({ sql: "SELECT set_config('app.user_id', $1, true)", params: ["u_A"] });
-    expect(log[1]).toEqual({ sql: "SELECT set_config($1, $2, true)", params: ["hnsw.ef_search", "100"] });
-    expect(log[2].sql).toBe("SELECT 1");
+    expect(log[1]).toEqual({ sql: "SELECT set_config('app.workspace_id', $1, true)", params: ["ws_A"] });
+    // Troca pro papel sem BYPASSRLS: a conexão do DATABASE_URL é dona das tabelas.
+    expect(log[2]).toEqual({ sql: "SELECT set_config('role', $1, true)", params: ["le_app"] });
+    expect(log[3]).toEqual({ sql: "SELECT set_config($1, $2, true)", params: ["hnsw.ef_search", "100"] });
+    expect(log[4].sql).toBe("SELECT 1");
 
-    const bad = createPrismaSqlExecutor(prisma, { userId: "u_A", settings: { "x'; DROP": "1" } });
+    const bad = createPrismaSqlExecutor(prisma, { userId: "u_A", workspaceId: "ws_A", settings: { "x'; DROP": "1" } });
     await expect(bad.query("SELECT 1")).rejects.toThrow();
+    const semWs = createPrismaSqlExecutor(prisma, { userId: "u_A", workspaceId: "" });
+    await expect(semWs.query("SELECT 1")).rejects.toThrow(/workspace/);
+    const papelRuim = createPrismaSqlExecutor(prisma, { userId: "u_A", workspaceId: "ws_A", role: "x; DROP" });
+    await expect(papelRuim.query("SELECT 1")).rejects.toThrow();
   });
 });
 

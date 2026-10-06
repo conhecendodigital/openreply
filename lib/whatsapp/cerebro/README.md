@@ -43,7 +43,7 @@ memória curta por contato. Branch `feat/wa-cerebro`.
 ## Uso pelo agente (fase 4)
 
 ```ts
-const { store, usage } = cerebroForUser(ownerUserId);
+const { store, usage } = cerebroForUser(ownerUserId, workspaceId);
 const { hits } = await searchKnowledge(
   { scope: { ownerUserId, workspaceId }, agentKind: "atendimento", sessionId, question: textoDoContato, refId: messageId },
   { store, embedder, usage }
@@ -72,8 +72,9 @@ SQL em `prisma/migrations-wa/cerebro/migration.sql` (desfazer: `down.sql`). Fora
 - `WaKnowledgeChunk`: texto, página e `embedding vector(1536)` com índice HNSW (`vector_cosine_ops`, m=16, ef_construction=64).
 - `WaContactMemory`: nome, interesse, objeção, etapa e observação, com limite de tamanho no banco também.
 - `WaAiUsage`: gasto de IA.
-- RLS ligada e forçada nas 4, por workspace (`app.my_workspace_ids()` ou `app.is_admin()`), só pro papel `le_app`.
-  Pra trocar por dono (`"ownerUserId" = app.current_user_id()`, como as outras tabelas do plano), mude só a policy.
+- RLS ligada e forçada nas 4, igual às tabelas `whatsapp.*` da Fase 0: `app.in_current_workspace("workspaceId")`
+  (workspace ativo + membro) e admin só lê com auditoria (`app.admin_audit_ok`). O executor marca `app.user_id`,
+  `app.workspace_id` e troca o papel pra `le_app` (`DB_RLS_ROLE`) em toda transação.
 
 ## Quando juntar com a Fase 0
 
@@ -82,7 +83,11 @@ SQL em `prisma/migrations-wa/cerebro/migration.sql` (desfazer: `down.sql`). Fora
 2. O Postgres precisa da extensão `vector` (imagem `pgvector/pgvector`, pgvector 0.5 ou mais novo pro HNSW).
 3. Rode o SQL como `le_owner`: `psql "$DATABASE_URL_OWNER" -f prisma/migrations-wa/cerebro/migration.sql`.
    Ou copie pra uma pasta nova em `prisma/migrations/<data>_wa_cerebro/` depois das migrações da Fase 0/1.
-4. Em `service.ts`, troque `prisma` por `prismaApp` (papel le_app). O executor já marca `app.user_id`.
+4. Em `service.ts`, troque `prisma` por `getAppPrisma()` da Fase 0. O executor já marca `app.user_id`,
+   `app.workspace_id` e o papel `le_app`.
+4b. `WaContactMemory` também é criada pelo `feat/wa-agentes` com OUTRO formato (chave `contactId`, `resumo`/`fatos`).
+   Fica a deste branch (por workspace, campos com limite); o `AgentStore.lerMemoria/salvarMemoria` dos agentes
+   lê e grava aqui (`renderMemory` vira o `resumo`). A migração dos agentes não cria mais a tabela.
 5. Registre a chave do dono: `setOwnerOpenAIKeyLookup(async (userId) => decifrar(AiCredential openai))`.
    Sem isso, todo PDF termina com erro `no_embedding_key`. Quem só tem chave da Anthropic não tem embedding
    (a Anthropic não vende): mostre esse aviso na tela, ou ligue um modelo local.
