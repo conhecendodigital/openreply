@@ -14,7 +14,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
 import type { PrismaClient } from "../app/generated/prisma/client";
-import { migratedDb, startPrisma } from "./helpers/pglite-db";
+import { migratedDb, migrationNames, startPrisma } from "./helpers/pglite-db";
 import { FAKE_ADMIN_TOKEN, FakeUazapi } from "./helpers/fake-uazapi";
 import { FAKE_OPENWA_KEY, FakeOpenWA } from "./helpers/fake-openwa";
 
@@ -181,7 +181,13 @@ beforeEach(() => {
   uazapi.calls = [];
 });
 
-describe("migração 20261018120000_wa_excluir_numero (banco vazio)", () => {
+describe("migração 20261018130000_wa_excluir_numero (banco vazio)", () => {
+  it("vem depois da canais_chaves (as duas no mesmo dia)", () => {
+    const names = migrationNames();
+    expect(names.at(-1)).toBe("20261018130000_wa_excluir_numero");
+    expect(names.indexOf("20261018120000_canais_chaves")).toBe(names.length - 2);
+  });
+
   it("colunas novas opcionais e a auditoria com RLS forçada", async () => {
     const cols = await db.query<{ column_name: string; is_nullable: string }>(
       `SELECT column_name, is_nullable FROM information_schema.columns WHERE table_schema = 'whatsapp' AND table_name = 'WaSession'

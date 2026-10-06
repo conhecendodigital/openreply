@@ -74,6 +74,7 @@ import { checkPublicHttpsUrl, isPrivateIp } from "../lib/integrations/url-guard"
 import { testIntegration } from "../lib/integrations/test-connection";
 import { sessionCredentials, whatsappStatusFor } from "../lib/whatsapp/setup";
 import { createConnector } from "../lib/whatsapp/factory";
+import { deleteSession } from "../lib/whatsapp/painel-excluir";
 import { PrismaWaRepository } from "../lib/whatsapp/prisma-repository";
 import { createSession, serverStatus, type PainelDeps } from "../lib/whatsapp/painel";
 import { uazapiOverview } from "../lib/whatsapp/painel-uazapi";
@@ -133,6 +134,11 @@ beforeAll(async () => {
       }
       if (req.url === "/api/health") {
         res.writeHead(200, { "content-type": "application/json" }).end('{"status":"ok"}');
+        return;
+      }
+      // Excluir número: logout e apagar a sessão.
+      if ((req.method === "POST" && req.url === "/api/sessions/owa-1/logout") || (req.method === "DELETE" && req.url === "/api/sessions/owa-1")) {
+        res.writeHead(200, { "content-type": "application/json" }).end('{"success":true}');
         return;
       }
       if (req.method === "POST" && /\/messages\/send-text$/.test(req.url ?? "")) {
@@ -211,10 +217,12 @@ async function auditRows(ws = "ws_a") {
 }
 
 describe("migração 20261018120000_canais_chaves", () => {
-  it("é a última, vem depois de 20261017120000 e só adiciona", () => {
+  it("vem logo depois de 20261017120000, antes da wa_excluir_numero, e só adiciona", () => {
     const names = migrationNames();
-    expect(names.at(-1)).toBe("20261018120000_canais_chaves");
-    expect(names.at(-2)).toBe("20261017120000_dm_formato_texto");
+    const i = names.indexOf("20261018120000_canais_chaves");
+    expect(names[i - 1]).toBe("20261017120000_dm_formato_texto");
+    // Depois dela entrou 20261018130000_wa_excluir_numero (Excluir número em Conexões).
+    expect(names.indexOf("20261018130000_wa_excluir_numero")).toBeGreaterThan(i);
     const sql = readFileSync(join(__dirname, "..", "prisma", "migrations", "20261018120000_canais_chaves", "migration.sql"), "utf8").replace(/--.*$/gm, "");
     expect(sql).not.toMatch(/\b(DROP|TRUNCATE|ALTER COLUMN|DELETE FROM|UPDATE\s+"?\w+"?\s+SET)\b/i);
     expect(sql).not.toMatch(/ALTER TABLE\s+(?!(public\.)?"WorkspaceIntegration)/);
@@ -549,6 +557,23 @@ describe("Conectores e worker com a credencial do workspace", () => {
     const connector = createConnector({ ...session!, riskAcceptedAt: new Date() }, { credentials: creds });
     await connector.sendText("5511999990000", "oi");
     expect(openwa.calls.at(-1)).toMatchObject({ method: "POST", path: "/api/sessions/owa-1/messages/send-text", key: OPENWA_KEY });
+  });
+
+  it("Excluir número usa a mesma credencial do workspace (Canais), não a do ambiente", async () => {
+    const envElsewhere = { ...deps(), env: { ...deps().env, OPENWA_BASE_URL: "http://127.0.0.1:1", OPENWA_API_KEY: "env", UAZAPI_SERVER_URL: "http://127.0.0.1:1", UAZAPI_ADMIN_TOKEN: "env" } };
+    const owa = await deleteSession({ userId: "u_dono", workspaceId: "ws_a" }, "s_owa", { mode: "number_only" }, envElsewhere);
+    expect(owa).toMatchObject({ providerOk: true, provider: "OPENWA", providerRef: "owa-1" });
+    expect(openwa.calls.map((c) => [c.method, c.path, c.key])).toEqual([
+      ["POST", "/api/sessions/owa-1/logout", OPENWA_KEY],
+      ["DELETE", "/api/sessions/owa-1", OPENWA_KEY],
+    ]);
+
+    const row = await db.query<{ id: string }>(`SELECT id FROM whatsapp."WaSession" WHERE "workspaceId" = 'ws_a' AND provider = 'UAZAPI' AND "deletedAt" IS NULL LIMIT 1`);
+    const before = fake.instances.length;
+    const uaz = await deleteSession({ userId: "u_dono", workspaceId: "ws_a" }, row.rows[0].id, { mode: "number_only" }, envElsewhere);
+    expect(uaz).toMatchObject({ providerOk: true, provider: "UAZAPI" });
+    expect(fake.calls.map((c) => `${c.method} ${c.path}`)).toEqual(["POST /instance/disconnect", "DELETE /instance"]);
+    expect(fake.instances.length).toBe(before - 1);
   });
 
   it("número de outro workspace sem nada salvo continua no ambiente", async () => {

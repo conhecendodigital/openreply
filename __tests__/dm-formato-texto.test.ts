@@ -135,7 +135,7 @@ describe("migração 20261017120000_dm_formato_texto", () => {
   });
 
   it("vem depois da uazapi e é só aditiva (nenhum DROP, DELETE, UPDATE ou mudança de tipo)", () => {
-    // Era a última até 20261018120000_canais_chaves; continua depois da 20261016120000_wa_uazapi.
+    // Era a última até 20261018120000_canais_chaves (e depois 20261018130000_wa_excluir_numero); continua depois da 20261016120000_wa_uazapi.
     const names = migrationNames();
     expect(names.indexOf(NAME)).toBeGreaterThan(names.indexOf("20261016120000_wa_uazapi"));
     const code = sql.replace(/--.*$/gm, "");
