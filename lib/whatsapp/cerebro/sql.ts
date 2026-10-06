@@ -25,13 +25,40 @@ export interface PrismaRawLike {
 export interface PrismaExecutorOptions {
   /** Usuário dono da requisição ou do job (vira app.user_id na RLS). */
   userId: string;
+  /**
+   * Workspace ativo (vira app.workspace_id). A RLS da Fase 0
+   * (app.in_current_workspace) só libera linhas desse workspace.
+   */
+  workspaceId: string;
+  /**
+   * Papel da transação. Padrão: DB_RLS_ROLE ou "le_app" (sem BYPASSRLS), igual
+   * ao lib/db/rls.ts da Fase 0. Sem trocar o papel, a conexão do DATABASE_URL
+   * (dona das tabelas ou superusuária) passava por cima da RLS.
+   * null = não troca (só quando a conexão já é um usuário sem BYPASSRLS).
+   */
+  role?: string | null;
   /** Configurações locais extras da transação (ex.: hnsw.ef_search). */
   settings?: Record<string, string>;
   timeoutMs?: number;
 }
 
-async function applySettings(tx: PrismaRawLike, userId: string, settings: Record<string, string> = {}) {
+const ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;
+
+export function defaultRlsRole(env: Record<string, string | undefined> = process.env): string | null {
+  const value = (env.DB_RLS_ROLE ?? "le_app").trim();
+  if (!value || value === "off") return null;
+  if (!ROLE_NAME.test(value)) throw new Error("DB_RLS_ROLE inválido");
+  return value;
+}
+
+async function applySettings(tx: PrismaRawLike, options: PrismaExecutorOptions) {
+  const { userId, workspaceId, settings = {} } = options;
+  if (!userId || !workspaceId) throw new Error("RLS do cérebro sem usuário ou workspace");
+  const role = options.role === undefined ? defaultRlsRole() : options.role;
+  if (role !== null && !ROLE_NAME.test(role)) throw new Error("Papel inválido");
   await tx.$queryRawUnsafe("SELECT set_config('app.user_id', $1, true)", userId);
+  await tx.$queryRawUnsafe("SELECT set_config('app.workspace_id', $1, true)", workspaceId);
+  if (role) await tx.$queryRawUnsafe("SELECT set_config('role', $1, true)", role);
   for (const [name, value] of Object.entries(settings)) {
     if (!/^[a-z_]+(\.[a-z_]+)?$/.test(name)) throw new Error("Nome de configuração inválido");
     await tx.$queryRawUnsafe("SELECT set_config($1, $2, true)", name, value);
@@ -50,13 +77,13 @@ export function createPrismaSqlExecutor(prisma: PrismaRawLike, options: PrismaEx
   return {
     query<T>(sql: string, params: unknown[] = []) {
       return prisma.$transaction(async (tx) => {
-        await applySettings(tx, options.userId, options.settings);
+        await applySettings(tx, options);
         return tx.$queryRawUnsafe<T[]>(sql, ...params);
       }, { timeout });
     },
     transaction(fn) {
       return prisma.$transaction(async (tx) => {
-        await applySettings(tx, options.userId, options.settings);
+        await applySettings(tx, options);
         return fn(inTx(tx));
       }, { timeout });
     },

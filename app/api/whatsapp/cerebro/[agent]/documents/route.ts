@@ -27,7 +27,7 @@ export async function GET(_request: NextRequest, { params }: RouteProps) {
   const { agent } = await params;
   if (!isAgentKind(agent)) return fail("Agente inválido", 404, { code: "invalid_agent" });
 
-  const { store } = cerebroForUser(auth.context.userId);
+  const { store } = cerebroForUser(auth.context.userId, auth.context.workspaceId);
   const documents = await store.listDocuments(auth.context.workspaceId, agent);
   return ok({ documents: documents.map(publicDocument) });
 }
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest, { params }: RouteProps) {
   const limited = await hitRateLimit("wa-cerebro-upload", auth.context.userId, UPLOAD_RATE_LIMIT.limit, UPLOAD_RATE_LIMIT.windowSeconds);
   if (!limited.allowed) return fail("Muitos envios em pouco tempo. Tente de novo daqui a pouco.", 429, { code: "rate_limited" });
 
-  const { store } = cerebroForUser(auth.context.userId);
+  const { store } = cerebroForUser(auth.context.userId, auth.context.workspaceId);
   const outcome = await handleKnowledgeUpload(
     request,
     { ownerUserId: auth.context.userId, workspaceId: auth.context.workspaceId },

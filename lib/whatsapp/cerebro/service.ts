@@ -33,18 +33,21 @@ export const defaultEmbeddingResolver: EmbeddingProviderResolver = {
   },
 };
 
-/** Executor com a RLS do usuário (`app.user_id`). */
-export function sqlForUser(userId: string, settings?: Record<string, string>): SqlExecutor {
-  return createPrismaSqlExecutor(prisma as unknown as PrismaRawLike, { userId, settings });
+/**
+ * Executor com a RLS do usuário e do workspace ativo (`app.user_id`,
+ * `app.workspace_id`) e o papel le_app, igual ao withRls() da Fase 0.
+ */
+export function sqlForUser(userId: string, workspaceId: string, settings?: Record<string, string>): SqlExecutor {
+  return createPrismaSqlExecutor(prisma as unknown as PrismaRawLike, { userId, workspaceId, settings });
 }
 
-export function cerebroForUser(userId: string) {
-  const db = sqlForUser(userId, { "hnsw.ef_search": "100" });
+export function cerebroForUser(userId: string, workspaceId: string) {
+  const db = sqlForUser(userId, workspaceId, { "hnsw.ef_search": "100" });
   return { store: new CerebroStore(db), usage: new SqlUsageRecorder(db) };
 }
 
-/** Dependências de um job da fila wa-cerebro (RLS do dono do job). */
-export function ingestDepsFor(ownerUserId: string): IngestDeps {
-  const { store, usage } = cerebroForUser(ownerUserId);
+/** Dependências de um job da fila wa-cerebro (RLS do dono e do workspace do job). */
+export function ingestDepsFor(ownerUserId: string, workspaceId: string): IngestDeps {
+  const { store, usage } = cerebroForUser(ownerUserId, workspaceId);
   return { store, usage, embedders: defaultEmbeddingResolver };
 }
