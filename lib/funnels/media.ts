@@ -122,6 +122,18 @@ const VIMEO_HASH = /^[a-f0-9]{6,20}$/;
 const PANDA_HOST = /^([a-z0-9-]+\.)+pandavideo\.com\.br$/;
 const PANDA_ID = /^[a-f0-9-]{36}$/;
 
+/**
+ * A path of this site ("/privacy"), never another site. "//host" and "/\host"
+ * are refused: browsers read both as a link to another host (auditoria 05/10).
+ */
+export function isLocalPath(value: string): boolean {
+  if (typeof value !== "string") return false;
+  const v = value.trim();
+  if (!v.startsWith("/") || v.length > MAX_URL_LENGTH) return false;
+  if (v.startsWith("//") || v.includes("\\") || /[\u0000-\u001f\u007f\s]/.test(v)) return false;
+  return true;
+}
+
 /** Valid URL, https:, no user/password, at most 2048 characters. */
 export function isHttpsUrl(url: string): boolean {
   const u = parseUrl(url);

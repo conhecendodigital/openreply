@@ -19,6 +19,12 @@ export type ResolvedApiToken = {
   /** ApiToken.id, or "env" for the deploy-level OPENREPLY_API_TOKEN. */
   tokenId: string;
   scopes: string[];
+  /**
+   * Workspace the key was created in (Settings keys): the key acts ONLY there,
+   * never in another workspace its owner also belongs to (auditoria 05/10).
+   * null for the deploy-level OPENREPLY_API_TOKEN (that user's primary workspace).
+   */
+  workspaceId: string | null;
 };
 
 /** Scopes of the deploy-level key: OPENREPLY_API_TOKEN_SCOPES, comma separated. */
@@ -58,7 +64,7 @@ export async function resolveApiToken(
       });
       userId = owner?.userId ?? null;
     }
-    return userId ? { userId, tokenId: "env", scopes: envTokenScopes() } : null;
+    return userId ? { userId, tokenId: "env", scopes: envTokenScopes(), workspaceId: null } : null;
   }
 
   const stored = await prisma.apiToken.findUnique({
@@ -68,6 +74,7 @@ export async function resolveApiToken(
       revokedAt: true,
       lastUsedAt: true,
       scopes: true,
+      workspaceId: true,
       workspace: { select: { ownerId: true } },
     },
   });
@@ -79,7 +86,12 @@ export async function resolveApiToken(
       .update({ where: { id: stored.id }, data: { lastUsedAt: new Date() } })
       .catch(() => undefined);
   }
-  return { userId: stored.workspace.ownerId, tokenId: stored.id, scopes: stored.scopes ?? [] };
+  return {
+    userId: stored.workspace.ownerId,
+    tokenId: stored.id,
+    scopes: stored.scopes ?? [],
+    workspaceId: stored.workspaceId ?? null,
+  };
 }
 
 /** User a bearer-authenticated request acts as (see resolveApiToken). */

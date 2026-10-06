@@ -11,10 +11,18 @@ export function hashClickIp(ipAddress: string | null | undefined) {
   return createHash("sha256").update(`${salt}:${ipAddress}`).digest("hex");
 }
 
+/**
+ * Client IP behind ONE trusted proxy (Dokploy's Traefik). The proxy appends
+ * the address it saw at the END of X-Forwarded-For, so the last entry is the
+ * one nobody outside can choose. The first entry is whatever the client sent
+ * (auditoria 05/10: taking it let anyone dodge the per-IP limits of the quiz
+ * and send a made-up IP to the Conversions API).
+ */
 export function getRequestIp(request: Request) {
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) {
-    return forwardedFor.split(",")[0]?.trim() ?? null;
+    const parts = forwardedFor.split(",").map((p) => p.trim()).filter(Boolean);
+    return parts[parts.length - 1] ?? null;
   }
 
   return (

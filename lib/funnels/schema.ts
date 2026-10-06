@@ -15,7 +15,7 @@ import {
   type FunnelDefinition,
   type FunnelTheme,
 } from "@/lib/funnels/types";
-import { isAllowedImageUrl, isHttpsUrl, parseVideoUrl } from "@/lib/funnels/media";
+import { isAllowedImageUrl, isHttpsUrl, isLocalPath, parseVideoUrl } from "@/lib/funnels/media";
 
 export const MAX_STEPS = 40;
 export const MAX_BLOCKS_PER_STEP = 30;
@@ -62,7 +62,7 @@ const privacyUrl = z
   .string()
   .trim()
   .max(MAX_URL)
-  .refine((v) => v === "" || (v.startsWith("/") && !v.startsWith("//")) || isHttpsUrl(v), "Use /path or an https:// link")
+  .refine((v) => v === "" || isLocalPath(v) || isHttpsUrl(v), "Use /path or an https:// link")
   .optional();
 const cents = z.number().int().min(0).max(100_000_000);
 

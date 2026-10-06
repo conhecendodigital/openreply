@@ -11,7 +11,7 @@ import { useEffect, useId, useRef } from "react";
 import { useT } from "@/components/lang-provider";
 import { DEFAULT_CONSENT_TEXT, DEFAULT_THEME } from "@/lib/funnels/schema";
 import { contrastRatio } from "@/lib/funnels/validate";
-import { isAllowedImageUrl, isHttpsUrl } from "@/lib/funnels/media";
+import { isAllowedImageUrl, isHttpsUrl, isLocalPath } from "@/lib/funnels/media";
 import type { FunnelDefinition, FunnelSettings, FunnelTheme } from "@/lib/funnels/types";
 import { updateSettings } from "@/components/funnels/editor-model";
 import { CheckField, FieldShell, SelectField, TextField, inputClass } from "@/components/funnels/form-controls";
@@ -65,7 +65,7 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
   const lowContrast = textContrast < 4.5 || buttonContrast < 3;
 
   const urlError = (v: string | undefined, check: (x: string) => boolean) => (v && v.trim() && !check(v.trim()) ? t("Use a link that starts with https://") : null);
-  const privacyOk = (v: string) => (v.startsWith("/") && !v.startsWith("//")) || isHttpsUrl(v);
+  const privacyOk = (v: string) => isLocalPath(v) || isHttpsUrl(v);
   const pixelBad = Boolean(s.pixelId) && !/^\d{5,20}$/.test(s.pixelId ?? "");
 
   return (

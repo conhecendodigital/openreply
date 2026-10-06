@@ -3,7 +3,7 @@ import Nodemailer from "next-auth/providers/nodemailer";
 import Resend from "next-auth/providers/resend";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { headers } from "next/headers";
-import { resolveApiToken, resolveApiTokenUserId } from "@/lib/api-token-auth";
+import { resolveApiToken, type ResolvedApiToken } from "@/lib/api-token-auth";
 import { prisma } from "@/lib/db/client";
 import { ensureWorkspaceForUser, getPrimaryWorkspace } from "@/lib/workspace";
 import { allowSignIn } from "@/lib/auth-signin";
@@ -68,18 +68,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
 
 /**
  * User an `Authorization: Bearer <key>` request acts as (see
- * resolveApiTokenUserId). Lets the MCP endpoint and scripts reuse every
+ * resolveApiToken). Lets the MCP endpoint and scripts reuse every
  * session-guarded route.
  */
-async function getApiTokenUserId(): Promise<string | null> {
+async function getApiToken(): Promise<
+  { present: false } | { present: true; token: ResolvedApiToken | null }
+> {
   let authorization: string | null = null;
   try {
     authorization = (await headers()).get("authorization");
   } catch {
     // Outside a request (worker, cron script) there is no header to read.
-    return null;
+    return { present: false };
   }
-  return resolveApiTokenUserId(authorization);
+  if (!authorization) return { present: false };
+  return { present: true, token: await resolveApiToken(authorization) };
 }
 
 /** True when the current request authenticates with an API key, not a session. */
@@ -116,15 +119,24 @@ export async function getApiCaller(): Promise<ApiCaller> {
 }
 
 export async function getCurrentUserId(): Promise<string | null> {
-  const apiUserId = await getApiTokenUserId();
-  if (apiUserId) return apiUserId;
+  const api = await getApiToken();
+  // Auditoria 05/10: an Authorization header that is not a valid key is a
+  // failed login, not "try the cookie instead" (same rule as getApiCaller).
+  if (api.present) return api.token?.userId ?? null;
 
   const session = await auth();
   return session?.user?.id ?? null;
 }
 
 export async function getCurrentWorkspaceId(): Promise<string | null> {
-  const userId = await getCurrentUserId();
+  const api = await getApiToken();
+  if (api.present) {
+    if (!api.token) return null;
+    // A Settings key acts only in the workspace it was created in, never in
+    // an older workspace its owner also belongs to (auditoria 05/10).
+    if (api.token.workspaceId) return api.token.workspaceId;
+  }
+  const userId = api.present ? api.token?.userId ?? null : await getCurrentUserId();
   if (!userId) return null;
 
   const workspace = await getPrimaryWorkspace(userId);
