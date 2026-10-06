@@ -1,13 +1,18 @@
 /**
- * Envio de PDF pra base de conhecimento de um agente (lógica da rota).
+ * Envio de PDF (ou documento do Word, .docx) pra base de conhecimento de um
+ * agente (lógica da rota).
  *
  * Só pessoa logada (sessão), nunca chave de API. Confere tamanho antes de ler,
- * tipo pelos bytes (%PDF-), páginas e PDF com senha. O texto e os embeddings
- * são feitos depois, na fila wa-cerebro.
+ * tipo pelos bytes (%PDF- ou zip com word/document.xml), páginas e arquivo com
+ * senha. Do .docx guardamos só o texto extraído (lib/whatsapp/cerebro/texto.ts),
+ * nunca o arquivo original. O texto do PDF e os embeddings são feitos depois,
+ * na fila wa-cerebro.
  */
 import { createHash } from "node:crypto";
-import { MAX_DOCS_PER_AGENT, MAX_PDF_BYTES, MAX_PDF_PAGES, MAX_UPLOAD_BODY_BYTES } from "@/lib/whatsapp/cerebro/limits";
+import { MAX_DOCS_PER_AGENT, MAX_PDF_BYTES, MAX_PDF_PAGES, MAX_PDF_TEXT_CHARS, MAX_UPLOAD_BODY_BYTES } from "@/lib/whatsapp/cerebro/limits";
+import { DocxError, extractDocxText, isCfbBytes, isZipBytes } from "@/lib/whatsapp/cerebro/docx";
 import { countPdfPages, isPdfBytes, PdfError } from "@/lib/whatsapp/cerebro/pdf";
+import { encodeStoredText } from "@/lib/whatsapp/cerebro/texto";
 import type { CerebroStore } from "@/lib/whatsapp/cerebro/store";
 import type { AgentKind, CerebroIngestJob, CerebroScope, KnowledgeDoc } from "@/lib/whatsapp/cerebro/types";
 
@@ -25,7 +30,11 @@ const MESSAGES: Record<string, string> = {
   too_large: `O PDF passa do limite de ${Math.round(MAX_PDF_BYTES / 1024 / 1024)} MB.`,
   no_file: "Envie um arquivo PDF no campo \"file\".",
   empty_file: "O arquivo está vazio.",
-  not_pdf: "Esse arquivo não é um PDF.",
+  not_pdf: "Esse arquivo não é um PDF nem um documento do Word (.docx).",
+  docx_encrypted: "Esse documento tem senha. Tire a senha e envie de novo.",
+  docx_invalid: "Não deu pra abrir esse documento do Word. Ele pode estar corrompido.",
+  docx_no_text: "Esse documento do Word não tem texto.",
+  docx_too_large: "Esse documento do Word é grande demais por dentro.",
   pdf_encrypted: "Esse PDF tem senha. Tire a senha e envie de novo.",
   pdf_invalid: "Não deu pra abrir esse PDF. Ele pode estar corrompido.",
   too_many_pages: `O PDF passa do limite de ${MAX_PDF_PAGES} páginas.`,
@@ -71,15 +80,26 @@ export async function handleKnowledgeUpload(
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   // Tipo pelo conteúdo: o Content-Type e o nome vêm do navegador e mentem.
-  if (!isPdfBytes(bytes)) return failure(415, "not_pdf");
-
+  let data: Uint8Array = bytes;
   let pageCount: number;
-  try {
-    pageCount = await (deps.countPages ?? countPdfPages)(bytes);
-  } catch (error) {
-    return failure(400, error instanceof PdfError ? error.code : "pdf_invalid");
+  if (isPdfBytes(bytes)) {
+    try {
+      pageCount = await (deps.countPages ?? countPdfPages)(bytes);
+    } catch (error) {
+      return failure(400, error instanceof PdfError ? error.code : "pdf_invalid");
+    }
+    if (pageCount > MAX_PDF_PAGES) return failure(400, "too_many_pages");
+  } else if (isZipBytes(bytes) || isCfbBytes(bytes)) {
+    try {
+      data = encodeStoredText(extractDocxText(bytes, { maxChars: MAX_PDF_TEXT_CHARS }).text);
+    } catch (error) {
+      const code = error instanceof DocxError ? error.code : "docx_invalid";
+      return failure(code === "not_docx" ? 415 : 400, code === "not_docx" ? "not_pdf" : code);
+    }
+    pageCount = 1;
+  } else {
+    return failure(415, "not_pdf");
   }
-  if (pageCount > MAX_PDF_PAGES) return failure(400, "too_many_pages");
 
   if ((await deps.store.countDocuments(scope.workspaceId, agentKind)) >= MAX_DOCS_PER_AGENT) {
     return failure(409, "too_many_docs");
@@ -92,7 +112,7 @@ export async function handleKnowledgeUpload(
     fileName: cleanFileName(file.name),
     sizeBytes: bytes.length,
     sha256,
-    data: bytes,
+    data,
     pageCount,
   });
   if (duplicate && (document.status === "ready" || document.status === "processing" || document.status === "queued")) {
