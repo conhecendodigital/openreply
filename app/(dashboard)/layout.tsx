@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import DashboardShell from "@/components/dashboard-shell";
-import { auth } from "@/lib/auth";
+import { auth, needsTwoFactorSetup } from "@/lib/auth";
+import { getSecurityState, shouldOfferPassword, SKIP_PASSWORD_COOKIE } from "@/lib/account-security";
 import { prisma } from "@/lib/db/client";
 import { getChannelAlerts, type ChannelAlert } from "@/lib/channels/overview";
 import { ensureWorkspaceForUser } from "@/lib/workspace";
@@ -14,6 +16,16 @@ export default async function DashboardLayout({
 
   if (!session?.user?.id) {
     redirect("/login");
+  }
+  // Fase 0: admin da plataforma só usa o painel com 2FA ligado.
+  if (needsTwoFactorSetup(session.user)) {
+    redirect("/account/two-factor");
+  }
+  // Primeiro acesso de quem só tinha o link: oferece criar a senha (dá pra pular).
+  const security = await getSecurityState(session.user.id).catch(() => null);
+  const skipped = (await cookies()).get(SKIP_PASSWORD_COOKIE)?.value === "1";
+  if (security && shouldOfferPassword(security, skipped)) {
+    redirect("/account/password");
   }
 
   const workspace = await ensureWorkspaceForUser(

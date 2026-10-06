@@ -1,17 +1,19 @@
-import { EMAIL_PROVIDER_ID, signIn } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import type { Metadata } from "next";
 import { getCampaignTemplate } from "@/lib/templates/campaign-templates";
 import { DemoNotice } from "@/components/demo-notice";
-
 import { getT } from "@/lib/i18n/server";
 import { LeadEngineLogo } from "@/components/sidebar";
 import { LangSwitch } from "@/components/lang-provider";
-import Link from "next/link";
-import type { Metadata } from "next";
+import { LoginForm } from "@/components/auth/login-form";
+import { auth } from "@/lib/auth";
+import { isGoogleLoginConfigured } from "@/lib/better-auth";
+import { safeCallbackPath } from "@/lib/auth-config";
 
 /**
- * Login (2026-10-04): visual da tela de entrada do instagram.com (cartão
- * central com o logo, campo e botão azul, divisória "ou", segundo cartão e
- * rodapé discreto). A autenticação continua igual: link de acesso por e-mail.
+ * Login (2026-10-04, visual do instagram.com). Fase 0 (06/10/2026): login
+ * novo com três jeitos de entrar: senha, Google e link por e-mail.
  */
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
@@ -25,27 +27,20 @@ export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    checkEmail?: string;
     callbackUrl?: string;
     template?: string;
+    error?: string;
   }>;
 }) {
   const t = await getT();
   const params = await searchParams;
-  const checkEmail = params.checkEmail === "1";
   const selectedTemplate = getCampaignTemplate(params.template);
-  const templateCallbackUrl = selectedTemplate
-    ? `/campaigns/new?template=${selectedTemplate.slug}`
-    : null;
-  const callbackUrl = params.callbackUrl ?? templateCallbackUrl ?? "/dashboard";
+  const templateCallbackUrl = selectedTemplate ? `/campaigns/new?template=${selectedTemplate.slug}` : null;
+  const callbackUrl = safeCallbackPath(params.callbackUrl ?? templateCallbackUrl ?? "/dashboard", "http://local.invalid");
 
-  async function sendMagicLink(formData: FormData) {
-    "use server";
-    await signIn(EMAIL_PROVIDER_ID, {
-      email: String(formData.get("email") ?? ""),
-      redirectTo: callbackUrl,
-    });
-  }
+  // Já logado de verdade (sessão conferida no banco, não só o cookie)? Vai pro painel.
+  const session = await auth().catch(() => null);
+  if (session) redirect(callbackUrl);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#fafafa] text-foreground">
@@ -63,75 +58,29 @@ export default async function LoginPage({
                 : t("Sign in to manage your comments, Direct and contacts.")}
             </p>
 
-            {selectedTemplate && !checkEmail && (
+            {selectedTemplate && (
               <div className="mt-5 rounded-lg border border-border bg-[#fafafa] px-4 py-3">
                 <p className="text-xs font-semibold text-muted">{t("Template selected")}</p>
                 <p className="mt-1 text-sm font-semibold text-foreground">{t(selectedTemplate.title)}</p>
               </div>
             )}
 
-            {checkEmail ? (
-              <div className="mt-6 text-center" role="status">
-                <h2 className="text-base font-semibold">{t("Check your email")}</h2>
-                <p className="mt-2 text-sm leading-6 text-muted">
-                  {t("We sent you a secure sign-in link. Open it on this device to continue.")}
-                </p>
-                <Link
-                  href="/login"
-                  className="mt-5 inline-block text-sm font-semibold text-accent hover:underline"
-                >
-                  {t("Use another email")}
-                </Link>
-              </div>
-            ) : (
-              <form action={sendMagicLink} className="mt-6 space-y-3">
-                <div>
-                  <label htmlFor="email" className="sr-only">
-                    {t("Email")}
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    inputMode="email"
-                    placeholder={t("Your email")}
-                    aria-describedby="email-ajuda"
-                    className="h-11 w-full rounded-md border border-border bg-[#fafafa] px-3 text-sm text-foreground placeholder:text-muted transition-colors focus:border-accent focus:bg-white"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="h-10 w-full rounded-lg bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
-                >
-                  {t("Send access link")}
-                </button>
-
-                <p id="email-ajuda" className="pt-1 text-center text-xs leading-5 text-muted">
-                  {t("We send a sign in link to your email. No password to remember.")}
-                </p>
-              </form>
-            )}
-
-            <div className="my-6 flex items-center gap-4" role="separator" aria-hidden="true">
-              <span className="h-px flex-1 bg-border" />
-              <span className="text-[13px] font-semibold uppercase text-muted">{t("or")}</span>
-              <span className="h-px flex-1 bg-border" />
-            </div>
-
-            <p className="text-center">
-              <Link href="/" className="text-sm font-semibold text-accent hover:underline">
-                {t("Get to know Lead Engine")}
-              </Link>
-            </p>
+            <LoginForm
+              callbackUrl={callbackUrl}
+              googleEnabled={isGoogleLoginConfigured()}
+              initialError={params.error ?? null}
+            />
           </div>
 
           <div className="rounded-xl border border-border bg-white px-6 py-5 text-center text-sm">
             <p className="font-semibold text-foreground">{t("First time here?")}</p>
             <p className="mt-1 text-muted">
-              {t("The same link creates your account if your email has access.")}
+              {t("Ask for the link by email or use Google. If your email has access, your account is created on the spot.")}
+            </p>
+            <p className="mt-3">
+              <Link href="/" className="font-semibold text-accent hover:underline">
+                {t("Get to know Lead Engine")}
+              </Link>
             </p>
           </div>
         </div>

@@ -1,14 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isApiKeyRouteAllowed } from "@/lib/api-key-routes";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/automations", "/logs", "/settings", "/quizzes"];
+const PROTECTED_PREFIXES = ["/dashboard", "/automations", "/logs", "/settings", "/quizzes", "/admin", "/account"];
 
-function hasSessionCookie(request: NextRequest): boolean {
+/**
+ * Fase 0 (06/10/2026): cookie do login novo (Better Auth). Os cookies antigos
+ * do NextAuth não contam mais: quem ainda tem um entra de novo uma vez.
+ */
+export function hasSessionCookie(request: NextRequest): boolean {
   return (
-    request.cookies.has("authjs.session-token") ||
-    request.cookies.has("__Secure-authjs.session-token") ||
-    request.cookies.has("next-auth.session-token") ||
-    request.cookies.has("__Secure-next-auth.session-token")
+    request.cookies.has("better-auth.session_token") ||
+    request.cookies.has("__Secure-better-auth.session_token")
   );
 }
 
@@ -95,7 +97,6 @@ export function proxy(request: NextRequest) {
   const isProtected = PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
-  const isLogin = pathname === "/login";
   const isAuthenticated = hasSessionCookie(request);
 
   if (isProtected && !isAuthenticated) {
@@ -104,9 +105,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isLogin && isAuthenticated) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
+  // Quem já está logado e abre /login é mandado pro painel pela própria página
+  // de login, depois de conferir a sessão no banco. Fazer isso aqui só pelo
+  // cookie dava laço infinito com cookie vencido.
 
   return NextResponse.next();
 }

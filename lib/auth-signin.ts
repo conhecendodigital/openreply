@@ -1,8 +1,14 @@
 /**
- * NextAuth signIn callback, kept apart from lib/auth.ts so it can be tested.
+ * Quem pode entrar (allowlist), separado do login pra dar pra testar.
  *
- * Runs before the magic link is sent (email.verificationRequest = true), so
- * a blocked address never receives one, and again when the link is verified.
+ * Fase 0 (06/10/2026, login novo): vale pros três caminhos (senha, Google e
+ * link por e-mail). Roda antes de mandar o link (verificationRequest = true),
+ * então um e-mail barrado nunca recebe nada, e de novo sempre que uma sessão
+ * vai ser criada (lib/auth-config.ts).
+ *
+ * Entra quem está no ALLOWED_EMAILS, na tabela BetaAllowlist (o beta) ou foi
+ * convidado pra um workspace. Com as duas listas vazias, fica aberto como era
+ * antes (instalação nova de quem hospeda o próprio Lead Engine).
  */
 import { isEmailAllowedToSignIn } from "@/lib/env";
 import { hitRateLimit, MAGIC_LINK_LIMIT } from "@/lib/http-rate-limit";
@@ -43,15 +49,52 @@ export async function hasWorkspaceAccess(email: string): Promise<boolean> {
   return Boolean(member);
 }
 
+/** Está na tabela BetaAllowlist (sempre em minúsculo). */
+export async function isOnBetaAllowlist(email: string): Promise<boolean> {
+  const { prisma } = await import("@/lib/db/client");
+  const row = await prisma.betaAllowlist.findUnique({
+    where: { email: email.trim().toLowerCase() },
+    select: { email: true },
+  });
+  return Boolean(row);
+}
+
+/** Beta ou convite de workspace. */
+export async function hasSignInAccess(email: string): Promise<boolean> {
+  if (await isOnBetaAllowlist(email)) return true;
+  return hasWorkspaceAccess(email);
+}
+
+/**
+ * true quando nenhuma lista está configurada (nem ALLOWED_EMAILS, nem uma
+ * linha na BetaAllowlist). Erro no banco = fechado.
+ */
+export async function isSignInOpen(): Promise<boolean> {
+  const envList = (process.env.ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+  if (envList.length) return false;
+  try {
+    const { prisma } = await import("@/lib/db/client");
+    const count = await prisma.betaAllowlist.count();
+    return !count;
+  } catch {
+    return false;
+  }
+}
+
 export async function allowSignIn(
   params: {
     user?: { email?: string | null } | null;
     email?: { verificationRequest?: boolean } | null;
   },
-  accessLookup: (email: string) => Promise<boolean> = hasWorkspaceAccess
+  accessLookup: (email: string) => Promise<boolean> = hasSignInAccess,
+  openLookup: () => Promise<boolean> = isSignInOpen
 ): Promise<boolean> {
   const address = params.user?.email;
-  if (!isEmailAllowedToSignIn(address)) {
+  // ALLOWED_EMAILS vazio deixa todo mundo passar no isEmailAllowedToSignIn;
+  // agora uma linha na BetaAllowlist também fecha o login.
+  const envListSet = Boolean((process.env.ALLOWED_EMAILS ?? "").replace(/[\s,]/g, ""));
+  const allowed = envListSet ? isEmailAllowedToSignIn(address) : await openLookup();
+  if (!allowed) {
     if (!address) return false;
     // Not on the list: let in only who was invited or already is on a team.
     // A database hiccup fails closed (no link is sent).

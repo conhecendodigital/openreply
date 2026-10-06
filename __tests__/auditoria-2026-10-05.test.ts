@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   authorization: null as string | null,
-  session: null as { user: { id: string } } | null,
+  session: null as { user: { id: string; role?: string; twoFactorEnabled?: boolean } } | null,
   resolved: null as null | { userId: string; tokenId: string; scopes: string[]; workspaceId: string | null },
   findUnique: vi.fn(),
   findFirst: vi.fn(),
@@ -20,12 +20,20 @@ const h = vi.hoisted(() => ({
 vi.mock("next/headers", () => ({
   headers: async () => ({ get: (k: string) => (k.toLowerCase() === "authorization" ? h.authorization : null) }),
 }));
-vi.mock("next-auth", () => ({
-  default: () => ({ handlers: {}, auth: async () => h.session, signIn: vi.fn(), signOut: vi.fn() }),
+// Fase 0: login novo (Better Auth). A sessão vem do getAuth().api.getSession.
+vi.mock("@/lib/better-auth", () => ({
+  getAuth: () => ({
+    api: {
+      getSession: async () =>
+        h.session
+          ? {
+              user: { email: "pessoa@example.com", name: "", image: null, role: "USER", twoFactorEnabled: false, ...h.session.user },
+              session: { id: "s1", expiresAt: new Date(Date.now() + 60_000) },
+            }
+          : null,
+    },
+  }),
 }));
-vi.mock("next-auth/providers/nodemailer", () => ({ default: () => ({}) }));
-vi.mock("next-auth/providers/resend", () => ({ default: () => ({}) }));
-vi.mock("@auth/prisma-adapter", () => ({ PrismaAdapter: () => ({}) }));
 vi.mock("@/lib/api-token-auth", () => ({ resolveApiToken: vi.fn(async () => h.resolved) }));
 vi.mock("@/lib/db/client", () => ({
   prisma: {
@@ -39,7 +47,7 @@ vi.mock("@/lib/workspace", () => ({
 }));
 vi.mock("@/lib/auth-signin", () => ({ allowSignIn: vi.fn(async () => true) }));
 
-import { getCurrentUserId, getCurrentWorkspaceId } from "../lib/auth";
+import { getCurrentUserId, getCurrentWorkspaceId, needsTwoFactorSetup } from "../lib/auth";
 import { getCurrentWorkspaceContext } from "../lib/workspace-access";
 import { getRequestIp } from "../lib/tracking/server";
 import { isLocalPath } from "../lib/funnels/media";
@@ -92,6 +100,36 @@ describe("chave de API presa ao workspace dela", () => {
     h.session = { user: { id: "u_pessoa" } };
     expect(await getCurrentUserId()).toBe("u_pessoa");
     expect((await getCurrentWorkspaceContext())?.workspaceId).toBe("ws_antigo");
+  });
+});
+
+describe("fase 0: login novo", () => {
+  it("admin sem 2FA não usa o painel (getCurrentUserId = ninguém)", async () => {
+    h.session = { user: { id: "u_admin", role: "ADMIN", twoFactorEnabled: false } };
+    expect(await getCurrentUserId()).toBeNull();
+    expect(await getCurrentWorkspaceContext()).toBeNull();
+  });
+
+  it("admin com 2FA ligado usa normalmente", async () => {
+    h.session = { user: { id: "u_admin", role: "ADMIN", twoFactorEnabled: true } };
+    expect(await getCurrentUserId()).toBe("u_admin");
+  });
+
+  it("a chave de API do admin continua funcionando e presa ao workspace dela", async () => {
+    h.session = { user: { id: "u_admin", role: "ADMIN", twoFactorEnabled: false } };
+    h.authorization = "Bearer or_x";
+    h.resolved = { ...KEY, userId: "u_admin" };
+    h.findUnique.mockResolvedValue({ workspaceId: "ws_da_chave", workspace: { id: "ws_da_chave" }, role: "OWNER" });
+    expect(await getCurrentUserId()).toBe("u_admin");
+    expect(await getCurrentWorkspaceId()).toBe("ws_da_chave");
+    expect((await getCurrentWorkspaceContext())?.workspaceId).toBe("ws_da_chave");
+  });
+
+  it("a mesma regra pro needsTwoFactorSetup", () => {
+    expect(needsTwoFactorSetup({ role: "ADMIN", twoFactorEnabled: false })).toBe(true);
+    expect(needsTwoFactorSetup({ role: "ADMIN", twoFactorEnabled: true })).toBe(false);
+    expect(needsTwoFactorSetup({ role: "USER", twoFactorEnabled: false })).toBe(false);
+    expect(needsTwoFactorSetup(null)).toBe(false);
   });
 });
 

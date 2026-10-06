@@ -55,6 +55,8 @@ export async function hitRateLimit(
 
 /** Magic links per e-mail address per hour. */
 export const MAGIC_LINK_LIMIT = { limit: 5, windowSeconds: 60 * 60 };
+/** Fase 0: tentativas de senha por e-mail a cada 15 minutos. */
+export const PASSWORD_LIMIT = { limit: 10, windowSeconds: 15 * 60 };
 /**
  * MCP calls per API key per minute (one call can be a batch). Generous: the
  * owner's agents share one key and must not hit it in normal use.

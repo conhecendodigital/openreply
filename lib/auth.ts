@@ -1,70 +1,59 @@
-import NextAuth, { type NextAuthConfig } from "next-auth";
-import Nodemailer from "next-auth/providers/nodemailer";
-import Resend from "next-auth/providers/resend";
-import { PrismaAdapter } from "@auth/prisma-adapter";
+/**
+ * Quem está usando o Lead Engine: a pessoa logada (sessão do Better Auth, ver
+ * lib/better-auth.ts) ou uma chave de API (MCP, scripts).
+ *
+ * Fase 0 (06/10/2026): o NextAuth saiu. As funções abaixo têm a mesma
+ * assinatura de antes, então as rotas não mudam. Chave de API e MCP continuam
+ * exatamente iguais (presas ao workspace onde foram criadas).
+ */
 import { headers } from "next/headers";
 import { resolveApiToken, type ResolvedApiToken } from "@/lib/api-token-auth";
 import { prisma } from "@/lib/db/client";
+import { getAuth } from "@/lib/better-auth";
 import { ensureWorkspaceForUser, getPrimaryWorkspace } from "@/lib/workspace";
-import { allowSignIn } from "@/lib/auth-signin";
 
-type AdapterPrismaClient = Parameters<typeof PrismaAdapter>[0];
+export type SessionUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  image: string | null;
+  role: "USER" | "ADMIN";
+  twoFactorEnabled: boolean;
+};
 
-const emailFrom = process.env.EMAIL_FROM ?? "Lead Engine <login@example.com>";
-// Setting EMAIL_SERVER switches magic links to your own SMTP server, for
-// self-hosters who do not want a third-party mail service. Resend stays the
-// default, so an existing deployment is unaffected.
-const smtpServer = process.env.EMAIL_SERVER;
+export type AppSession = {
+  user: SessionUser;
+  session: { id: string; expiresAt: Date };
+};
 
-/**
- * Provider id the login form has to sign in with. It differs per transport,
- * so it is derived here rather than hardcoded at the call site.
- */
-export const EMAIL_PROVIDER_ID = smtpServer ? "nodemailer" : "resend";
+/** Admin da plataforma sem 2FA ligado: só pode ativar o 2FA, mais nada. */
+export function needsTwoFactorSetup(user: Pick<SessionUser, "role" | "twoFactorEnabled"> | null | undefined): boolean {
+  return Boolean(user && user.role === "ADMIN" && !user.twoFactorEnabled);
+}
 
-export const authConfig = {
-  adapter: PrismaAdapter(prisma as unknown as AdapterPrismaClient),
-  providers: [
-    smtpServer
-      ? Nodemailer({ server: smtpServer, from: emailFrom })
-      : Resend({
-          apiKey: process.env.RESEND_API_KEY ?? "missing-resend-api-key",
-          from: emailFrom,
-        }),
-  ],
-  callbacks: {
-    // Runs before the magic link is sent, so a blocked address never receives
-    // one, and again when the link is verified. Also limits magic links per
-    // address (lib/auth-signin.ts).
-    async signIn({ user, email }) {
-      return allowSignIn({ user, email });
+/** Sessão do navegador (cookie). Mesmo formato do antigo auth() do NextAuth. */
+export async function auth(): Promise<AppSession | null> {
+  let requestHeaders: Headers;
+  try {
+    requestHeaders = new Headers(await headers());
+  } catch {
+    return null;
+  }
+  const result = await getAuth().api.getSession({ headers: requestHeaders });
+  if (!result?.user) return null;
+  const u = result.user as typeof result.user & { role?: string | null; twoFactorEnabled?: boolean | null };
+  return {
+    user: {
+      id: u.id,
+      email: u.email ?? null,
+      name: u.name || null,
+      image: u.image ?? null,
+      role: u.role === "ADMIN" ? "ADMIN" : "USER",
+      twoFactorEnabled: Boolean(u.twoFactorEnabled),
     },
-    async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
-      }
-      return session;
-    },
-  },
-  events: {
-    async createUser({ user }) {
-      if (user.id) {
-        await ensureWorkspaceForUser(user.id, user.email);
-      }
-    },
-  },
-  pages: {
-    signIn: "/login",
-    verifyRequest: "/verify-request",
-  },
-  session: {
-    strategy: "database",
-  },
-  trustHost: true,
-  secret: process.env.NEXTAUTH_SECRET,
-} satisfies NextAuthConfig;
-
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+    session: { id: result.session.id, expiresAt: new Date(result.session.expiresAt) },
+  };
+}
 
 /**
  * User an `Authorization: Bearer <key>` request acts as (see
@@ -125,7 +114,11 @@ export async function getCurrentUserId(): Promise<string | null> {
   if (api.present) return api.token?.userId ?? null;
 
   const session = await auth();
-  return session?.user?.id ?? null;
+  if (!session) return null;
+  // Admin sem 2FA não usa nada do painel até ligar o 2FA (o Better Auth, que
+  // cuida de ligar o 2FA, não passa por aqui).
+  if (needsTwoFactorSetup(session.user)) return null;
+  return session.user.id;
 }
 
 export async function getCurrentWorkspaceId(): Promise<string | null> {

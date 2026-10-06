@@ -37,6 +37,8 @@ const h = vi.hoisted(() => {
       webhookEvent: { create: vi.fn(async () => ({ id: "we1" })), findMany: vi.fn(async () => []) },
       directMedia: { findUnique: vi.fn() },
       instagramAccount: { count: vi.fn(async () => 0), updateMany: vi.fn(async () => ({})) },
+      // Fase 0: allowlist do beta vazia (login aberto como antes, sem ALLOWED_EMAILS).
+      betaAllowlist: { count: vi.fn(async () => 0), findUnique: vi.fn(async () => null) },
     },
     worker: vi.fn(async () => ({ healthy: true, heartbeat: { hostname: "container-123", pid: 42 }, ageMs: 10 })),
   };
