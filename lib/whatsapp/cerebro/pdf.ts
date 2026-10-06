@@ -68,6 +68,7 @@ export function cleanPageText(raw: string): string {
 
 type PdfProxy = {
   numPages: number;
+  getPage?: (n: number) => Promise<{ getTextContent(): Promise<{ items: Array<{ str?: string; hasEOL?: boolean }> }> }>;
   destroy?: () => Promise<void>;
   loadingTask?: { destroy(): Promise<void> };
 };
@@ -113,17 +114,29 @@ export async function countPdfPages(bytes: Uint8Array): Promise<number> {
 /** Extrai o texto página por página, com limite de páginas e de tamanho. */
 export async function extractPdfText(
   bytes: Uint8Array,
-  options: { maxPages?: number; maxChars?: number } = {}
+  options: { maxPages?: number; maxChars?: number; firstPagesOnly?: boolean } = {}
 ): Promise<PdfText> {
   const maxPages = options.maxPages ?? MAX_PDF_PAGES;
   const maxChars = options.maxChars ?? MAX_PDF_TEXT_CHARS;
   const pdf = await openPdf(bytes);
   try {
-    if (pdf.numPages > maxPages) throw new PdfError("too_many_pages");
-    const { extractText } = await import("unpdf");
+    // firstPagesOnly (PDF que o cliente manda no WhatsApp): lê só as primeiras
+    // páginas em vez de recusar o arquivo inteiro.
+    const partial = pdf.numPages > maxPages && options.firstPagesOnly === true && typeof pdf.getPage === "function";
+    if (pdf.numPages > maxPages && !partial) throw new PdfError("too_many_pages");
     let result: { text: string[] };
     try {
-      result = await extractText(pdf as never, { mergePages: false });
+      if (partial) {
+        const text: string[] = [];
+        for (let n = 1; n <= maxPages; n++) {
+          const content = await pdf.getPage!(n).then((p) => p.getTextContent());
+          text.push(content.items.map((i) => `${i.str ?? ""}${i.hasEOL ? "\n" : ""}`).join(""));
+        }
+        result = { text };
+      } else {
+        const { extractText } = await import("unpdf");
+        result = await extractText(pdf as never, { mergePages: false });
+      }
     } catch {
       throw new PdfError("pdf_invalid");
     }
@@ -141,7 +154,7 @@ export async function extractPdfText(
       if (truncated) break;
     }
     if (pages.every((p) => p.trim().length === 0)) throw new PdfError("pdf_no_text");
-    return { pageCount: pdf.numPages, pages, truncated };
+    return { pageCount: pdf.numPages, pages, truncated: truncated || partial };
   } finally {
     await closePdf(pdf);
   }

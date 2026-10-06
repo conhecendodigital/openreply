@@ -20,8 +20,8 @@ export function isAiAgent(value: unknown): value is AiAgent {
   return typeof value === "string" && (AI_AGENTS as readonly string[]).includes(value);
 }
 
-/** Quem gasta, no relatório (os 3 agentes, o cérebro e a triagem do Jev). */
-export const USAGE_AGENTS = [...AI_AGENTS, "cerebro", "triagem"] as const;
+/** Quem gasta, no relatório (os 3 agentes, o cérebro, a triagem do Jev e a leitura de mídia do cliente). */
+export const USAGE_AGENTS = [...AI_AGENTS, "cerebro", "triagem", "midia"] as const;
 export type UsageAgent = (typeof USAGE_AGENTS)[number];
 
 export function isUsageAgent(value: unknown): value is UsageAgent {
