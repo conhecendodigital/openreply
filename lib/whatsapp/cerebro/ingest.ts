@@ -1,5 +1,6 @@
 /**
- * Processa um PDF da fila: texto -> pedaços -> embeddings -> banco.
+ * Processa um documento da fila (PDF, ou o texto já extraído de um .docx):
+ * texto -> pedaços -> embeddings -> banco.
  * Roda no worker (nunca na requisição de envio).
  */
 import { chunkPages } from "@/lib/whatsapp/cerebro/chunk";
@@ -9,7 +10,8 @@ import {
   type EmbeddingProviderResolver,
 } from "@/lib/whatsapp/cerebro/embeddings";
 import { MAX_PDF_PAGES } from "@/lib/whatsapp/cerebro/limits";
-import { extractPdfText, PdfError, type PdfText } from "@/lib/whatsapp/cerebro/pdf";
+import { PdfError, type PdfText } from "@/lib/whatsapp/cerebro/pdf";
+import { extractStoredDocument } from "@/lib/whatsapp/cerebro/texto";
 import type { CerebroStore } from "@/lib/whatsapp/cerebro/store";
 import type { CerebroIngestJob, NewKnowledgeChunk, UsageRecorder } from "@/lib/whatsapp/cerebro/types";
 
@@ -50,7 +52,7 @@ export async function processKnowledgeDocument(job: CerebroIngestJob, deps: Inge
 
   let text: PdfText;
   try {
-    text = await (deps.extract ?? extractPdfText)(doc.data, { maxPages: MAX_PDF_PAGES });
+    text = await (deps.extract ?? extractStoredDocument)(doc.data, { maxPages: MAX_PDF_PAGES });
   } catch (error) {
     return fail(error instanceof PdfError ? error.code : "pdf_invalid");
   }
