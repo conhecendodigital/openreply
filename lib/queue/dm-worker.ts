@@ -54,8 +54,10 @@ import {
 import { recordWorkerAlert } from "@/lib/ops/worker-health";
 import {
   buildTrackedUrl,
+  composeLinkText,
   renderMessageWithTracking,
   renderMessageWithoutLink,
+  type DmFormatValue,
 } from "@/lib/tracking/message";
 import { recipientQuery } from "@/lib/tracking/recipient";
 import {
@@ -185,29 +187,38 @@ function buildLinkButtons(
 }
 
 /**
- * Fallback text when Meta rejects the button template: render the primary link
- * inline, then append any extra tracked URLs on their own lines so no link is
- * lost.
+ * The link DM as ONE plain text message (Automation.dmFormat TEXT, the text
+ * fallback when Meta rejects the card). Same tracked
+ * URLs as the buttons, with the signed ?c= of this person, so the click is
+ * counted and credited exactly like a button tap. `{link}` takes the primary
+ * link; without it the link goes at the end on its own line; a second link
+ * goes on the next line with its label (lib/tracking/message.ts).
+ *
+ * 2026-10-06: replaces buildInlineLinkFallback, which dropped the primary link
+ * when the message had no {link} (the card fallback then went with no link).
  */
-function buildInlineLinkFallback(
+function buildTrackedLinkText(
   message: string,
   commenterName: string | null | undefined,
   trackedLinks: WorkerTrackedLink[],
-  bodyText: string,
   recipientId?: string | null
 ): string {
-  const linkQuery = (slug: string) => recipientQuery(slug, recipientId);
-  const base =
-    renderMessageWithTracking({ message, commenterName, trackedLinks, linkQuery }) ||
-    bodyText;
-  const extraUrls = trackedLinks
-    .slice(1)
-    .map((link) => buildTrackedUrl(link.slug, undefined, linkQuery(link.slug)));
-  return extraUrls.length > 0 ? `${base}\n${extraUrls.join("\n")}` : base;
+  const [first, ...rest] = trackedLinks.slice(0, 3);
+  const url = (link: WorkerTrackedLink) =>
+    buildTrackedUrl(link.slug, undefined, recipientQuery(link.slug, recipientId));
+  return composeLinkText({
+    message,
+    commenterName,
+    primary: first ? url(first) : null,
+    destinationUrl: first?.destinationUrl ?? null,
+    extraLinks: rest.map((link) => ({ url: url(link), label: link.label })),
+  });
 }
 
 type RevealAutomation = {
   dmMessage: string;
+  /** BUTTON (card) or TEXT (link inside the text). Missing = BUTTON. */
+  dmFormat?: DmFormatValue | null;
   linkButtonLabel: string | null;
   trackedLinks: WorkerTrackedLink[];
   instagramAccount: { instagramId: string };
@@ -232,6 +243,20 @@ async function sendRevealDirectMessage(
       commenterName,
       trackedLinks: automation.trackedLinks,
     });
+    await ledger(text, (o) =>
+      sendDirectMessage(accessToken, automation.instagramAccount.instagramId, userId, text, o)
+    );
+    return;
+  }
+
+  // TEXT format: one text message with the tracked link inside, no card.
+  if (automation.dmFormat === "TEXT") {
+    const text = buildTrackedLinkText(
+      automation.dmMessage,
+      commenterName,
+      automation.trackedLinks,
+      userId
+    );
     await ledger(text, (o) =>
       sendDirectMessage(accessToken, automation.instagramAccount.instagramId, userId, text, o)
     );
@@ -270,11 +295,10 @@ async function sendRevealDirectMessage(
       `[DM Worker] Button template rejected in ${context}, falling back to inline link:`,
       formatError(buttonError)
     );
-    const fallbackText = buildInlineLinkFallback(
+    const fallbackText = buildTrackedLinkText(
       automation.dmMessage,
       commenterName,
       automation.trackedLinks,
-      bodyText,
       userId
     );
     try {
@@ -724,6 +748,13 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     // With an opening DM, the private reply is a button message; tapping it
     // fires a postback that delivers the reveal (see processPostback). Without
     // one, we send the reveal text directly as today.
+    //
+    // dmFormat (2026-10-06) only changes the messages that carry the LINK:
+    // this private reply, the reveal after a tap, the DM keyword / story /
+    // ig.me reply (sendRevealDirectMessage). The opening DM and the "follow
+    // me first" prompt keep their card: their button is a POSTBACK (it comes
+    // back to us to deliver the link / re-check the follow), and a text
+    // message cannot carry one. The follow-up is already plain text, no link.
     const useOpeningDm =
       automation.openingDmEnabled &&
       Boolean(automation.openingDmMessage) &&
@@ -785,6 +816,24 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             o
           )
         );
+      } else if (automation.trackedLinks.length > 0 && copy.dmFormat === "TEXT") {
+        // TEXT format: ONE private reply in text with the tracked link inside
+        // (Meta allows one private reply per comment, so it is all in one).
+        const linkText = buildTrackedLinkText(
+          copy.dmMessage,
+          commenterName,
+          automation.trackedLinks,
+          commenterId
+        );
+        await ledger(linkText, (o) =>
+          sendPrivateReply(
+            accessToken,
+            automation.instagramAccount.instagramId,
+            commentId,
+            linkText,
+            o
+          )
+        );
       } else if (automation.trackedLinks.length > 0) {
         // Try button template first; if Meta rejects it, fall back to inline links.
         const bodyText =
@@ -819,11 +868,10 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             "[DM Worker] Button template rejected, falling back to inline link:",
             formatError(buttonError)
           );
-          const fallbackMessage = buildInlineLinkFallback(
+          const fallbackMessage = buildTrackedLinkText(
             copy.dmMessage,
             commenterName,
             automation.trackedLinks,
-            bodyText,
             commenterId
           );
           try {

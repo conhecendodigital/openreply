@@ -1262,3 +1262,139 @@ describe("DM Worker — CRM and moderation hooks", () => {
     expect(mockPrisma.dmLog.create).not.toHaveBeenCalled();
   });
 });
+
+// 2026-10-06: Automation.dmFormat. TEXT sends ONE text message with the
+// tracked link (same /r/<slug>?c=<person> as the button), BUTTON stays as it
+// was (card), and campaigns without the field behave as BUTTON.
+describe("DM Worker — DM format (card or text with the link)", () => {
+  const TRACKED = /\/r\/abc123\?c=commenter_999\.[\w-]+/;
+  const SECOND = /\/r\/def456\?c=commenter_999\.[\w-]+/;
+  const withLink = (extra: Record<string, unknown> = {}) => ({
+    ...mockAutomation,
+    dmMessage: "Oi {username}! Pega aqui: {link} e bom proveito",
+    linkButtonLabel: "Acessar",
+    trackedLinks: [{ slug: "abc123", label: "Primary campaign link", destinationUrl: "https://example.com/oferta" }],
+    ...extra,
+  });
+  const sentText = (mock: typeof mockSendPrivateReply) => mock.mock.calls[0]?.[3] as string;
+
+  it("TEXT: one private reply in text with the tracked link and ?c= where {link} was", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([withLink({ dmFormat: "TEXT" })]);
+    await getProcessor()(createMockJob());
+
+    expect(mockSendPrivateReplyWithLinkButton).not.toHaveBeenCalled();
+    expect(mockSendPrivateReply).toHaveBeenCalledTimes(1);
+    const text = sentText(mockSendPrivateReply);
+    expect(text).toMatch(/^Oi commenter_user! Pega aqui: \S+\/r\/abc123\?c=commenter_999\.[\w-]+ e bom proveito$/);
+    // Never the raw destination: the click must go through /r/<slug>.
+    expect(text).not.toContain("example.com/oferta");
+    expect(mockPrisma.dmLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "SENT" }) })
+    );
+  });
+
+  it("TEXT without {link}: the link goes at the end on its own line", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([
+      withLink({ dmFormat: "TEXT", dmMessage: "Oi {username}, aqui está o material" }),
+    ]);
+    await getProcessor()(createMockJob());
+
+    const lines = sentText(mockSendPrivateReply).split("\n");
+    expect(lines[0]).toBe("Oi commenter_user, aqui está o material");
+    expect(lines[1]).toMatch(TRACKED);
+    expect(lines).toHaveLength(2);
+  });
+
+  it("TEXT with a second link: it goes on the next line with its label", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([
+      withLink({
+        dmFormat: "TEXT",
+        trackedLinks: [
+          { slug: "abc123", label: "Primary campaign link", destinationUrl: "https://example.com/oferta" },
+          { slug: "def456", label: "Grupo VIP", destinationUrl: "https://example.com/grupo" },
+        ],
+      }),
+    ]);
+    await getProcessor()(createMockJob());
+
+    const lines = sentText(mockSendPrivateReply).split("\n");
+    expect(lines[0]).toMatch(TRACKED);
+    expect(lines[1]).toMatch(/^Grupo VIP: \S+/);
+    expect(lines[1]).toMatch(SECOND);
+  });
+
+  it("BUTTON: still the card with the tracked button, no text", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([withLink({ dmFormat: "BUTTON" })]);
+    await getProcessor()(createMockJob());
+
+    expect(mockSendPrivateReply).not.toHaveBeenCalled();
+    expect(mockSendPrivateReplyWithLinkButton).toHaveBeenCalledTimes(1);
+    const [, , , body, buttons] = mockSendPrivateReplyWithLinkButton.mock.calls[0];
+    expect(body).toBe("Oi commenter_user! Pega aqui: e bom proveito");
+    expect(buttons[0].title).toBe("Acessar");
+    expect(buttons[0].url).toMatch(TRACKED);
+  });
+
+  it("a campaign saved before the field (no dmFormat) behaves as BUTTON", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([withLink()]);
+    await getProcessor()(createMockJob());
+
+    expect(mockSendPrivateReplyWithLinkButton).toHaveBeenCalledTimes(1);
+    expect(mockSendPrivateReply).not.toHaveBeenCalled();
+  });
+
+  it("BUTTON rejected by Meta: the text fallback keeps the link even without {link}", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([
+      withLink({ dmFormat: "BUTTON", dmMessage: "Oi {username}, aqui está o material" }),
+    ]);
+    mockSendPrivateReplyWithLinkButton.mockRejectedValue(new Error("Unsupported message template"));
+    await getProcessor()(createMockJob());
+
+    expect(sentText(mockSendPrivateReply)).toMatch(TRACKED);
+  });
+
+  it("TEXT keeps the opening DM card: its button is a postback, not a link", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([
+      withLink({
+        dmFormat: "TEXT",
+        openingDmEnabled: true,
+        openingDmMessage: "Quer o link?",
+        openingDmButtonLabel: "Quero",
+      }),
+    ]);
+    await getProcessor()(createMockJob());
+
+    expect(mockSendPrivateReplyWithButton).toHaveBeenCalledWith(
+      "decrypted_token",
+      "ig_456",
+      "comment_555",
+      "Quer o link?",
+      "Quero",
+      "reveal:auto_789",
+      LEDGER_OPTIONS
+    );
+    expect(mockSendPrivateReply).not.toHaveBeenCalled();
+  });
+
+  it("TEXT on the button tap (reveal): a direct message in text with the tracked link", async () => {
+    mockPrisma.automation.findFirst.mockResolvedValue(withLink({ dmFormat: "TEXT" }));
+    await getProcessor()(createMockPostbackJob());
+
+    expect(mockSendDirectMessageWithLinkButton).not.toHaveBeenCalled();
+    expect(mockSendDirectMessage).toHaveBeenCalledTimes(1);
+    expect(mockSendDirectMessage.mock.calls[0][3]).toMatch(TRACKED);
+  });
+
+  it("TEXT on a DM keyword: a direct message in text with the tracked link", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([withLink({ dmFormat: "TEXT", dmTriggerEnabled: true })]);
+    await getProcessor()({
+      name: "process-message",
+      data: { instagramAccountId: "ig_456", messageId: "mid_x", messageText: "LINK", senderId: "commenter_999" },
+      id: "m1",
+      attemptsMade: 0,
+    });
+
+    expect(mockSendDirectMessageWithLinkButton).not.toHaveBeenCalled();
+    expect(mockSendDirectMessage.mock.calls[0][3]).toMatch(TRACKED);
+  });
+});

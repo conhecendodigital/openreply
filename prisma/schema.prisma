@@ -368,6 +368,14 @@ model FollowerSnapshot {
 /// STORY_REPLY = a reply to one of our stories (storyId, or any story).
 /// STORY_MENTION = someone mentions us in their story (no keyword).
 /// LIVE_COMMENT = a comment during any of our lives (private reply only).
+/// Automation.dmFormat: card with buttons, or text with the link inside.
+enum DmFormat {
+  BUTTON
+  TEXT
+
+  @@schema("public")
+}
+
 enum AutomationTrigger {
   COMMENT
   DM
@@ -400,6 +408,11 @@ model Automation {
   // postId / matchAnyPost do not apply to it.
   dmTriggerEnabled        Boolean           @default(false)
   dmMessage               String
+  /// How the link DM goes out (2026-10-06). BUTTON = card with link buttons
+  /// (the old way, default for every campaign that already existed). TEXT =
+  /// plain text with the tracked link inside: shows in every Instagram
+  /// version and in the Requests folder. New campaigns on the screen start TEXT.
+  dmFormat                DmFormat          @default(BUTTON)
   openingDmEnabled        Boolean           @default(false)
   openingDmMessage        String?
   openingDmButtonLabel    String?
