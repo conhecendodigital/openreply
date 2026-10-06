@@ -180,7 +180,7 @@ export type FunnelTheme = {
   text: string;
   radius?: "sm" | "md" | "lg";
 };
-export type PixelConsent = "banner" | "notice";
+export type PixelConsent = "banner" | "notice" | "off";
 export type FunnelSettings = {
   theme: FunnelTheme;
   logoUrl?: string;

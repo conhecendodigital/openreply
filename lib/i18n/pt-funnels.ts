@@ -300,6 +300,7 @@ export const ptFunnels: Record<string, string> = {
   "Cookie notice": "Aviso de cookies",
   "Ask first (Pixel only after Accept)": "Perguntar antes (Pixel só depois do Aceitar)",
   "Only inform (Pixel loads right away)": "Só avisar (Pixel carrega na hora)",
+  "No notice (Pixel loads right away)": "Sem aviso (Pixel carrega na hora)",
   "Asking first is the safest choice for LGPD.": "Perguntar antes é a escolha mais segura pra LGPD.",
   "Event per screen": "Evento por tela",
   "Sends QuizStep with the screen number to the Pixel.": "Manda QuizStep com o número da tela pro Pixel.",

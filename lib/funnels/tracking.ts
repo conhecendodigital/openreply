@@ -124,13 +124,13 @@ type AdBody = { adConsent?: "accepted" | "declined"; fbp?: string; fbc?: string 
 
 /**
  * Consent for Pixel/CAPI of this visit, decided on the server with the
- * quiz mode: "banner" (default) = only after Accept; "notice" = already on.
+ * quiz mode: "banner" (default) = only after Accept; "notice" and "off" = already on.
  * IP, user agent and the Pixel cookies are kept only with consent AND with
  * the Conversions API set up (the Hotmart Purchase needs them later).
  */
 export function adConsentFields(funnel: LivePublicFunnel, body: AdBody, request: Request) {
   const mode = funnel.settings.pixelConsent ?? "banner";
-  const allowed = Boolean(funnel.settings.pixelId) && (mode === "notice" || body.adConsent === "accepted");
+  const allowed = Boolean(funnel.settings.pixelId) && (mode === "notice" || mode === "off" || body.adConsent === "accepted");
   if (!allowed) return { adConsent: false, clientIp: null, clientUserAgent: null, fbp: null, fbc: null };
   if (!isCapiReady(funnel.capi, funnel.settings.pixelId)) return { adConsent: true };
   const fbp = validFbp(body.fbp);
