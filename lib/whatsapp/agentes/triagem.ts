@@ -10,6 +10,7 @@
  *    automático sem revisão.
  */
 import { PERGUNTAS_TRIAGEM, perguntarJev, type JevOpcoes, type JevResultado } from "./jev";
+import { textoPlano } from "./comando";
 import type { AgenteConfig, AgenteTipo, WaMessageLite } from "./types";
 
 export type AcaoTriagem = "responder" | "nao_precisa" | "humano" | "spam";
@@ -67,7 +68,7 @@ function agentePadrao(agentes: AgenteConfig[]): AgenteTipo {
 function contextoCurto(historico: WaMessageLite[]): string {
   return historico
     .slice(-6)
-    .map((m) => `${m.fromMe ? "negócio" : "cliente"}: ${(m.body ?? `[${m.type}]`).slice(0, 300)}`)
+    .map((m) => `${m.fromMe ? "negócio" : "cliente"}: ${(textoPlano(m) || `[${m.type}]`).slice(0, 300)}`)
     .join("\n");
 }
 
@@ -77,11 +78,14 @@ export async function triar(
   jev: JevOpcoes = {}
 ): Promise<DecisaoTriagem> {
   const ultima = ultimaDoContato(historico);
-  const texto = ultima?.body ?? "";
+  // Áudio transcrito, foto descrita e PDF lido contam como texto do cliente.
+  const texto = ultima ? textoPlano(ultima) : "";
   const padrao = agentePadrao(agentes);
   const ativos = new Set(agentes.filter((a) => a.ativo).map((a) => a.agente));
 
-  const local = ultima && ultima.type === "text" ? triagemLocal(texto) : null;
+  // Áudio transcrito passa pelas mesmas regras do texto ("quero falar com uma pessoa").
+  const falado = ultima?.type === "audio" && ultima.mediaTextKind === "audio" && Boolean(ultima.mediaText?.trim());
+  const local = ultima && (ultima.type === "text" || falado) ? triagemLocal(texto) : null;
   if (local) {
     return { ...local, agente: padrao, dificil: false, incerto: false, fonte: "regra", jevTokens: 0 };
   }

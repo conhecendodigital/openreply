@@ -30,6 +30,10 @@ export interface WaMessageLite {
   type: string;
   body: string | null;
   sentAt: Date;
+  /** O que foi lido da mídia do cliente (transcrição, descrição da foto, trecho do PDF). */
+  mediaText?: string | null;
+  /** audio | image | pdf */
+  mediaTextKind?: string | null;
 }
 
 export interface ConversaContexto {

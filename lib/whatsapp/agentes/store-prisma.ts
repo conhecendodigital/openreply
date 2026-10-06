@@ -186,7 +186,7 @@ export class PrismaAgentStore implements AgentStore {
           where: { conversationId },
           orderBy: { sentAt: "desc" },
           take: HISTORICO_MAX,
-          select: { id: true, fromMe: true, sentBy: true, type: true, body: true, sentAt: true },
+          select: { id: true, fromMe: true, sentBy: true, type: true, body: true, sentAt: true, mediaText: true, mediaTextKind: true },
         }),
       ]);
       return {

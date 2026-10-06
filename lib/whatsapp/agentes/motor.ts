@@ -14,7 +14,7 @@
  * então "Assumir" segura até um envio que já estava na fila.
  */
 import { duracaoTotalMs, planejarRitmo, quebrarEmBolhas, type Sorteio } from "./bolhas";
-import { lerSaida, montarComando } from "./comando";
+import { lerSaida, montarComando, textoPlano } from "./comando";
 import { abrirChave } from "./credenciais";
 import { descreverInventadas, afirmacoesInventadas } from "./guardas";
 import { PERGUNTAS_CHECAR, perguntarJev, type JevOpcoes } from "./jev";
@@ -159,7 +159,7 @@ export async function processarMensagem(
   const consulta = ctx.historico
     .filter((m) => !m.fromMe)
     .slice(-3)
-    .map((m) => m.body ?? "")
+    .map((m) => textoPlano(m).slice(0, 1500))
     .join("\n");
   const [trechos, memoria] = await Promise.all([
     deps.cerebro
@@ -275,7 +275,7 @@ export async function processarMensagem(
   const alertas: string[] = [];
   const inventadas = afirmacoesInventadas(bolhas.join("\n"), comando.fontesPermitidas);
   if (inventadas.length) alertas.push(descreverInventadas(inventadas));
-  const checagem = await perguntarJev({ ultima_mensagem_do_cliente: ultima.body ?? "", resposta: bolhas.join("\n") }, PERGUNTAS_CHECAR, deps.jev);
+  const checagem = await perguntarJev({ ultima_mensagem_do_cliente: textoPlano(ultima).slice(0, 1500), resposta: bolhas.join("\n") }, PERGUNTAS_CHECAR, deps.jev);
   if (checagem.ok) {
     const sim = (k: string) => {
       const r = checagem.respostas[k];

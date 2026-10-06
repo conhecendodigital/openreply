@@ -35,6 +35,11 @@ export interface AgentWorkerDeps {
   repo: WaRepository & Pick<PrismaWaRepository, "getMessageSentBy">;
   queue: WaQueuePort;
   env?: Record<string, string | undefined>;
+  /**
+   * Lê áudio, foto e PDF novos do cliente antes do motor (lib/whatsapp/midia).
+   * Nunca deve jogar erro; se jogar, o agente segue igual.
+   */
+  lerMidia?: (job: WaAgentJob) => Promise<unknown>;
 }
 
 export function jevLigado(env: Record<string, string | undefined> = process.env): boolean {
@@ -126,6 +131,7 @@ export async function processAgentJob(job: WaAgentJob, deps: AgentWorkerDeps) {
   }
   const motor = await motorDeps(job, deps);
   await aoMensagemDoContato(motor.store, job.conversationId);
+  if (deps.lerMidia) await deps.lerMidia(job).catch(() => undefined);
   return processarMensagem(motor, { conversationId: job.conversationId, triggerMsgId: job.messageId });
 }
 

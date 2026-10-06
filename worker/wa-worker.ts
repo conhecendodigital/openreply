@@ -16,6 +16,7 @@ import { Worker } from "bullmq";
 import { getRedisConnection } from "@/lib/queue/client";
 import { agentIngestHooks, agentSendHooks, processAgentJob } from "@/lib/whatsapp/agentes/worker";
 import { createCerebroWorker } from "@/lib/whatsapp/cerebro/queue";
+import { lerMidiasDoJob } from "@/lib/whatsapp/midia/worker";
 import { ingestDepsFor } from "@/lib/whatsapp/cerebro/service";
 import { WA_AGENT_QUEUE, type WaAgentJob } from "@/lib/whatsapp/queue";
 import { purgeOldWebhookEvents, RETENTION_INTERVAL_MS } from "@/lib/whatsapp/retencao";
@@ -30,6 +31,11 @@ if (!runtime) {
 
 const repo = getWaRepository();
 const deps = { repo, queue: runtime.queue };
+// Áudio, foto e PDF do cliente viram texto antes do agente (só tipo e status no log, nunca o texto).
+const lerMidia = async (job: WaAgentJob) => {
+  const lidas = await lerMidiasDoJob(job, deps);
+  if (lidas.length) console.log(`[WA Midia] ${job.conversationId} ${lidas.map((l) => `${l.kind}:${l.status}`).join(" ")}`);
+};
 
 const workers = createWaWorkers({
   runtime,
@@ -41,13 +47,14 @@ const workers = createWaWorkers({
 const agent = new Worker<WaAgentJob>(
   WA_AGENT_QUEUE,
   async (job) => {
-    const result = await processAgentJob(job.data, deps);
+    const result = await processAgentJob(job.data, { ...deps, lerMidia });
     // The reason is a fixed system phrase (never message text), so it is safe to log.
     const motivo = "motivo" in result && typeof result.motivo === "string" ? ` (${result.motivo.slice(0, 120)})` : "";
     console.log(`[WA Agent] ${job.data.kind} ${job.data.conversationId} ${result.acao}${motivo}`);
     return { acao: result.acao };
   },
-  { connection: getRedisConnection(), concurrency: 1, lockDuration: 120_000 }
+  // Lock maior: a leitura de mídia (até 3 por vez, transcrição de até 10 min) roda antes do motor.
+  { connection: getRedisConnection(), concurrency: 1, lockDuration: 300_000 }
 );
 agent.on("failed", (job, error) => {
   console.error(`[WA Agent] falhou ${job?.data.conversationId ?? "?"}: ${(error?.message ?? "").slice(0, 160)}`);
