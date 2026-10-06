@@ -29,10 +29,12 @@ const h = vi.hoisted(() => {
   };
   const transaction = vi.fn();
   const queryRaw = vi.fn(async () => [] as unknown[]);
+  const executeRaw = vi.fn(async () => 0);
   const prisma = new Proxy({} as Record<string, unknown>, {
     get(_t, name: string) {
       if (name === "$transaction") return transaction;
       if (name === "$queryRaw") return queryRaw;
+      if (name === "$executeRaw") return executeRaw;
       return model(name);
     },
   });

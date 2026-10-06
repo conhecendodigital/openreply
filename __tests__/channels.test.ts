@@ -28,6 +28,7 @@ const h = vi.hoisted(() => {
     get(_t, name: string) {
       if (name === "$transaction") return transaction;
       if (name === "$queryRaw") return vi.fn(async () => []);
+      if (name === "$executeRaw") return vi.fn(async () => 0);
       return model(name);
     },
   });
