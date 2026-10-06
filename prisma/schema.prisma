@@ -130,6 +130,10 @@ model Workspace {
   waAgentProfiles    WaAgentProfile[]
   waAgentRuns        WaAgentRun[]
   waAgentConfigs     WaAgentConfig[]
+  waAgentExamples    WaAgentExample[]
+  waAgentCases       WaAgentLearningCase[]
+  waAgentSuggestions WaAgentSuggestion[]
+  waLeadStageEvents  WaLeadStageEvent[]
   waKnowledgeDocs    WaKnowledgeDocument[]
   waKnowledgeChunks  WaKnowledgeChunk[]
   waContactMemories  WaContactMemory[]
@@ -1851,6 +1855,10 @@ model WaSession {
   messages      WaMessage[]
   agentProfile  WaAgentProfile?
   agentConfigs  WaAgentConfig[]
+  agentExamples    WaAgentExample[]
+  agentCases       WaAgentLearningCase[]
+  agentSuggestions WaAgentSuggestion[]
+  stageEvents      WaLeadStageEvent[]
 
   @@index([workspaceId])
   @@index([ownerUserId])
@@ -1899,19 +1907,31 @@ model WaConversation {
   agentMode          WaAgentMode @default(INHERIT)
   /// Alguém assumiu: agente pausado até aqui.
   humanTakeoverUntil DateTime?
+  /// Ficha do lead: o que o cliente já disse (lib/whatsapp/regras/ficha.ts).
+  leadFicha          Json?
+  /// novo | qualificando | qualificado | analisar | fora_do_perfil | cliente | sem_resposta
+  leadStage          String?
+  leadStageMotivo    String?
+  /// regiao | servico | outro (fora do perfil)
+  leadStageTipo      String?
+  /// O dono mudou na mão: o agente não sobrescreve sem fato novo.
+  leadStageManual    Boolean     @default(false)
+  leadStageAt        DateTime?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  workspace Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  session   WaSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  contact   WaContact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  messages  WaMessage[]
-  labels    WaConversationLabel[]
-  agentRuns WaAgentRun[]
+  workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session     WaSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contact     WaContact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages    WaMessage[]
+  labels      WaConversationLabel[]
+  agentRuns   WaAgentRun[]
+  stageEvents WaLeadStageEvent[]
 
   @@unique([sessionId, contactId])
   @@index([workspaceId, archivedAt, pinnedAt(sort: Desc), lastMessageAt(sort: Desc)])
   @@index([workspaceId, unreadCount])
+  @@index([workspaceId, leadStage])
   @@schema("whatsapp")
 }
 
@@ -2155,6 +2175,14 @@ model WaAgentProfile {
   /// Atraso humano antes da 1ª bolha (envio automático).
   delayMinSeconds Int       @default(20)
   delayMaxSeconds Int       @default(90)
+  /// Regras duras do negócio, estruturadas (lib/whatsapp/regras/esquema.ts).
+  regrasNegocio   Json?
+  /// Janela pra juntar mensagens seguidas antes de responder (3 a 30 s).
+  debounceSeconds Int       @default(10)
+  /// Nome e "oculto" de cada estágio do lead, por número.
+  estagiosLead    Json?
+  /// {"ligado": false, "telefone": "+55..."}: resumo do lead qualificado pro responsável.
+  avisarResponsavel Json?
   learnedAt       DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @default(now()) @updatedAt
@@ -2224,6 +2252,105 @@ model WaAgentConfig {
 
   @@unique([sessionId, agente])
   @@index([workspaceId])
+  @@schema("whatsapp")
+}
+
+/// Exemplo aprendido: mensagem do cliente -> resposta da equipe (rascunho editado ou resposta depois de assumir).
+model WaAgentExample {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  workspaceId String
+  ownerUserId String
+  sessionId   String
+  agente      String?
+  /// edicao | assumir
+  origem      String
+  origemId    String
+  pergunta    String
+  resposta    String
+  rascunho    String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session   WaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, origemId])
+  @@index([sessionId, createdAt(sort: Desc)])
+  @@index([workspaceId])
+  @@schema("whatsapp")
+}
+
+/// Caso pro relatório "O que o agente aprendeu" (descartado, regra que bloqueou, fora da área...).
+model WaAgentLearningCase {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  workspaceId  String
+  ownerUserId  String
+  sessionId    String
+  /// descartado | regra_bloqueou | regra_corrigiu | fora_da_area | servico_recusado
+  tipo         String
+  regra        String?
+  assunto      String?
+  pergunta     String?
+  resposta     String?
+  conversaHash String?
+  origemId     String
+  createdAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session   WaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, origemId])
+  @@index([sessionId, createdAt(sort: Desc)])
+  @@index([workspaceId])
+  @@schema("whatsapp")
+}
+
+/// Sugestão de mudança nas regras ou instruções. Só vira regra com o clique do dono.
+model WaAgentSuggestion {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  workspaceId String
+  ownerUserId String
+  sessionId   String
+  /// regra | ia
+  origem      String
+  chave       String
+  texto       String
+  mudanca     Json
+  /// pendente | aceita | recusada
+  status      String    @default("pendente")
+  decididoPor String?
+  decididoEm  DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session   WaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, chave])
+  @@index([sessionId, status])
+  @@index([workspaceId])
+  @@schema("whatsapp")
+}
+
+/// Histórico de mudança de estágio do lead (só INSERT e SELECT).
+model WaLeadStageEvent {
+  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  workspaceId    String
+  sessionId      String
+  conversationId String
+  de             String?
+  para           String
+  motivo         String?
+  tipo           String?
+  manual         Boolean  @default(false)
+  /// NULL = o agente
+  porUserId      String?
+  createdAt      DateTime @default(now())
+
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session      WaSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  conversation WaConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@schema("whatsapp")
 }
 
