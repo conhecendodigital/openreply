@@ -7,6 +7,9 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  /// Fase 0 (06/10/2026): schema "whatsapp" pras tabelas do inbox de WhatsApp,
+  /// no mesmo Postgres do Lead Engine (FK direto pra User e Workspace).
+  schemas  = ["public", "whatsapp"]
 }
 
 model User {
@@ -18,11 +21,25 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  /// Fase 0 (login novo, Better Auth): e-mail confirmado. A coluna antiga
+  /// emailVerified (data, do NextAuth) fica como estava.
+  authEmailVerified Boolean      @default(false)
+  /// Papel na plataforma (não é o papel dentro de um workspace). ADMIN = dono do Lead Engine.
+  role              PlatformRole @default(USER)
+  twoFactorEnabled  Boolean      @default(false)
+
+  /// Tabelas antigas do NextAuth: ficam intactas nesta fase (voltar atrás = só redeploy).
   accounts         Account[]
   sessions         Session[]
+  authSessions     AuthSession[]
+  authAccounts     AuthAccount[]
+  twoFactors       TwoFactor[]
   ownedWorkspaces  Workspace[]           @relation("WorkspaceOwner")
   workspaceMembers WorkspaceMember[]
   sentInvitations  WorkspaceInvitation[] @relation("WorkspaceInvitationsSent")
+  waSessions       WaSession[]
+
+  @@schema("public")
 }
 
 model Account {
@@ -43,6 +60,7 @@ model Account {
 
   @@unique([provider, providerAccountId])
   @@index([userId])
+  @@schema("public")
 }
 
 model Session {
@@ -54,6 +72,7 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@schema("public")
 }
 
 model VerificationToken {
@@ -62,6 +81,7 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@schema("public")
 }
 
 model Workspace {
@@ -98,8 +118,14 @@ model Workspace {
   funnels            Funnel[]
   funnelMedia        FunnelMedia[]
   metaCapi           MetaCapiSettings?
+  waSessions         WaSession[]
+  waContacts         WaContact[]
+  waConversations    WaConversation[]
+  waMessages         WaMessage[]
+  waLabels           WaLabel[]
 
   @@index([ownerId])
+  @@schema("public")
 }
 
 /// Every DM seen by the webhook (inbound and our own echoes), so the inbox keeps
@@ -128,6 +154,7 @@ model DirectMessage {
   media DirectMedia[]
 
   @@index([accountId, contactId, sentAt])
+  @@schema("public")
 }
 
 /// Photo, video, audio or file attached to a DM, downloaded when it arrives so
@@ -149,6 +176,7 @@ model DirectMedia {
   message DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, position])
+  @@schema("public")
 }
 
 /// Workspace API key for scripts and the MCP endpoint. Only a SHA-256 hash is
@@ -172,6 +200,7 @@ model ApiToken {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
+  @@schema("public")
 }
 
 model WorkspaceMember {
@@ -186,6 +215,7 @@ model WorkspaceMember {
 
   @@unique([workspaceId, userId])
   @@index([userId])
+  @@schema("public")
 }
 
 model WorkspaceInvitation {
@@ -208,6 +238,7 @@ model WorkspaceInvitation {
   @@index([email])
   @@index([workspaceId])
   @@index([status])
+  @@schema("public")
 }
 
 model InstagramAccount {
@@ -257,12 +288,15 @@ model InstagramAccount {
 
   @@index([workspaceId])
   @@index([workspaceId, status])
+  @@schema("public")
 }
 
 enum InstagramAccountStatus {
   ACTIVE
   NEEDS_RECONNECT
   DISCONNECTED
+
+  @@schema("public")
 }
 
 /// Daily follower total for one account. Instagram only retains ~30 days of
@@ -283,6 +317,7 @@ model FollowerSnapshot {
 
   @@unique([instagramAccountId, date])
   @@index([instagramAccountId, date])
+  @@schema("public")
 }
 
 /// What fires a campaign. COMMENT = comment on a post (the original kind; its
@@ -296,6 +331,8 @@ enum AutomationTrigger {
   STORY_REPLY
   STORY_MENTION
   LIVE_COMMENT
+
+  @@schema("public")
 }
 
 model Automation {
@@ -361,6 +398,7 @@ model Automation {
   @@index([instagramAccountId])
   @@index([postId])
   @@index([instagramAccountId, trigger, isActive])
+  @@schema("public")
 }
 
 model DmLog {
@@ -401,6 +439,7 @@ model DmLog {
   @@index([status])
   @@index([workspaceId, dmSentAt])
   @@index([automationId, status])
+  @@schema("public")
 }
 
 // Every comment the system has seen, from either the webhook or the polling
@@ -417,6 +456,7 @@ model ProcessedComment {
   seenAt             DateTime @default(now())
 
   @@index([instagramAccountId])
+  @@schema("public")
 }
 
 model TrackedLink {
@@ -435,6 +475,7 @@ model TrackedLink {
 
   @@index([workspaceId])
   @@index([automationId])
+  @@schema("public")
 }
 
 model LinkClick {
@@ -464,6 +505,7 @@ model LinkClick {
   @@index([createdAt])
   @@index([workspaceId, createdAt])
   @@index([contactIgUserId])
+  @@schema("public")
 }
 
 model WebhookEvent {
@@ -480,6 +522,7 @@ model WebhookEvent {
 
   @@index([workspaceId])
   @@index([status])
+  @@schema("public")
 }
 
 model OperationalEvent {
@@ -498,6 +541,7 @@ model OperationalEvent {
   @@index([source])
   @@index([level])
   @@index([createdAt])
+  @@schema("public")
 }
 
 // ─── Comment moderation ──────────────────────────────────────────────────────
@@ -528,6 +572,7 @@ model ModerationSettings {
   instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
+  @@schema("public")
 }
 
 /// One decision per flagged (or protected) comment. Clean comments are not
@@ -566,12 +611,15 @@ model CommentModeration {
   @@index([workspaceId, createdAt])
   @@index([instagramAccountId, action])
   @@index([commenterIgId])
+  @@schema("public")
 }
 
 enum ModerationMode {
   OFF
   OBSERVE
   HIDE
+
+  @@schema("public")
 }
 
 enum ModerationAction {
@@ -581,6 +629,8 @@ enum ModerationAction {
   RESTORED
   SKIPPED_PROTECTED
   FAILED
+
+  @@schema("public")
 }
 
 // ─── Contacts (CRM) ──────────────────────────────────────────────────────────
@@ -652,6 +702,7 @@ model Contact {
   @@index([workspaceId, username])
   @@index([workspaceId, lastInboundAt])
   @@index([workspaceId, firstSeenAt])
+  @@schema("public")
 }
 
 /// A tag as plain text: "comentou:FOTO", "recebeu:<campanha>", "clicou", or a
@@ -670,6 +721,7 @@ model ContactTag {
   @@unique([contactId, name])
   @@index([workspaceId, name])
   @@index([workspaceId, createdAt])
+  @@schema("public")
 }
 
 /// Timeline of a contact. The unique (contactId, type, refId) makes webhook
@@ -696,12 +748,15 @@ model ContactEvent {
   @@unique([contactId, type, refId])
   @@index([contactId, occurredAt])
   @@index([workspaceId, type, occurredAt])
+  @@schema("public")
 }
 
 enum WorkspaceRole {
   OWNER
   ADMIN
   MEMBER
+
+  @@schema("public")
 }
 
 enum WorkspaceInvitationStatus {
@@ -709,6 +764,8 @@ enum WorkspaceInvitationStatus {
   ACCEPTED
   REVOKED
   EXPIRED
+
+  @@schema("public")
 }
 
 enum DmStatus {
@@ -720,12 +777,16 @@ enum DmStatus {
   SKIPPED_PLAN_LIMIT
   SKIPPED_NO_MATCH
   SKIPPED_TAKEOVER
+
+  @@schema("public")
 }
 
 enum WebhookStatus {
   PENDING
   PROCESSED
   FAILED
+
+  @@schema("public")
 }
 
 enum OperationalEventSource {
@@ -733,12 +794,16 @@ enum OperationalEventSource {
   TOKEN_REFRESH
   HEALTH
   SYSTEM
+
+  @@schema("public")
 }
 
 enum OperationalEventLevel {
   INFO
   WARNING
   ERROR
+
+  @@schema("public")
 }
 
 // ─── Etapa 2: drafts, takeover, sequences, conversation links ───────────────
@@ -769,6 +834,7 @@ model OutboundMessage {
   @@index([instagramAccountId, contactIgUserId, createdAt])
   @@index([workspaceId, createdAt])
   @@index([workspaceId, origin, createdAt])
+  @@schema("public")
 }
 
 /// A reply proposed for one person (by the AI "vendedor" or by hand). Nothing
@@ -807,6 +873,7 @@ model DraftReply {
 
   @@index([workspaceId, status, createdAt])
   @@index([contactId, status])
+  @@schema("public")
 }
 
 enum DraftStatus {
@@ -816,6 +883,8 @@ enum DraftStatus {
   REJECTED
   EXPIRED
   FAILED
+
+  @@schema("public")
 }
 
 /// Messages sent after a campaign delivered its link, only while the person's
@@ -834,6 +903,7 @@ model Sequence {
   enrollments SequenceEnrollment[]
 
   @@index([workspaceId])
+  @@schema("public")
 }
 
 model SequenceStep {
@@ -848,6 +918,7 @@ model SequenceStep {
   sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
 
   @@unique([sequenceId, order])
+  @@schema("public")
 }
 
 model SequenceEnrollment {
@@ -870,6 +941,7 @@ model SequenceEnrollment {
 
   @@unique([sequenceId, contactId])
   @@index([contactId, status])
+  @@schema("public")
 }
 
 enum SequenceStatus {
@@ -879,6 +951,8 @@ enum SequenceStatus {
   STOPPED_WINDOW
   STOPPED_TAKEOVER
   STOPPED_OFF
+
+  @@schema("public")
 }
 
 /// https://ig.me/m/<username>?ref=<code> for a story, the bio or a page.
@@ -910,6 +984,7 @@ model ConversationLink {
 
   @@index([workspaceId])
   @@index([instagramAccountId])
+  @@schema("public")
 }
 
 model ConversationLinkOpen {
@@ -928,6 +1003,7 @@ model ConversationLinkOpen {
 
   @@unique([linkId, eventKey])
   @@index([contactId])
+  @@schema("public")
 }
 
 // ─── Etapa 3: flows (visual builder) ─────────────────────────────────────────
@@ -949,6 +1025,8 @@ enum FlowRunStatus {
   STOPPED_OFF
   STOPPED_LIMIT
   FAILED
+
+  @@schema("public")
 }
 
 model Flow {
@@ -991,6 +1069,7 @@ model Flow {
   @@index([instagramAccountId, isActive, triggerType])
   @@index([workspaceId])
   @@index([conversationLinkId])
+  @@schema("public")
 }
 
 /// One person going through one flow. Unique per (flow, trigger event), and at
@@ -1024,6 +1103,7 @@ model FlowRun {
   @@index([contactId, status])
   @@index([flowId, status, currentNodeId])
   @@index([triggerCommentId])
+  @@schema("public")
 }
 
 model FlowStep {
@@ -1043,6 +1123,7 @@ model FlowStep {
 
   @@index([runId, occurredAt])
   @@index([flowId, nodeId, outcome])
+  @@schema("public")
 }
 
 /// Tracked link of a flow's link button (/r/<slug>), separate from campaign
@@ -1063,6 +1144,7 @@ model FlowLink {
   clicks FlowLinkClick[]
 
   @@unique([flowId, nodeId, buttonId])
+  @@schema("public")
 }
 
 model FlowLinkClick {
@@ -1082,6 +1164,7 @@ model FlowLinkClick {
   @@index([runId])
   @@index([contactIgUserId])
   @@index([flowId, createdAt])
+  @@schema("public")
 }
 
 // ─── Etapa 5: escala (A/B, segmentos, disparos) ─────────────────────────────
@@ -1109,6 +1192,7 @@ model CampaignVariant {
 
   @@unique([automationId, key])
   @@index([automationId])
+  @@schema("public")
 }
 
 /// A saved CRM filter (lib/segments/filters.ts). Counted live, never cached
@@ -1132,6 +1216,7 @@ model Segment {
   broadcasts Broadcast[]
 
   @@index([workspaceId])
+  @@schema("public")
 }
 
 enum BroadcastStatus {
@@ -1141,6 +1226,8 @@ enum BroadcastStatus {
   DONE
   CANCELED
   FAILED
+
+  @@schema("public")
 }
 
 /// A message to a segment. Instagram only allows it to people whose 24 h
@@ -1195,6 +1282,7 @@ model Broadcast {
 
   @@index([workspaceId, status, createdAt])
   @@index([status, scheduledAt])
+  @@schema("public")
 }
 
 enum BroadcastRecipientStatus {
@@ -1210,6 +1298,8 @@ enum BroadcastRecipientStatus {
   SKIPPED_LIMIT
   SKIPPED_BUSY
   SKIPPED_CANCELED
+
+  @@schema("public")
 }
 
 /// One person of a broadcast. The unique (broadcastId, contactId) is the
@@ -1234,6 +1324,7 @@ model BroadcastRecipient {
   @@unique([broadcastId, contactId])
   @@index([broadcastId, status])
   @@index([igUserId])
+  @@schema("public")
 }
 
 /// Tracked link of a broadcast button (/r/<slug>), resolved after campaign
@@ -1252,6 +1343,7 @@ model BroadcastLink {
   clicks    BroadcastLinkClick[]
 
   @@unique([broadcastId, buttonId])
+  @@schema("public")
 }
 
 model BroadcastLinkClick {
@@ -1268,6 +1360,7 @@ model BroadcastLinkClick {
 
   @@index([broadcastId, createdAt])
   @@index([contactIgUserId])
+  @@schema("public")
 }
 
 // ─── Etapa 6: funis interativos (Quiz) ───────────────────────────────────────
@@ -1276,6 +1369,8 @@ enum FunnelStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+
+  @@schema("public")
 }
 
 /// Etapa 6: funil interativo (quiz). Definição em JSON (lib/funnels/schema.ts).
@@ -1305,6 +1400,7 @@ model Funnel {
   media     FunnelMedia[]
 
   @@index([workspaceId, updatedAt])
+  @@schema("public")
 }
 
 /// Arquivo (foto, GIF, vídeo) enviado pelo editor do quiz pro armazenamento
@@ -1331,31 +1427,32 @@ model FunnelMedia {
   funnel    Funnel    @relation(fields: [funnelId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, funnelId, createdAt])
+  @@schema("public")
 }
 
 model FunnelVisit {
-  id            String    @id @default(cuid())
-  workspaceId   String
-  funnelId      String
+  id              String    @id @default(cuid())
+  workspaceId     String
+  funnelId        String
   /// 32 hex gerado no navegador. Global (vira xcod no checkout Hotmart).
-  visitorId     String
-  funnelVersion Int
-  contactId     String?
+  visitorId       String
+  funnelVersion   Int
+  contactId       String?
   /// utm_*, fbclid, gclid, src, sck da entrada.
-  tracking      Json?
+  tracking        Json?
   /// utm_source em minúsculas ou "direto".
-  source        String
-  referrerHost  String?
+  source          String
+  referrerHost    String?
   /// mobile | tablet | desktop
-  device        String?
-  ipHash        String?
-  maxStepIndex  Int       @default(0)
-  startedAt     DateTime?
-  completedAt   DateTime?
-  checkoutAt    DateTime?
-  leadAt        DateTime?
-  purchasedAt   DateTime?
-  refundedAt    DateTime?
+  device          String?
+  ipHash          String?
+  maxStepIndex    Int       @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  checkoutAt      DateTime?
+  leadAt          DateTime?
+  purchasedAt     DateTime?
+  refundedAt      DateTime?
   /// Consentimento de anúncios (Pixel/CAPI) da visita: true = pode mandar
   /// eventos server-side; false/null = não manda. Calculado no servidor com o
   /// modo do quiz (banner = só depois do "Aceitar"; notice = já vale).
@@ -1367,8 +1464,8 @@ model FunnelVisit {
   /// Cookies _fbp / _fbc do Pixel do navegador.
   fbp             String?
   fbc             String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   funnel    Funnel           @relation(fields: [funnelId], references: [id], onDelete: Cascade)
   contact   Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
@@ -1381,6 +1478,7 @@ model FunnelVisit {
   @@index([funnelId, createdAt])
   @@index([funnelId, source, createdAt])
   @@index([contactId])
+  @@schema("public")
 }
 
 /// Pixel padrão e API de Conversões da Meta da conta (1 por workspace).
@@ -1400,6 +1498,8 @@ model MetaCapiSettings {
   updatedAt      DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@schema("public")
 }
 
 model FunnelEvent {
@@ -1422,6 +1522,7 @@ model FunnelEvent {
 
   @@unique([visitId, type, stepId, blockId])
   @@index([funnelId, type, createdAt])
+  @@schema("public")
 }
 
 model FunnelLead {
@@ -1449,6 +1550,7 @@ model FunnelLead {
 
   @@index([funnelId, createdAt])
   @@index([workspaceId, email])
+  @@schema("public")
 }
 
 model FunnelPurchase {
@@ -1482,4 +1584,314 @@ model FunnelPurchase {
 
   @@unique([provider, transaction, event])
   @@index([funnelId, occurredAt])
+  @@schema("public")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 0 (06/10/2026): login novo (Better Auth) e Lead Engine multiusuário.
+// Tudo aqui é novo: as tabelas do NextAuth (Account, Session, VerificationToken)
+// continuam intactas pra dar pra voltar atrás só com um redeploy.
+// ---------------------------------------------------------------------------
+
+enum PlatformRole {
+  USER
+  ADMIN
+
+  @@schema("public")
+}
+
+/// Sessão do login novo. O cookie guarda só o token.
+model AuthSession {
+  id        String   @id
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@schema("public")
+}
+
+/// Forma de entrar: providerId "credential" (senha, com hash) ou "google".
+/// Link mágico não precisa de linha aqui.
+model AuthAccount {
+  id                    String    @id
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  /// Hash da senha (scrypt). Nunca a senha em si.
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([providerId, accountId])
+  @@schema("public")
+}
+
+/// Tokens de uso único: link mágico, desafio do 2FA, troca de e-mail.
+model AuthVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@schema("public")
+}
+
+/// 2FA por app autenticador (TOTP). Segredo e códigos de recuperação criptografados.
+model TwoFactor {
+  id                      String    @id
+  userId                  String
+  secret                  String
+  backupCodes             String
+  verified                Boolean   @default(true)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([secret])
+  @@schema("public")
+}
+
+/// Quem pode entrar no beta (além do ALLOWED_EMAILS e dos convites de workspace).
+model BetaAllowlist {
+  /// Sempre minúsculo.
+  email       String   @id
+  canWhatsapp Boolean  @default(true)
+  addedById   String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@schema("public")
+}
+
+/// Toda vez que o admin abre conteúdo de outro workspace (LGPD). Só cresce:
+/// a RLS não deixa ninguém editar nem apagar.
+model AdminAccessLog {
+  id                String   @id @default(cuid())
+  adminUserId       String
+  targetWorkspaceId String
+  targetUserId      String?
+  /// ex.: "whatsapp.conversation"
+  resource          String
+  resourceId        String?
+  reason            String
+  createdAt         DateTime @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([targetWorkspaceId, createdAt])
+  @@schema("public")
+}
+
+// ---------------------------------------------------------------------------
+// Schema "whatsapp" (fase 0: tabelas vazias, RLS ligada desde o primeiro dia).
+// O acesso segue o workspace: quem é membro do workspace vê e responde.
+// ---------------------------------------------------------------------------
+
+enum WaProvider {
+  OPENWA
+  CLOUD_API
+
+  @@schema("whatsapp")
+}
+
+enum WaStatus {
+  PENDING
+  QR_READY
+  CONNECTED
+  DISCONNECTED
+  RESTRICTED
+  BANNED
+
+  @@schema("whatsapp")
+}
+
+enum WaAgentMode {
+  INHERIT
+  OFF
+  DRAFT
+  AUTO
+
+  @@schema("whatsapp")
+}
+
+enum WaSentBy {
+  CONTACT
+  USER_APP
+  USER_PHONE
+  AGENT
+
+  @@schema("whatsapp")
+}
+
+/// Um número de WhatsApp conectado.
+model WaSession {
+  id                String      @id @default(cuid())
+  workspaceId       String
+  /// Quem conectou o número.
+  ownerUserId       String
+  provider          WaProvider
+  /// id no OpenWA ou phone_number_id na Meta.
+  providerSessionId String      @unique
+  phoneE164         String?
+  displayName       String?
+  status            WaStatus    @default(PENDING)
+  /// Segredo HMAC do webhook desta sessão, criptografado.
+  webhookSecretEnc  String?
+  agentMode         WaAgentMode @default(OFF)
+  /// Termo de risco do modo experimental (OpenWA).
+  riskAcceptedAt    DateTime?
+  connectedAt       DateTime?
+  lastEventAt       DateTime?
+  /// Números que o admin pode ver sem abrir conteúdo.
+  conversationCount Int         @default(0)
+  messageCount      Int         @default(0)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner         User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  contacts      WaContact[]
+  conversations WaConversation[]
+  messages      WaMessage[]
+
+  @@index([workspaceId])
+  @@index([ownerUserId])
+  @@schema("whatsapp")
+}
+
+model WaContact {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  sessionId    String
+  /// 5511...@c.us, @lid ou @g.us
+  jid          String
+  phoneE164    String?
+  /// Nome que o usuário salvou.
+  name         String?
+  /// Nome que a pessoa usa.
+  pushName     String?
+  avatarUrl    String?
+  isGroup      Boolean  @default(false)
+  /// Ligação opcional com o Contact do Lead Engine.
+  crmContactId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session       WaSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  conversations WaConversation[]
+
+  @@unique([sessionId, jid])
+  @@index([workspaceId, name])
+  @@schema("whatsapp")
+}
+
+model WaConversation {
+  id                 String      @id @default(cuid())
+  workspaceId        String
+  sessionId          String
+  contactId          String
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+  unreadCount        Int         @default(0)
+  archivedAt         DateTime?
+  pinnedAt           DateTime?
+  mutedUntil         DateTime?
+  agentMode          WaAgentMode @default(INHERIT)
+  /// Alguém assumiu: agente pausado até aqui.
+  humanTakeoverUntil DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  workspace Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session   WaSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contact   WaContact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages  WaMessage[]
+  labels    WaConversationLabel[]
+
+  @@unique([sessionId, contactId])
+  @@index([workspaceId, archivedAt, pinnedAt(sort: Desc), lastMessageAt(sort: Desc)])
+  @@index([workspaceId, unreadCount])
+  @@schema("whatsapp")
+}
+
+model WaMessage {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  sessionId         String
+  conversationId    String
+  providerMessageId String
+  fromMe            Boolean
+  sentBy            WaSentBy
+  /// text | image | audio | video | document | sticker | location | reaction
+  type              String
+  body              String?
+  quotedId          String?
+  /// pending | sent | delivered | read | failed
+  ack               String    @default("pending")
+  sentAt            DateTime
+  editedAt          DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session      WaSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  conversation WaConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// Webhook repetido não duplica.
+  @@unique([sessionId, providerMessageId])
+  @@index([conversationId, sentAt(sort: Desc)])
+  @@schema("whatsapp")
+}
+
+model WaLabel {
+  id          String      @id @default(cuid())
+  workspaceId String
+  name        String
+  /// #RRGGBB
+  color       String
+  position    Int         @default(0)
+  agentMode   WaAgentMode @default(INHERIT)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  workspace     Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversations WaConversationLabel[]
+
+  @@unique([workspaceId, name])
+  @@schema("whatsapp")
+}
+
+model WaConversationLabel {
+  conversationId String
+  labelId        String
+  workspaceId    String
+  createdAt      DateTime @default(now())
+
+  conversation WaConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  label        WaLabel        @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, labelId])
+  @@index([workspaceId, labelId])
+  @@schema("whatsapp")
 }
