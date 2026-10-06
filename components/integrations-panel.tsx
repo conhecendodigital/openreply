@@ -136,9 +136,9 @@ const btnPrimary = `${btn} bg-accent text-white hover:bg-accent-hover`;
 const btnSecondary = `${btn} border border-border text-foreground hover:bg-surface-hover`;
 const btnDanger = `${btn} border border-error/30 text-error hover:bg-error/10`;
 
-export function IntegrationsPanel({ initial }: { initial?: IntegrationsData | null } = {}) {
+export function IntegrationsPanel({ initial = null }: { initial?: IntegrationsData | null }) {
   const t = useT();
-  const [data, setData] = useState<IntegrationsData | null>(initial ?? null);
+  const [data, setData] = useState<IntegrationsData | null>(initial);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(

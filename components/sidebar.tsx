@@ -159,21 +159,6 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
   },
 ];
 
-type NavSection = { title: string; items: { label: string; href: string; icon?: string }[]; notice?: string };
-
-/** Grupo do admin da plataforma (no fim do menu). null = não aparece. */
-export function adminSection(state: AdminMenuState | null | undefined): NavSection | null {
-  if (state === "admin") return { title: "Platform admin", items: [{ label: "Admin", href: "/admin" }] };
-  if (state === "needs_2fa") {
-    return {
-      title: "Platform admin",
-      items: [{ label: "Admin", href: "/account/two-factor", icon: "/admin" }],
-      notice: "Turn on two-step verification to open Admin.",
-    };
-  }
-  return null;
-}
-
 const isActiveHref = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
 
 /** Which groups the owner left open or closed. Browser only; empty is fine. */
@@ -215,6 +200,21 @@ interface SidebarProps {
   channelsNeedAttention?: boolean;
   /** Platform admin only (computed on the server). */
   adminMenu?: AdminMenuState;
+}
+
+type NavSection = { title: string; items: { label: string; href: string; icon?: string }[]; notice?: string };
+
+/** Grupo do admin da plataforma (no fim do menu). null = não aparece. */
+export function adminSection(state: AdminMenuState | null | undefined): NavSection | null {
+  if (state === "admin") return { title: "Platform admin", items: [{ label: "Admin", href: "/admin" }] };
+  if (state === "needs_2fa") {
+    return {
+      title: "Platform admin",
+      items: [{ label: "Admin", href: "/account/two-factor", icon: "/admin" }],
+      notice: "Turn on two-step verification to open Admin.",
+    };
+  }
+  return null;
 }
 
 /** Marca: ícone com o gradiente do Instagram + nome. */
