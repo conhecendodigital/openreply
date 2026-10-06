@@ -4,15 +4,13 @@
  * webhook não mudam.
  */
 import { CloudApiConnector } from "@/lib/whatsapp/cloud-api";
-import type { FetchLike, WhatsAppConnector } from "@/lib/whatsapp/connector";
+import type { ConnectorCredentials as Creds, FetchLike, WhatsAppConnector } from "@/lib/whatsapp/connector";
 import { OpenWAConnector } from "@/lib/whatsapp/openwa";
+import { UazapiConnector } from "@/lib/whatsapp/uazapi";
 import type { WaSessionRecord } from "@/lib/whatsapp/types";
 
 /** Credenciais já decifradas pelo chamador. Nunca logar. */
-export interface ConnectorCredentials {
-  openwa?: { baseUrl: string; apiKey: string };
-  cloudApi?: { accessToken: string; graphVersion?: string };
-}
+export type ConnectorCredentials = Creds;
 
 export interface ConnectorFactoryDeps {
   credentials: ConnectorCredentials;
@@ -46,6 +44,11 @@ export function createConnector(
       graphVersion: creds.graphVersion,
       fetch: deps.fetch,
     });
+  }
+  if (session.provider === "UAZAPI") {
+    const creds = deps.credentials.uazapi;
+    if (!creds) throw new Error("Credenciais da uazapi ausentes");
+    return new UazapiConnector({ serverUrl: creds.serverUrl, instanceToken: creds.instanceToken, fetch: deps.fetch });
   }
   throw new Error("Conector desconhecido");
 }

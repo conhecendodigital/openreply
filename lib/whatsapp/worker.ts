@@ -2,7 +2,8 @@
  * Workers BullMQ do WhatsApp: wa-ingest e wa-send. Processo separado do site,
  * igual ao dm-worker (worker/wa-worker.ts chama createWaWorkers).
  */
-import { DelayedError, Worker, type Job } from "bullmq";
+import { DelayedError, UnrecoverableError, Worker, type Job } from "bullmq";
+import { WhatsAppConnectorError } from "@/lib/whatsapp/connector";
 import { getRedisConnection } from "@/lib/queue/client";
 import { createConnector } from "@/lib/whatsapp/factory";
 import { processIngestJob, type IngestDeps } from "@/lib/whatsapp/ingest";
@@ -12,6 +13,18 @@ import { WA_INGEST_QUEUE, WA_SEND_QUEUE, type WaIngestJob, type WaSendJob } from
 import type { WhatsAppRuntime } from "@/lib/whatsapp/runtime";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
+/**
+ * uazapi não tem chave de idempotência: envio com tempo esgotado ou 5xx pode já
+ * ter saído, e repetir mandaria a mesma bolha duas vezes. Esses erros param o
+ * job (sem nova tentativa). OpenWA continua como antes (ele tem Idempotency-Key).
+ */
+export function sendErrorForQueue(error: unknown): unknown {
+  if (error instanceof WhatsAppConnectorError && error.provider === "UAZAPI" && !error.retryable) {
+    return new UnrecoverableError(error.message);
+  }
+  return error;
+}
 
 export interface WaWorkerOptions {
   runtime: WhatsAppRuntime;
@@ -40,6 +53,8 @@ export function createWaWorkers({ runtime, hooks, sendHooks, limiter = new Redis
         onProgress: async (nextIndex) => {
           await job.updateData({ ...job.data, nextIndex });
         },
+      }).catch((error: unknown) => {
+        throw sendErrorForQueue(error);
       });
       if (result.status === "rate_limited") {
         // Passou do limite por minuto do número: volta pra fila no próximo minuto.

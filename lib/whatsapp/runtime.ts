@@ -40,3 +40,17 @@ export function openwaCredentialsFromEnv(env: Record<string, string | undefined>
   if (!env.OPENWA_BASE_URL || !env.OPENWA_API_KEY) return undefined;
   return { baseUrl: env.OPENWA_BASE_URL, apiKey: env.OPENWA_API_KEY };
 }
+
+/**
+ * Credenciais da uazapi pra UM número: endereço do servidor (UAZAPI_SERVER_URL)
+ * e o token daquela instância (decifrado pelo repositório). O admintoken não
+ * entra aqui: só o painel usa, pra criar instância.
+ */
+export function uazapiCredentialsFor(
+  session: Pick<WaSessionRecord, "provider" | "instanceToken">,
+  env: Record<string, string | undefined> = process.env
+): ConnectorCredentials["uazapi"] {
+  const serverUrl = env.UAZAPI_SERVER_URL?.trim().replace(/\/+$/, "");
+  if (session.provider !== "UAZAPI" || !serverUrl || !session.instanceToken) return undefined;
+  return { serverUrl, instanceToken: session.instanceToken };
+}

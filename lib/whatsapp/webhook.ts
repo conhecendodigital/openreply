@@ -16,6 +16,7 @@ import { metaDedupeKey, normalizeMeta, normalizeOpenWAEnvelope, openwaDedupeKey,
 import type { WaQueuePort } from "@/lib/whatsapp/queue";
 import type { WaRepository } from "@/lib/whatsapp/repository";
 import { verifyAnySecret, verifyHmacSignature } from "@/lib/whatsapp/signature";
+import type { WaProvider } from "@/lib/whatsapp/types";
 
 /** Payload de WhatsApp é pequeno; histórico da coexistência vem em lotes, por isso folga. */
 export const MAX_WA_WEBHOOK_BYTES = 2 * 1024 * 1024;
@@ -56,9 +57,9 @@ export function declaredTooLarge(headers: Headers): boolean {
   return Number.isFinite(declared) && declared > MAX_WA_WEBHOOK_BYTES;
 }
 
-async function enqueueOnce(
+export async function enqueueOnce(
   deps: WebhookDeps,
-  item: { dedupeKey: string; provider: "OPENWA" | "CLOUD_API"; eventType: string; sessionId: string; ownerUserId: string; payload: unknown },
+  item: { dedupeKey: string; provider: WaProvider; eventType: string; sessionId: string; ownerUserId: string; payload: unknown },
   event: Parameters<WaQueuePort["addIngest"]>[0]["event"] | null
 ): Promise<"queued" | "duplicate" | "ignored"> {
   const recorded = await deps.repo.recordWebhookEvent(item);
