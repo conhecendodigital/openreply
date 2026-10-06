@@ -9,6 +9,9 @@
  * never deletes anything; deleting for real is a separate, hidden step that
  * only the owner can do, typing the account's @ to confirm.
  * Below: "coming soon" cards for Telegram, WhatsApp, Messenger and Threads.
+ * 2026-10-06: "Conexões e chaves" (owner and admins only): the keys of uazapi,
+ * the OpenWA gateway, the Meta Pixel and Conversions API (moved here from
+ * Settings) and, for the platform admin, the AI keys status.
  */
 
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -17,6 +20,7 @@ import { InstagramConnectNotice } from "@/components/instagram-connect-notice";
 import { useLang, useT } from "@/components/lang-provider";
 import { useDateTime, useTimeAgo } from "@/components/contact-ui";
 import { channelAlertText, isSeriousAlert, type BannerAlert } from "@/components/channel-alert-banner";
+import { IntegrationsPanel } from "@/components/integrations-panel";
 
 type Status = "ACTIVE" | "NEEDS_RECONNECT" | "DISCONNECTED";
 type Role = "OWNER" | "ADMIN" | "MEMBER";
@@ -201,6 +205,11 @@ export default function ChannelsPage() {
           ))}
         </div>
       </section>
+
+      {canManage && <IntegrationsPanel />}
+      {role === "MEMBER" && (
+        <p className="text-sm text-muted">{t("Only owners and admins see the connection keys.")}</p>
+      )}
     </div>
   );
 }

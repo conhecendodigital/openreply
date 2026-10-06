@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import type { AccountOption } from "@/components/account-select";
 import { ApiKeysPanel } from "@/components/api-keys-panel";
-import { MetaCapiPanel } from "@/components/meta-capi-panel";
 import { SecurityPanel } from "@/components/security-panel";
 import { AiUsageReport } from "@/components/ai-usage-report";
 import { InstagramConnectNotice } from "@/components/instagram-connect-notice";
@@ -382,7 +381,20 @@ export default function SettingsPage() {
         <AiUsageReport scope="me" />
       </section>
 
-      {canManageMembers && <MetaCapiPanel />}
+      {canManageMembers && (
+        <section className="panel rounded p-4 sm:p-6">
+          <h2 className="mb-2 text-base font-semibold">{t("Meta Pixel and Conversions API")}</h2>
+          <p className="mb-4 text-sm text-muted">
+            {t("The Meta Pixel and the Conversions API moved to Channels, in Connections and keys. Everything you saved is still there.")}
+          </p>
+          <a
+            href="/channels#conexoes"
+            className="inline-flex rounded border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover"
+          >
+            {t("Open Connections and keys")}
+          </a>
+        </section>
+      )}
 
       {canManageMembers && <ApiKeysPanel />}
 

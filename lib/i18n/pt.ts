@@ -14,8 +14,11 @@ import { ptAuth } from "@/lib/i18n/pt-auth";
 import { ptIa } from "@/lib/i18n/pt-ia";
 import { ptWhatsapp } from "@/lib/i18n/pt-whatsapp";
 import { ptDmFormato } from "@/lib/i18n/pt-dm-formato";
+import { ptCanais } from "@/lib/i18n/pt-canais";
 
 export const pt: Record<string, string> = {
+  // 2026-10-06: Canais > Conexões e chaves e o item Admin do menu, em lib/i18n/pt-canais.ts.
+  ...ptCanais,
   // 2026-10-06: formato da DM (cartão ou texto com link), em lib/i18n/pt-dm-formato.ts.
   ...ptDmFormato,
   // 2026-10-06: telas do WhatsApp (Conversas, Conexões, Agentes), em lib/i18n/pt-whatsapp.ts.

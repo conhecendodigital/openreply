@@ -519,7 +519,7 @@ function NewNumberCard({
           )}
           {!uazapiReady && (
             <span className="mt-2 block text-xs text-warning">
-              {t("Not available yet: the uazapi is not configured on the server (UAZAPI_SERVER_URL and UAZAPI_ADMIN_TOKEN).")}
+              {t("Not available yet: the uazapi is not configured (Channels, Connections and keys).")}
             </span>
           )}
         </label>
@@ -543,7 +543,7 @@ function NewNumberCard({
           </span>
           <span className="mt-1 block text-muted">{t("Goes out through the IP of a data center. A personal number was banned 5 seconds after connecting this way.")}</span>
           {!openwaReady && (
-            <span className="mt-2 block text-xs text-warning">{t("Not available: the OpenWA gateway is not configured on the server.")}</span>
+            <span className="mt-2 block text-xs text-warning">{t("Not available: the OpenWA gateway is not configured (Channels, Connections and keys).")}</span>
           )}
         </label>
       </fieldset>
