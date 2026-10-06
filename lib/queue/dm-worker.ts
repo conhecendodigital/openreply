@@ -777,6 +777,17 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     // `automation`, so the texts below are exactly the campaign's.
     const variant = await campaignVariantFor(automation, commenterId);
     const copy = applyVariant(automation, variant);
+    // 2026-10-06 (Matheus): someone who comments again after this campaign
+    // already sent them its DM most likely never saw the button card (old
+    // app, web, message requests). The link goes as text this time.
+    const alreadyGotIt =
+      automation.trackedLinks.length > 0 && copy.dmFormat !== "TEXT" && !useOpeningDm && !sendFollowPrompt
+        ? await prisma.dmLog.findFirst({
+            where: { automationId: automation.id, commenterId, status: "SENT", NOT: { commentId } },
+            select: { id: true },
+          })
+        : null;
+    const dmFormat = alreadyGotIt ? "TEXT" : copy.dmFormat;
 
     try {
       if (useOpeningDm) {
@@ -816,7 +827,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             o
           )
         );
-      } else if (automation.trackedLinks.length > 0 && copy.dmFormat === "TEXT") {
+      } else if (automation.trackedLinks.length > 0 && dmFormat === "TEXT") {
         // TEXT format: ONE private reply in text with the tracked link inside
         // (Meta allows one private reply per comment, so it is all in one).
         const linkText = buildTrackedLinkText(
@@ -1673,6 +1684,22 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
 
   const dedupeId = `dm:${messageId}`;
   if (!messageText.trim()) return;
+
+  // 2026-10-06 (Matheus authorized it without approval): someone who got a
+  // campaign's link DM and writes back that it did not arrive gets the link
+  // again, as text, once per campaign.
+  // Best effort: an error here never blocks the normal answer below.
+  const resent = await resendIfNotReceived({
+    instagramAccountId,
+    senderId,
+    messageText,
+    receivedAt,
+    attemptsMade: job.attemptsMade,
+  }).catch((error: unknown) => {
+    console.warn("[DM Worker] resend check failed:", formatError(error));
+    return false;
+  });
+  if (resent) return;
   // Etapa 3: did any active campaign (story or DM words) match this message?
   let campaignMatched = false;
 
@@ -1778,6 +1805,83 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
       });
     }
   }
+}
+
+const NOT_RECEIVED =
+  /\b(nao|n)\s+(chegou|recebi|veio|apareceu|vi|abriu|tem nada|tem nenhuma|consigo ver|ta aparecendo|aparece)\b|\bcade\b|nada aqui|nenhuma (msg|mensagem)|manda (de novo|novamente)|mensagem (vazia|em branco)|\bem branco\b/;
+const GOT_IT = /\b(chegou|recebi|obrigad|valeu|vlw|consegui|deu certo|ja vi|amei)\b/;
+
+function plainText(text: string): string {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/** "não chegou", "cadê", "não veio nada"... (no AI: a fixed list). */
+export function saysNotReceived(text: string): boolean {
+  return NOT_RECEIVED.test(plainText(text));
+}
+
+/**
+ * Resend a campaign's link as text to someone who got its DM (last 7 days)
+ * and wrote back. Sends when they say it did not arrive, or when the DM was
+ * a button card, they never clicked and the message is not a "got it".
+ * Once per person per campaign (DmLog `resend:<sender>`), never after a click,
+ * never with the campaign off; deliverCampaignToDm keeps the 24h window and
+ * human takeover rules. True when the resend went out (this message is done).
+ */
+async function resendIfNotReceived(input: {
+  instagramAccountId: string;
+  senderId: string;
+  messageText: string;
+  receivedAt: Date;
+  attemptsMade: number;
+}): Promise<boolean> {
+  const since = new Date(input.receivedAt.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const last = await prisma.dmLog.findFirst({
+    where: {
+      commenterId: input.senderId,
+      status: "SENT",
+      dmSentAt: { gte: since },
+      NOT: { commentId: { startsWith: "resend:" } },
+      instagramAccount: { instagramId: input.instagramAccountId },
+    },
+    orderBy: { dmSentAt: "desc" },
+    select: { automationId: true },
+  });
+  if (!last) return false;
+
+  const automation = await prisma.automation.findUnique({
+    where: { id: last.automationId },
+    include: CAMPAIGN_INCLUDE,
+  });
+  if (!automation || !automation.isActive || automation.trackedLinks.length === 0) return false;
+
+  const dedupeId = `resend:${input.senderId}`;
+  const done = await prisma.dmLog.findUnique({
+    where: { automationId_commentId: { automationId: automation.id, commentId: dedupeId } },
+    select: { status: true },
+  });
+  if (done?.status === "SENT" || done?.status === "SKIPPED_TAKEOVER") return false;
+
+  const said = saysNotReceived(input.messageText);
+  if (!said && (automation.dmFormat === "TEXT" || GOT_IT.test(plainText(input.messageText)))) return false;
+
+  const clicked = await prisma.linkClick.findFirst({
+    where: { automationId: automation.id, contactIgUserId: input.senderId },
+    select: { id: true },
+  });
+  if (clicked) return false;
+
+  const outcome = await deliverCampaignToDm({
+    automation: { ...automation, dmFormat: "TEXT", requireFollow: false },
+    senderId: input.senderId,
+    dedupeId,
+    triggerText: input.messageText,
+    matchedKeyword: said ? "reenvio: disse que não recebeu" : "reenvio: não viu o cartão",
+    attemptsMade: input.attemptsMade,
+    inboundAt: input.receivedAt,
+    context: "resend",
+  });
+  return outcome === "answered";
 }
 
 /**
