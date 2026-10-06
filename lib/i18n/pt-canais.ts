@@ -64,6 +64,7 @@ export const ptCanais: Record<string, string> = {
   "The test failed.": "O teste falhou.",
   "Connection OK. The server has {n} numbers created.": "Conexão OK. O servidor tem {n} números criados.",
   "Connection OK.": "Conexão OK.",
+  "Connection OK. The server has 1 number created.": "Conexão OK. O servidor tem 1 número criado.",
   "Nothing configured yet. Save the address and the key first.": "Nada configurado ainda. Salve o endereço e a chave primeiro.",
   "The service refused the key. Check if you copied the right one.": "O serviço recusou a chave. Confira se você copiou a certa.",
   "The service took too long to answer. Try again in a moment.": "O serviço demorou pra responder. Tente de novo daqui a pouco.",

@@ -111,7 +111,9 @@ export function integrationErrorText(t: (s: string) => string, code: string | un
 export function testResultText(t: (s: string, v?: Record<string, string | number>) => string, result: TestResult): string {
   switch (result.code) {
     case "ok":
-      return result.instances != null
+      return result.instances === 1
+        ? t("Connection OK. The server has 1 number created.")
+        : result.instances != null
         ? t("Connection OK. The server has {n} numbers created.", { n: result.instances })
         : t("Connection OK.");
     case "not_configured":
