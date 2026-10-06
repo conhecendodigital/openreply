@@ -71,8 +71,8 @@ describe("QA sidebar sections", () => {
   const titles = [...block.matchAll(/title: "([^"]+)"/g)].map((m) => m[1]);
   const items = [...block.matchAll(/\{ label: "([^"]+)", href: "([^"]+)" \}/g)].map((m) => ({ label: m[1], href: m[2] }));
 
-  it("has the 5 sections, each with a title (Quiz since Etapa 6)", () => {
-    expect(titles).toEqual(["Home", "Conversations", "Automations", "Quiz", "Channels and account"]);
+  it("has the 6 sections, each with a title (Quiz since Etapa 6, WhatsApp since 06/10)", () => {
+    expect(titles).toEqual(["Home", "Conversations", "WhatsApp", "Automations", "Quiz", "Channels and account"]);
   });
 
   it("lists every top-level dashboard screen once (and only screens that exist)", () => {
@@ -82,6 +82,14 @@ describe("QA sidebar sections", () => {
       // /automations only redirects to /campaigns.
       .filter((n) => !read(`app/(dashboard)/${n}/page.tsx`).includes('redirect("/campaigns")'))
       .map((n) => `/${n}`)
+      // /whatsapp only redirects to /whatsapp/inbox: its 3 screens are the items.
+      .flatMap((href) =>
+        href === "/whatsapp"
+          ? readdirSync(join(dir, "whatsapp"))
+              .filter((n) => existsSync(join(dir, "whatsapp", n, "page.tsx")))
+              .map((n) => `/whatsapp/${n}`)
+          : [href]
+      )
       .sort();
     const hrefs = items.map((i) => i.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);

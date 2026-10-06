@@ -17,6 +17,7 @@
  * que ficou aberto é lembrado no navegador. Avisos (aprovações, canal) sobem
  * pro nome do grupo quando ele está fechado. A Etapa 6 entra como grupo "Quiz".
  * 2026-10-10: Etapa 6. Grupo "Quiz" (funis interativos), logo depois de Automações.
+ * 2026-10-06: grupo "WhatsApp" (Conversas, Conexões, Agentes), logo depois de Conversas.
  */
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -77,6 +78,15 @@ const icones: Record<string, Icone> = {
   "/channels": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="12" cy="12" r="2" /><path {...traco(ativo)} d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5" /></svg>
   ),
+  "/whatsapp/inbox": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.4z" /><path {...traco(ativo)} d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.4-1.8-1.2-2.2-2.2l1-1-1-2z" /></svg>
+  ),
+  "/whatsapp/connections": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="3" y="3" width="7" height="7" rx="1" /><rect {...traco(ativo)} x="14" y="3" width="7" height="7" rx="1" /><rect {...traco(ativo)} x="3" y="14" width="7" height="7" rx="1" /><path {...traco(ativo)} d="M14 14h3v3h-3zM20 14v.01M20 20h-6M17 17v3" /></svg>
+  ),
+  "/whatsapp/agents": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="4" y="7" width="16" height="12" rx="3" /><path {...traco(ativo)} d="M12 3v4M9 12h.01M15 12h.01M9.5 15.5h5M2 12v3M22 12v3" /></svg>
+  ),
   "/settings": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 6h18M3 12h18M3 18h18" /></svg>
   ),
@@ -104,6 +114,15 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
       { label: "Inbox", href: "/inbox" },
       { label: "Approvals", href: "/approvals" },
       { label: "Contacts", href: "/contacts" },
+    ],
+  },
+  {
+    // 2026-10-06: WhatsApp (conectar pelo QR, inbox e os 3 agentes de IA).
+    title: "WhatsApp",
+    items: [
+      { label: "Conversations", href: "/whatsapp/inbox" },
+      { label: "Connections", href: "/whatsapp/connections" },
+      { label: "Agents", href: "/whatsapp/agents" },
     ],
   },
   {

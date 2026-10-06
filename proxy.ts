@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isApiKeyRouteAllowed } from "@/lib/api-key-routes";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/automations", "/logs", "/settings", "/quizzes", "/admin", "/account"];
+const PROTECTED_PREFIXES = ["/dashboard", "/automations", "/logs", "/settings", "/quizzes", "/admin", "/account", "/whatsapp"];
 
 /**
  * Fase 0 (06/10/2026): cookie do login novo (Better Auth). Os cookies antigos
