@@ -165,6 +165,9 @@ export class OpenWAConnector implements WhatsAppConnector {
 
   /** Registra o webhook do Lead Engine nesta sessão, assinado com o segredo do número. */
   async registerWebhook(url: string, secret: string): Promise<{ webhookId: string }> {
+    // O OpenWA exige no mínimo 16; segredo fraco deixa forjar o HMAC por força bruta.
+    if (secret.length < 32) throw new Error("Segredo do webhook curto demais (mínimo 32 caracteres aleatórios)");
+    if (!url.startsWith("https://")) throw new Error("Webhook do WhatsApp só por HTTPS");
     const res = await this.request<{ id?: string }>("POST", this.sessionPath("/webhooks"), {
       url,
       secret,
@@ -194,8 +197,8 @@ export class OpenWAConnector implements WhatsAppConnector {
       const res = await this.request<{ qrCode?: string }>("GET", this.sessionPath("/qr"));
       return res.qrCode || null;
     } catch (error) {
-      // Sem QR (já conectado ou ainda iniciando) o gateway responde 404/409.
-      if (error instanceof WhatsAppConnectorError && (error.status === 404 || error.status === 409)) return null;
+      // Sem QR o OpenWA 0.24 responde 400 ("QR code is not ready yet" ou sessão já autenticada); 404/409 por garantia.
+      if (error instanceof WhatsAppConnectorError && (error.status === 400 || error.status === 404 || error.status === 409)) return null;
       throw error;
     }
   }

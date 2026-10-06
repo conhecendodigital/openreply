@@ -422,6 +422,21 @@ describe("adaptador OpenWA", () => {
     expect(f.calls[3]).toMatchObject({ method: "POST", url: "https://gw/api/sessions/s1/logout" });
   });
 
+  it("QR ainda não pronto (400 do OpenWA 0.24) vira null, sem erro", async () => {
+    const f = fakeFetch(() => ({ status: 400, json: { message: "QR code is not ready yet" } }));
+    const c = new OpenWAConnector({ baseUrl: "https://gw", apiKey: "k", sessionId: "s1", riskAcceptedAt: new Date(), fetch: f.fn });
+    expect(await c.getQr()).toBeNull();
+  });
+
+  it("registerWebhook recusa segredo curto e URL sem HTTPS", async () => {
+    const f = fakeFetch(() => ({ json: { id: "wh1" } }));
+    const c = new OpenWAConnector({ baseUrl: "https://gw", apiKey: "k", sessionId: "s1", riskAcceptedAt: new Date(), fetch: f.fn });
+    await expect(c.registerWebhook("https://le/api/whatsapp/webhook", "curto")).rejects.toThrow(/curto/);
+    await expect(c.registerWebhook("http://le/api/whatsapp/webhook", "x".repeat(40))).rejects.toThrow(/HTTPS/);
+    expect(await c.registerWebhook("https://le/api/whatsapp/webhook", "x".repeat(40))).toEqual({ webhookId: "wh1" });
+    expect(f.calls).toHaveLength(1);
+  });
+
   it("erro do gateway não vaza o corpo e marca se dá pra tentar de novo", async () => {
     const f = fakeFetch(() => ({ status: 503, json: { message: "texto secreto da mensagem" } }));
     const c = new OpenWAConnector({ baseUrl: "https://gw", apiKey: "k", sessionId: "s1", riskAcceptedAt: new Date(), fetch: f.fn });
