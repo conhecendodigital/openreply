@@ -6,13 +6,20 @@
  * (worker/wa-worker.ts). Sem WHATSAPP_ENABLED=1, getWhatsAppRuntime() continua
  * devolvendo null: o webhook responde 503 e o worker sai.
  *
- * Só o OpenWA está ligado de ponta a ponta nesta fase. O adaptador da Cloud API
+ * OpenWA e uazapi estão ligados de ponta a ponta (cada número escolhe o seu). O adaptador da Cloud API
  * existe (lib/whatsapp/cloud-api.ts), mas falta a tela de cadastro do número
  * oficial; até lá credentialsFor não devolve token da Meta.
  */
 import { bullmqWaQueue } from "@/lib/whatsapp/queue";
 import { PrismaWaRepository } from "@/lib/whatsapp/prisma-repository";
-import { getWhatsAppRuntime, openwaCredentialsFromEnv, registerWhatsAppRuntime, type WhatsAppRuntime } from "@/lib/whatsapp/runtime";
+import {
+  getWhatsAppRuntime,
+  openwaCredentialsFromEnv,
+  registerWhatsAppRuntime,
+  uazapiCredentialsFor,
+  type WhatsAppRuntime,
+} from "@/lib/whatsapp/runtime";
+import { uazapiFromEnv } from "@/lib/whatsapp/uazapi";
 
 let repo: PrismaWaRepository | null = null;
 
@@ -31,7 +38,8 @@ export function ensureWhatsAppRuntime(env: Record<string, string | undefined> = 
     registerWhatsAppRuntime({
       repo: getWaRepository(),
       queue: bullmqWaQueue,
-      async credentialsFor() {
+      async credentialsFor(session) {
+        if (session.provider === "UAZAPI") return { uazapi: uazapiCredentialsFor(session) };
         return { openwa: openwaCredentialsFromEnv() };
       },
     });
@@ -45,6 +53,8 @@ export function whatsappStatus(env: Record<string, string | undefined> = process
   return {
     enabled: env.WHATSAPP_ENABLED === "1",
     gatewayConfigured: Boolean(env.OPENWA_BASE_URL && env.OPENWA_API_KEY),
+    /** uazapi pronta (UAZAPI_SERVER_URL e UAZAPI_ADMIN_TOKEN). Sem isso, a opção aparece desabilitada. */
+    uazapiConfigured: Boolean(uazapiFromEnv(env)),
   };
 }
 
@@ -58,4 +68,14 @@ export function webhookUrl(env: Record<string, string | undefined> = process.env
   const base = (env.BETTER_AUTH_URL || env.NEXTAUTH_URL || "").trim().replace(/\/+$/, "");
   const url = explicit || (base ? `${base}/api/whatsapp/webhook` : "");
   return url.startsWith("https://") ? url : null;
+}
+
+/**
+ * URL do webhook de UM número na uazapi: a base de webhookUrl() + /uazapi/<id>/<segredo>.
+ * A uazapi não assina o corpo, então o segredo vai na URL (ver uazapi-webhook.ts).
+ */
+export function uazapiWebhookUrl(sessionId: string, secret: string, env: Record<string, string | undefined> = process.env): string | null {
+  const base = webhookUrl(env);
+  if (!base) return null;
+  return `${base.replace(/\/+$/, "")}/uazapi/${encodeURIComponent(sessionId)}/${encodeURIComponent(secret)}`;
 }
