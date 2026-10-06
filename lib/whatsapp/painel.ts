@@ -26,7 +26,14 @@ import type { WaQueuePort } from "@/lib/whatsapp/queue";
 import type { WaRepository } from "@/lib/whatsapp/repository";
 import { openwaCredentialsFromEnv } from "@/lib/whatsapp/runtime";
 import { webhookUrl, whatsappStatus } from "@/lib/whatsapp/setup";
-import type { WaStatus } from "@/lib/whatsapp/types";
+import {
+  createUazapiSession,
+  disconnectUazapi,
+  reconnectUazapi,
+  refreshUazapi,
+  uazapiConnectorFor,
+} from "@/lib/whatsapp/painel-uazapi";
+import type { WaProvider, WaStatus } from "@/lib/whatsapp/types";
 
 type Tx = Parameters<Parameters<typeof withRls>[1]>[0];
 
@@ -59,7 +66,7 @@ export class PainelError extends Error {
   }
 }
 
-function rls<T>(ctx: RlsContext, deps: PainelDeps, fn: (tx: Tx) => Promise<T>): Promise<T> {
+export function rls<T>(ctx: RlsContext, deps: PainelDeps, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return withRls(ctx, fn, deps.app ?? getAppPrisma());
 }
 
@@ -87,7 +94,9 @@ function gatewayMessage(error: unknown): PainelError {
 
 export type SessionView = {
   id: string;
-  provider: "OPENWA" | "CLOUD_API";
+  provider: WaProvider;
+  /** uazapi: região do proxy (a conexão sai por um IP dessa cidade). */
+  proxy: { country: string; city: string; label: string | null } | null;
   status: WaStatus;
   phoneE164: string | null;
   displayName: string | null;
@@ -100,7 +109,7 @@ export type SessionView = {
   createdAt: string;
 };
 
-const SESSION_VIEW_SELECT = {
+export const SESSION_VIEW_SELECT = {
   id: true,
   provider: true,
   status: true,
@@ -114,11 +123,14 @@ const SESSION_VIEW_SELECT = {
   messageCount: true,
   createdAt: true,
   providerSessionId: true,
+  proxyCountry: true,
+  proxyCity: true,
+  proxyCityLabel: true,
 } as const;
 
-type SessionRow = {
+export type SessionRow = {
   id: string;
-  provider: "OPENWA" | "CLOUD_API";
+  provider: WaProvider;
   status: WaStatus;
   phoneE164: string | null;
   displayName: string | null;
@@ -130,12 +142,16 @@ type SessionRow = {
   messageCount: number;
   createdAt: Date;
   providerSessionId: string;
+  proxyCountry: string | null;
+  proxyCity: string | null;
+  proxyCityLabel: string | null;
 };
 
-function toSessionView(r: SessionRow): SessionView {
+export function toSessionView(r: SessionRow): SessionView {
   return {
     id: r.id,
     provider: r.provider,
+    proxy: r.proxyCountry && r.proxyCity ? { country: r.proxyCountry, city: r.proxyCity, label: r.proxyCityLabel } : null,
     status: r.status,
     phoneE164: r.phoneE164,
     displayName: r.displayName,
@@ -156,7 +172,7 @@ export async function listSessions(ctx: RlsContext, deps: PainelDeps): Promise<S
   return rows.map(toSessionView);
 }
 
-async function loadSession(ctx: RlsContext, deps: PainelDeps, sessionId: string): Promise<SessionRow & { riskAcceptedAt: Date | null }> {
+export async function loadSession(ctx: RlsContext, deps: PainelDeps, sessionId: string): Promise<SessionRow & { riskAcceptedAt: Date | null }> {
   const row = await rls(ctx, deps, (tx) =>
     tx.waSession.findFirst({ where: { id: sessionId, workspaceId: ctx.workspaceId ?? "" }, select: SESSION_VIEW_SELECT })
   );
@@ -187,9 +203,11 @@ export async function serverStatus(deps: PainelDeps) {
  */
 export async function createSession(
   ctx: RlsContext & { workspaceId: string },
-  input: { acceptRisk: unknown; displayName?: unknown },
+  input: { acceptRisk: unknown; displayName?: unknown; provider?: unknown; method?: unknown; phone?: unknown; proxy?: unknown },
   deps: PainelDeps
-): Promise<{ session: SessionView; qr: string | null }> {
+): Promise<{ session: SessionView; qr: string | null; pairCode?: string | null; proxyWarning?: boolean }> {
+  // Provedor por número: uazapi (proxy com IP do Brasil) ou OpenWA (padrão, como sempre foi).
+  if (input.provider === "UAZAPI") return createUazapiSession(ctx, input, deps);
   if (input.acceptRisk !== true) {
     throw new PainelError("risk_not_accepted", "Read and accept the risk notice before connecting a number.", 400);
   }
@@ -241,7 +259,7 @@ export async function createSession(
   }
 }
 
-async function saveStatus(
+export async function saveStatus(
   ctx: RlsContext,
   deps: PainelDeps,
   sessionId: string,
@@ -272,8 +290,13 @@ async function saveStatus(
  * QR e status atuais, direto do gateway (a tela chama a cada poucos segundos
  * enquanto não conecta). Também atualiza o banco.
  */
-export async function refreshSession(ctx: RlsContext, sessionId: string, deps: PainelDeps): Promise<{ session: SessionView; qr: string | null }> {
+export async function refreshSession(
+  ctx: RlsContext,
+  sessionId: string,
+  deps: PainelDeps
+): Promise<{ session: SessionView; qr: string | null; pairCode?: string | null }> {
   const row = await loadSession(ctx, deps, sessionId);
+  if (row.provider === "UAZAPI") return refreshUazapi(ctx, sessionId, deps);
   if (row.provider !== "OPENWA") return { session: toSessionView(row), qr: null };
   const connector = connectorFor(deps, row.providerSessionId, row.riskAcceptedAt);
   try {
@@ -288,8 +311,14 @@ export async function refreshSession(ctx: RlsContext, sessionId: string, deps: P
 }
 
 /** Reconectar um número que caiu (gera QR de novo). Não muda nada das conversas. */
-export async function reconnectSession(ctx: RlsContext, sessionId: string, deps: PainelDeps): Promise<{ session: SessionView; qr: string | null }> {
+export async function reconnectSession(
+  ctx: RlsContext,
+  sessionId: string,
+  deps: PainelDeps,
+  input: { method?: unknown; phone?: unknown } = {}
+): Promise<{ session: SessionView; qr: string | null; pairCode?: string | null; proxyWarning?: boolean }> {
   const row = await loadSession(ctx, deps, sessionId);
+  if (row.provider === "UAZAPI") return reconnectUazapi(ctx, sessionId, input, deps);
   if (row.provider !== "OPENWA") throw new PainelError("not_supported", "Only numbers connected by QR code can reconnect here.", 400);
   const connector = connectorFor(deps, row.providerSessionId, row.riskAcceptedAt);
   try {
@@ -322,6 +351,8 @@ export async function disconnectSession(ctx: RlsContext, sessionId: string, deps
     } catch {
       gatewayOk = false;
     }
+  } else if (row.provider === "UAZAPI") {
+    gatewayOk = await disconnectUazapi(ctx, sessionId, deps);
   }
   const session = await saveStatus(ctx, deps, sessionId, "DISCONNECTED", null, null);
   return { session, gatewayOk };
@@ -523,7 +554,7 @@ export async function markRead(ctx: RlsContext, conversationId: string, deps: Pa
   const c = await rls(ctx, deps, async (tx) => {
     const row = await tx.waConversation.findFirst({
       where: { id: conversationId, workspaceId: ctx.workspaceId ?? "" },
-      select: { id: true, unreadCount: true, contact: { select: { jid: true } }, session: { select: { provider: true, providerSessionId: true, status: true, riskAcceptedAt: true } } },
+      select: { id: true, unreadCount: true, contact: { select: { jid: true } }, session: { select: { id: true, provider: true, providerSessionId: true, status: true, riskAcceptedAt: true } } },
     });
     if (!row) throw new PainelError("not_found", "Conversation not found.", 404);
     if (row.unreadCount > 0) await tx.waConversation.update({ where: { id: conversationId }, data: { unreadCount: 0 } });
@@ -533,6 +564,12 @@ export async function markRead(ctx: RlsContext, conversationId: string, deps: Pa
   if (c.unreadCount > 0 && c.session.provider === "OPENWA" && c.session.status === "CONNECTED") {
     try {
       await connectorFor(deps, c.session.providerSessionId, c.session.riskAcceptedAt).markRead(c.contact.jid, []);
+    } catch {
+      // ignora
+    }
+  } else if (c.unreadCount > 0 && c.session.provider === "UAZAPI" && c.session.status === "CONNECTED") {
+    try {
+      await (await uazapiConnectorFor(ctx, deps, c.session.id)).markRead(c.contact.jid, []);
     } catch {
       // ignora
     }
@@ -626,16 +663,20 @@ export async function messageMedia(
         type: true,
         mediaMime: true,
         mediaFilename: true,
-        session: { select: { provider: true, providerSessionId: true, riskAcceptedAt: true } },
+        session: { select: { id: true, provider: true, providerSessionId: true, riskAcceptedAt: true } },
         conversation: { select: { contact: { select: { jid: true } } } },
       },
     })
   );
   if (!m || !MEDIA_TYPES.has(m.type)) throw new PainelError("not_found", "Media not found.", 404);
-  if (m.session.provider !== "OPENWA") throw new PainelError("not_found", "Media not found.", 404);
+  if (m.session.provider !== "OPENWA" && m.session.provider !== "UAZAPI") throw new PainelError("not_found", "Media not found.", 404);
   let media: Awaited<ReturnType<GatewayClient["fetchMedia"]>>;
   try {
-    media = await connectorFor(deps, m.session.providerSessionId, m.session.riskAcceptedAt).fetchMedia(m.conversation.contact.jid, m.providerMessageId);
+    const client =
+      m.session.provider === "UAZAPI"
+        ? await uazapiConnectorFor(ctx, deps, m.session.id)
+        : connectorFor(deps, m.session.providerSessionId, m.session.riskAcceptedAt);
+    media = await client.fetchMedia(m.conversation.contact.jid, m.providerMessageId);
   } catch (error) {
     throw gatewayMessage(error);
   }
