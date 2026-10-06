@@ -18,7 +18,11 @@ import { Prisma, type PrismaClient } from "@/app/generated/prisma/client";
 import { getPrisma } from "@/lib/db/client";
 import { getAppPrisma, withRls, withSystemRole, type RlsContext } from "@/lib/db/rls";
 import { encryptToken } from "@/lib/meta/oauth";
-import { aprovarRascunho, rejeitarRascunho } from "@/lib/whatsapp/agentes/motor";
+import { aprenderRespostaHumana, aprovarRascunho, rejeitarRascunho } from "@/lib/whatsapp/agentes/motor";
+import { lerRegras, regrasVazias, type RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
+import { ESTAGIOS, estagioNaTela, estagioValido, lerConfigEstagios, type ConfigEstagio, type Estagio } from "@/lib/whatsapp/regras/estagio";
+import { camposDaFicha, lerFicha, type OrigemCampo } from "@/lib/whatsapp/regras/ficha";
+import { debounceMs } from "@/lib/whatsapp/agentes/worker";
 import { assumirConversa, devolverAoAgente, janelaAberta, JANELA_MS } from "@/lib/whatsapp/agentes/modo";
 import { storeFor } from "@/lib/whatsapp/agentes/worker";
 import { AGENTES, type AgenteTipo } from "@/lib/whatsapp/agentes/types";
@@ -398,11 +402,15 @@ export type ConversationItem = {
   paused: boolean;
   /** O número desta conversa foi excluído ("só o número"): só leitura, sem envio. */
   numberRemoved: boolean;
+  /** Estágio do lead no CRM ("sem_resposta" é calculado na hora). */
+  stage: Estagio;
+  stageReason: string | null;
+  stageManual: boolean;
 };
 
 export async function listConversations(
   ctx: RlsContext,
-  query: { q?: string | null; filter?: string | null; sessionId?: string | null; limit?: number },
+  query: { q?: string | null; filter?: string | null; sessionId?: string | null; limit?: number; stage?: string | null },
   deps: PainelDeps
 ): Promise<ConversationItem[]> {
   const ws = ctx.workspaceId ?? "";
@@ -431,6 +439,7 @@ export async function listConversations(
       include: {
         contact: { select: { id: true, name: true, pushName: true, phoneE164: true, isGroup: true } },
         session: { select: { deletedAt: true } },
+        messages: { orderBy: { sentAt: "desc" }, take: 1, select: { fromMe: true, sentAt: true } },
       },
     });
     const ids = rows.map((r) => r.id);
@@ -438,10 +447,8 @@ export async function listConversations(
       ? await tx.waAgentRun.findMany({ where: { conversationId: { in: ids }, status: "draft" }, select: { conversationId: true } })
       : [];
     const withDraft = new Set(drafts.map((d) => d.conversationId));
-    if (query.filter === "drafts") {
-      return rows.filter((r) => withDraft.has(r.id)).map((r) => toItem(r, withDraft, now));
-    }
-    return rows.map((r) => toItem(r, withDraft, now));
+    const items = (query.filter === "drafts" ? rows.filter((r) => withDraft.has(r.id)) : rows).map((r) => toItem(r, withDraft, now));
+    return estagioValido(query.stage) ? items.filter((i) => i.stage === query.stage) : items;
   });
 }
 
@@ -455,6 +462,10 @@ function toItem(
     humanTakeoverUntil: Date | null;
     contact: { id: string; name: string | null; pushName: string | null; phoneE164: string | null; isGroup: boolean };
     session: { deletedAt: Date | null };
+    leadStage?: string | null;
+    leadStageMotivo?: string | null;
+    leadStageManual?: boolean;
+    messages?: Array<{ fromMe: boolean; sentAt: Date }>;
   },
   withDraft: Set<string>,
   now: Date
@@ -469,8 +480,22 @@ function toItem(
     hasDraft: withDraft.has(r.id),
     paused: Boolean(r.humanTakeoverUntil && r.humanTakeoverUntil > now),
     numberRemoved: Boolean(r.session.deletedAt),
+    stage: estagioNaTela(r.leadStage, r.messages?.[0] ?? null, now),
+    stageReason: r.leadStageMotivo ?? null,
+    stageManual: Boolean(r.leadStageManual),
   };
 }
+
+/** Ficha do lead pra tela da conversa: os campos das regras do número, com o valor e de onde veio. */
+export type LeadView = {
+  stage: Estagio;
+  stageReason: string | null;
+  stageManual: boolean;
+  stageAt: string | null;
+  stages: Array<{ key: Estagio; name: string; hidden: boolean }>;
+  fields: Array<{ key: string; label: string; required: boolean; value: string | null; origin: OrigemCampo | null; note: string | null; messageId: string | null }>;
+  history: Array<{ from: string | null; to: string; reason: string | null; manual: boolean; byUser: boolean; at: string }>;
+};
 
 export type MessageView = {
   id: string;
@@ -492,6 +517,7 @@ export type MessageView = {
 export type DraftView = { runId: string; bubbles: string[]; alert: string | null; agente: string | null; createdAt: string };
 
 export type ThreadView = {
+  lead: LeadView | null;
   conversation: ConversationItem & { agentMode: string; humanTakeoverUntil: string | null };
   session: { id: string; status: WaStatus; phoneE164: string | null; displayName: string | null; agentMode: string; removed: boolean };
   messages: MessageView[];
@@ -511,18 +537,23 @@ export async function getThread(ctx: RlsContext, conversationId: string, deps: P
       },
     });
     if (!c) throw new PainelError("not_found", "Conversation not found.", 404);
-    const [rows, lastInbound, draft] = await Promise.all([
+    const [rows, lastInbound, draft, profile, history] = await Promise.all([
       tx.waMessage.findMany({ where: { conversationId }, orderBy: { sentAt: "desc" }, take: 200 }),
       tx.waMessage.findFirst({ where: { conversationId, sentBy: "CONTACT", fromMe: false }, orderBy: { sentAt: "desc" }, select: { sentAt: true } }),
       tx.waAgentRun.findFirst({ where: { conversationId, status: "draft" }, orderBy: { createdAt: "desc" } }),
+      tx.waAgentProfile.findUnique({ where: { sessionId: c.sessionId }, select: { regrasNegocio: true, estagiosLead: true } }),
+      tx.waLeadStageEvent.findMany({ where: { conversationId }, orderBy: { createdAt: "desc" }, take: 20 }),
     ]);
+    const ultima = rows[0] ? { fromMe: rows[0].fromMe, sentAt: rows[0].sentAt } : null;
+    const lead = leadView(c, profile, history, ultima, now);
     const bubbles =
       draft?.output && typeof draft.output === "object" && Array.isArray((draft.output as { bolhas?: unknown }).bolhas)
         ? ((draft.output as { bolhas: unknown[] }).bolhas.map(String) as string[])
         : [];
     return {
+      lead,
       conversation: {
-        ...toItem(c, new Set(draft ? [c.id] : []), now),
+        ...toItem({ ...c, messages: ultima ? [ultima] : [] }, new Set(draft ? [c.id] : []), now),
         agentMode: c.agentMode,
         humanTakeoverUntil: c.humanTakeoverUntil?.toISOString() ?? null,
       },
@@ -556,6 +587,39 @@ export async function getThread(ctx: RlsContext, conversationId: string, deps: P
       draft: draft && bubbles.length ? { runId: draft.id, bubbles, alert: draft.blockedReason, agente: draft.agente, createdAt: draft.createdAt.toISOString() } : null,
     };
   });
+}
+
+export function stagesView(estagiosLead: unknown): LeadView["stages"] {
+  const cfg = lerConfigEstagios(estagiosLead);
+  return ESTAGIOS.map((key) => ({ key, name: cfg[key].nome, hidden: cfg[key].oculto }));
+}
+
+export function leadView(
+  c: { leadFicha: unknown; leadStage: string | null; leadStageMotivo: string | null; leadStageManual: boolean; leadStageAt: Date | null },
+  profile: { regrasNegocio: unknown; estagiosLead: unknown } | null,
+  history: Array<{ de: string | null; para: string; motivo: string | null; manual: boolean; porUserId: string | null; createdAt: Date }>,
+  ultima: { fromMe: boolean; sentAt: Date } | null,
+  now: Date
+): LeadView {
+  const defs = camposDaFicha(profile?.regrasNegocio ? lerRegras(profile.regrasNegocio) : null);
+  const ficha = lerFicha(c.leadFicha);
+  const fields: LeadView["fields"] = defs.map((d) => {
+    const v = ficha.campos[d.chave];
+    return { key: d.chave, label: d.rotulo, required: d.obrigatorio, value: v?.valor ?? null, origin: v?.origem ?? null, note: v?.nota ?? null, messageId: v?.msgId ?? null };
+  });
+  // Campo que ficou na ficha mas saiu das regras: aparece igual, pra não sumir informação.
+  for (const [k, v] of Object.entries(ficha.campos)) {
+    if (!defs.some((d) => d.chave === k)) fields.push({ key: k, label: k.replace(/_/g, " "), required: false, value: v.valor, origin: v.origem, note: v.nota ?? null, messageId: v.msgId });
+  }
+  return {
+    stage: estagioNaTela(c.leadStage, ultima, now),
+    stageReason: c.leadStageMotivo,
+    stageManual: c.leadStageManual,
+    stageAt: c.leadStageAt?.toISOString() ?? null,
+    stages: stagesView(profile?.estagiosLead),
+    fields,
+    history: history.map((h) => ({ from: h.de, to: h.para, reason: h.motivo, manual: h.manual, byUser: Boolean(h.porUserId), at: h.createdAt.toISOString() })),
+  };
 }
 
 /** O que impede (ou não) uma resposta humana sair. Texto em inglês: a tela traduz. */
@@ -598,6 +662,8 @@ export async function sendReply(
     throw new PainelError(result.reason, BLOCK_MESSAGES[result.reason] ?? "This message could not be sent.", 409);
   }
   const store = storeFor(c.session.ownerUserId, ctx.workspaceId ?? "", deps);
+  // A resposta da equipe no lugar do agente vira exemplo do negócio (sem dado pessoal).
+  await aprenderRespostaHumana(store, { conversationId, texto: text });
   const paused = await assumirConversa(store, conversationId, { motivo: "você respondeu pelo inbox" });
   return { queued: true, pausedUntil: paused.ate.toISOString() };
 }
@@ -756,8 +822,16 @@ export type AgentsView = {
     delayMinSeconds: number;
     delayMaxSeconds: number;
     facts: string[];
+    /** Janela pra juntar mensagens seguidas do contato (3 a 30 s). */
+    debounceSeconds: number;
   };
   agents: Array<{ agente: AgenteTipo; ativo: boolean; instrucoes: string }>;
+  /** Regras duras do negócio (estruturadas). */
+  rules: RegrasNegocio;
+  /** Nome e "oculto" de cada estágio do lead nesse número. */
+  stages: Record<Estagio, ConfigEstagio>;
+  /** Mandar o resumo do lead qualificado pro WhatsApp do responsável (desligado por padrão). */
+  notifyOwner: { ligado: boolean; telefone: string };
 };
 
 const DEFAULT_PROFILE: AgentsView["profile"] = {
@@ -768,7 +842,13 @@ const DEFAULT_PROFILE: AgentsView["profile"] = {
   delayMinSeconds: 20,
   delayMaxSeconds: 90,
   facts: [],
+  debounceSeconds: 10,
 };
+
+function notifyOf(v: unknown): AgentsView["notifyOwner"] {
+  const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  return { ligado: o.ligado === true, telefone: typeof o.telefone === "string" ? o.telefone.slice(0, 30) : "" };
+}
 
 export async function getAgents(ctx: RlsContext, sessionId: string | null, deps: PainelDeps): Promise<AgentsView> {
   return rls(ctx, deps, async (tx) => {
@@ -779,7 +859,16 @@ export async function getAgents(ctx: RlsContext, sessionId: string | null, deps:
     });
     const chosen = sessions.find((s) => s.id === sessionId) ?? sessions[0] ?? null;
     if (!chosen) {
-      return { sessions: [], sessionId: null, numberMode: "OFF", profile: DEFAULT_PROFILE, agents: AGENTES.map((agente) => ({ agente, ativo: false, instrucoes: "" })) };
+      return {
+        sessions: [],
+        sessionId: null,
+        numberMode: "OFF",
+        profile: DEFAULT_PROFILE,
+        agents: AGENTES.map((agente) => ({ agente, ativo: false, instrucoes: "" })),
+        rules: regrasVazias(),
+        stages: lerConfigEstagios(null),
+        notifyOwner: { ligado: false, telefone: "" },
+      };
     }
     const [profile, configs] = await Promise.all([
       tx.waAgentProfile.findUnique({ where: { sessionId: chosen.id } }),
@@ -799,12 +888,16 @@ export async function getAgents(ctx: RlsContext, sessionId: string | null, deps:
             delayMinSeconds: profile.delayMinSeconds,
             delayMaxSeconds: profile.delayMaxSeconds,
             facts: Array.isArray(profile.fatosPermitidos) ? (profile.fatosPermitidos as unknown[]).filter((f): f is string => typeof f === "string") : [],
+            debounceSeconds: profile.debounceSeconds,
           }
         : DEFAULT_PROFILE,
       agents: AGENTES.map((agente) => {
         const row = configs.find((c) => c.agente === agente);
         return { agente, ativo: Boolean(row?.ativo), instrucoes: row?.instrucoes ?? "" };
       }),
+      rules: lerRegras(profile?.regrasNegocio ?? null),
+      stages: lerConfigEstagios(profile?.estagiosLead ?? null),
+      notifyOwner: notifyOf(profile?.avisarResponsavel),
     };
   });
 }
@@ -829,6 +922,10 @@ export async function saveAgents(ctx: RlsContext, input: Record<string, unknown>
   const facts = Array.isArray(p.facts)
     ? p.facts.filter((f): f is string => typeof f === "string").map((f) => f.trim().slice(0, 300)).filter(Boolean).slice(0, 30)
     : [];
+  // Regras duras: só mudam aqui (Salvar do dono) ou ao aceitar uma sugestão. Sem o campo, ficam como estão.
+  const rules = input.rules && typeof input.rules === "object" ? (lerRegras(input.rules) as unknown as Prisma.InputJsonValue) : undefined;
+  const stagesIn = input.stages && typeof input.stages === "object" ? (lerConfigEstagios(input.stages) as unknown as Prisma.InputJsonValue) : undefined;
+  const notify = input.notifyOwner && typeof input.notifyOwner === "object" ? (notifyOf(input.notifyOwner) as unknown as Prisma.InputJsonValue) : undefined;
   const profileData = {
     baseCommand,
     quietHours: quietStart && quietEnd ? { start: quietStart, end: quietEnd } : undefined,
@@ -836,6 +933,10 @@ export async function saveAgents(ctx: RlsContext, input: Record<string, unknown>
     delayMinSeconds: delayMin,
     delayMaxSeconds: delayMax,
     fatosPermitidos: facts,
+    debounceSeconds: Math.round(debounceMs(intIn(p.debounceSeconds, 3, 30, 10)) / 1000),
+    ...(rules !== undefined ? { regrasNegocio: rules } : {}),
+    ...(stagesIn !== undefined ? { estagiosLead: stagesIn } : {}),
+    ...(notify !== undefined ? { avisarResponsavel: notify } : {}),
   };
   const numberMode = input.numberMode === "DRAFT" || input.numberMode === "AUTO" ? input.numberMode : "OFF";
   const agentsIn = Array.isArray(input.agents) ? (input.agents as Array<Record<string, unknown>>) : [];
