@@ -461,68 +461,160 @@ export const ptPublic: Record<string, string> = {
   "Media kit clicks": "Cliques no mídia kit",
   "Qualified partnership DMs": "DMs de parceria com potencial",
 
-  // Páginas legais
+  // Páginas legais (06/10/2026, revisão do app pela Meta). Textos em
+  // lib/legal-pages.ts; dados da empresa em lib/legal-info.ts.
+  "Last updated {date}": "Atualizado em {date}",
+  "{product} is a service of {company}, CNPJ {cnpj}. {city}, Brazil.":
+    "{product} é um serviço da {company}, CNPJ {cnpj}. {city}, Brasil.",
+  "Contact:": "Contato:",
+
+  // Política de Privacidade
   "Privacy Policy - Lead Engine": "Política de Privacidade - Lead Engine",
-  "How Lead Engine handles Instagram account data, webhook payloads, billing data, and customer campaign information.":
-    "Como o Lead Engine trata os dados da conta do Instagram, os dados de webhook, os dados de cobrança e as informações das campanhas.",
+  "How Lead Engine, a service of {company}, collects, uses, shares and deletes Instagram and account data.":
+    "Como o Lead Engine, um serviço da {company}, coleta, usa, compartilha e apaga os dados da conta e do Instagram.",
   "Privacy Policy": "Política de Privacidade",
-  "Lead Engine helps businesses send Meta-compliant private replies when people comment on connected Instagram posts or reels.":
-    "O Lead Engine ajuda negócios a mandar respostas privadas dentro das regras da Meta quando alguém comenta em posts ou reels de uma conta do Instagram conectada.",
-  "Last updated May 24, 2026": "Atualizado em 24 de maio de 2026",
-  "Data We Collect": "Dados que coletamos",
-  "We collect account email addresses for authentication, workspace and billing metadata, connected Instagram account identifiers, encrypted Instagram access tokens, campaign settings, webhook payloads, comments needed to process campaigns, delivery logs, and operational diagnostics.":
-    "Coletamos o e-mail da conta pra autenticação, dados do espaço de trabalho e de cobrança, identificadores das contas do Instagram conectadas, chaves de acesso do Instagram com criptografia, configurações das campanhas, dados de webhook, os comentários necessários pra processar as campanhas, histórico de envios e diagnósticos de operação.",
-  "How We Use Data": "Como usamos os dados",
-  "We use this data to authenticate users, connect Instagram integrations, match comment keywords, send private replies through the official Meta APIs, prevent duplicate sends, troubleshoot failures, and protect the service.":
-    "Usamos esses dados pra autenticar quem usa, conectar o Instagram, identificar as palavras-chave nos comentários, mandar respostas privadas pelas APIs oficiais da Meta, evitar envio repetido, investigar falhas e proteger o serviço.",
-  "Instagram And Meta Data": "Dados do Instagram e da Meta",
-  "Lead Engine does not ask for Instagram passwords, scrape Instagram, or use browser automation. Instagram tokens are encrypted at rest and are used only to perform actions authorized by the connected business account.":
-    "O Lead Engine não pede senha do Instagram, não raspa dados do Instagram e não usa robô no navegador. As chaves de acesso do Instagram ficam guardadas com criptografia e só são usadas pras ações que a conta profissional conectada autorizou.",
-  Subprocessors: "Suboperadores",
-  "The production service may use hosting, database, Redis queue, email, and observability providers such as Vercel, Railway, PostgreSQL, Redis, and Resend. These providers process data only as needed to run the service.":
-    "O serviço em produção pode usar fornecedores de hospedagem, banco de dados, fila Redis, e-mail e monitoramento, como Vercel, Railway, PostgreSQL, Redis e Resend. Esses fornecedores só tratam os dados no que for preciso pro serviço funcionar.",
-  "Retention And Deletion": "Guarda e exclusão",
-  "Customers can disconnect Instagram from settings, which removes the stored Instagram connection and stops campaigns. For account or data deletion, follow the Data Deletion page linked from the footer.":
-    "Você pode desconectar o Instagram nas configurações, o que remove a conexão guardada e para as campanhas. Pra excluir a conta ou os dados, siga a página de Exclusão de dados, no link do rodapé.",
+  "How {product} collects, uses, shares and deletes data, and how you can use your rights.":
+    "Como o {product} coleta, usa, compartilha e apaga dados, e como você pode usar os seus direitos.",
+  "Who we are": "Quem somos",
+  "{product} ({site}) is operated by {company}, CNPJ {cnpj}, {address}, {city}, Brazil. We are the controller of Lead Engine account data and the processor of the data our customers handle through the service. Contact: {email}.":
+    "O {product} ({site}) é um serviço da {company}, CNPJ {cnpj}, com sede em {address}, {city}, Brasil. Somos os responsáveis (controladores) pelos dados das contas do Lead Engine e operadores dos dados que nossos clientes tratam pelo serviço. Contato: {email}.",
+  "What Lead Engine does": "O que o Lead Engine faz",
+  "It helps creators and businesses with an Instagram professional account send a private reply to people who comment a keyword on the account's own posts, and read and answer those conversations in an Inbox. We only use Meta's official APIs. We never ask for Instagram passwords, never scrape Instagram and never use browser automation.":
+    "Ajuda criadores e empresas com conta profissional do Instagram a responder, por mensagem privada, quem comenta uma palavra-chave nos posts da própria conta, e a ler e responder essas conversas num Inbox. Usamos só as APIs oficiais da Meta. Não pedimos senha do Instagram, não fazemos raspagem de dados e não usamos automação de navegador.",
+  "Data we collect": "Dados que coletamos",
+  "Lead Engine account: name, email, password (stored only as a hash), Google sign-in data and security settings (two-factor authentication).":
+    "Da conta do Lead Engine: nome, e-mail, senha (guardada só como hash), dados de login com Google e configuração de segurança (verificação em duas etapas).",
+  "Connected Instagram account, with the owner's permission: account ID, username, name, profile picture, follower count, list of posts and reels, post insights (reach, views, saves, shares) and the Instagram access token, stored encrypted with AES-256-GCM.":
+    "Da conta do Instagram conectada, com permissão do dono: id da conta, @, nome, foto de perfil, número de seguidores, lista de posts e reels, métricas dos posts (alcance, visualizações, salvamentos, compartilhamentos) e a chave de acesso do Instagram, guardada com criptografia AES-256-GCM.",
+  "People who interact with the connected account: their Instagram-scoped ID and username, public name and profile picture, comment text, messages exchanged with the connected account and their media, whether they follow the account (only when the owner turns this on) and clicks on tracked links.":
+    "De quem interage com a conta conectada: id e @ de quem comentou ou mandou mensagem, nome e foto de perfil públicos, texto do comentário, mensagens trocadas com a conta conectada e as mídias dessas mensagens, se a pessoa segue a conta (só quando o dono liga essa opção) e cliques nos links rastreados.",
+  "Service data: campaigns, keywords, delivery history, technical logs and diagnostics.":
+    "Do uso do serviço: campanhas, palavras-chave, histórico de envios, registros técnicos (logs) e diagnósticos.",
+  "How we use data": "Para que usamos",
+  "To sign you in, connect Instagram, find the keyword in comments, send the private and public replies the owner configured, show conversations in the Inbox, build the owner's contact list and reports, avoid duplicate sends, respect Meta's limits, fix errors and protect the service. We do not sell data. We do not use Instagram data for our own advertising or to train AI models.":
+    "Para fazer login, conectar a conta do Instagram, achar a palavra-chave nos comentários, mandar a resposta privada e a resposta pública que o dono configurou, mostrar as conversas no Inbox, montar o cadastro de contatos e os relatórios, evitar envio repetido, cumprir os limites da Meta, resolver erros e proteger o serviço. Não vendemos dados. Não usamos dados do Instagram para publicidade nossa nem para treinar modelos de IA.",
+  "Artificial intelligence": "Inteligência artificial",
+  "Some features use AI providers (such as Anthropic and OpenAI) to suggest replies. A suggestion is only sent after a person approves it. If the owner connects their own AI assistant through our API or MCP, the conversation data they request is shared with that assistant, at the owner's direction.":
+    "Alguns recursos usam provedores de IA (como Anthropic e OpenAI) para sugerir respostas. A sugestão só é enviada depois que uma pessoa aprova. Se o dono conecta um assistente de IA próprio pela nossa API ou MCP, os dados das conversas que ele pedir são entregues a esse assistente, por decisão dele.",
+  "Who we share data with": "Com quem compartilhamos",
+  "Only with the providers that run the service, and when the law requires it:":
+    "Só com os fornecedores que fazem o serviço funcionar, e quando a lei mandar:",
+  "Our own server, a VPS rented from Hostinger and managed with Dokploy, where the PostgreSQL database, the Redis queue and the media storage also run.":
+    "Nosso próprio servidor, uma VPS contratada na Hostinger e administrada com Dokploy, onde também ficam o banco de dados PostgreSQL, a fila Redis e o armazenamento de mídias.",
+  "Resend, to send sign-in emails.": "Resend, para mandar os e-mails de login.",
+  "Google, for Sign in with Google.": "Google, para o login com Google.",
+  "Meta, through the Instagram API and, if the owner turns it on, the Conversions API.":
+    "Meta, pela API do Instagram e, se o dono ligar, pela API de Conversões.",
+  "Hotmart, to confirm purchases.": "Hotmart, para confirmar compras.",
+  "The AI providers above, only for the features that use AI.":
+    "Os provedores de IA citados acima, só nos recursos que usam IA.",
+  "How long we keep data": "Por quanto tempo guardamos",
+  "While the customer account is active. When the owner disconnects Instagram, the access token is deleted right away and all sending stops. When the owner deletes the channel, removes the app on Instagram or asks for deletion, we delete that account's campaigns, contacts, conversations, media, logs and history within {days} days, except what the law requires us to keep.":
+    "Enquanto a conta do cliente estiver ativa. Quando o dono desconecta o Instagram, a chave de acesso é apagada na hora e os envios param. Quando o dono apaga o canal, remove o app pelo Instagram ou pede a exclusão, apagamos campanhas, contatos, conversas, mídias, registros e histórico daquela conta em até {days} dias, menos o que a lei obrigar a guardar.",
+  "Your rights (LGPD)": "Seus direitos (LGPD)",
+  "You can ask for confirmation, access, correction, portability and deletion of your data, information about who we share it with, and you can withdraw your consent. Write to {email}. If you only commented on or messaged one of our customers, you can also talk to that account directly.":
+    "Você pode pedir confirmação, acesso, correção, portabilidade e exclusão dos seus dados, saber com quem eles são compartilhados e revogar o consentimento. Escreva para {email}. Se você só comentou ou mandou mensagem para um cliente nosso, também pode falar direto com essa conta.",
+  "See the step by step at {site}/data-deletion.": "Veja o passo a passo em {site}/data-deletion.",
+  Security: "Segurança",
+  "Instagram access tokens are encrypted, Meta webhooks have their signature checked, and access is protected by a strong password, sign-in link and two-factor authentication.":
+    "As chaves de acesso do Instagram ficam com criptografia, os webhooks da Meta têm a assinatura conferida e o acesso é protegido por senha forte, link de login e verificação em duas etapas.",
   Contact: "Contato",
-  "For privacy questions, contact the repository owner through GitHub or the support email configured for the hosted Lead Engine service.":
-    "Pra dúvidas sobre privacidade, fale com o dono do repositório pelo GitHub ou pelo e-mail de suporte configurado no serviço hospedado do Lead Engine.",
+  "{company}, CNPJ {cnpj}, {address}, {city}, Brazil. Email: {email}.":
+    "{company}, CNPJ {cnpj}, {address}, {city}, Brasil. E-mail: {email}.",
 
+  // Termos de Uso
   "Terms of Service - Lead Engine": "Termos de Uso - Lead Engine",
-  "Terms for using Lead Engine's Instagram comment-to-DM campaign software.":
-    "Termos pra usar o software de campanhas de comentário pra DM no Instagram do Lead Engine.",
+  "Terms for using Lead Engine, a service of {company}.": "Termos para usar o Lead Engine, um serviço da {company}.",
   "Terms of Service": "Termos de Uso",
-  "These terms define acceptable use for Lead Engine's hosted Instagram comment-to-DM campaign service.":
-    "Estes termos definem o uso aceitável do serviço hospedado de campanhas de comentário pra DM no Instagram do Lead Engine.",
-  "Authorized Use": "Uso autorizado",
-  "You may use Lead Engine only with Instagram professional accounts you own or are authorized to manage. You are responsible for the campaigns, keywords, links, and messages you configure.":
-    "Você só pode usar o Lead Engine com contas profissionais do Instagram que são suas ou que você tem autorização pra gerenciar. Você responde pelas campanhas, palavras-chave, links e mensagens que configurar.",
-  "Platform Compliance": "Regras das plataformas",
-  "You agree to follow Meta Platform Terms, Instagram policies, applicable messaging rules, privacy laws, advertising rules, and anti-spam laws. Lead Engine may rate-limit, pause, or disable campaigns that create compliance, abuse, security, or deliverability risk.":
-    "Você concorda em seguir os Termos da Plataforma da Meta, as políticas do Instagram, as regras de mensagens que se aplicam, as leis de privacidade, as regras de publicidade e as leis contra spam. O Lead Engine pode limitar, pausar ou desligar campanhas que tragam risco de descumprimento de regras, abuso, segurança ou entrega.",
+  "The rules for using {product}. By using the service you agree to these terms.":
+    "As regras para usar o {product}. Ao usar o serviço, você aceita estes termos.",
+  Provider: "Quem oferece",
+  "{product} is provided by {company}, CNPJ {cnpj}, {address}, {city}, Brazil. Contact: {email}.":
+    "O {product} é oferecido pela {company}, CNPJ {cnpj}, {address}, {city}, Brasil. Contato: {email}.",
+  "The service": "O serviço",
+  "Software that sends private replies to people who comment keywords on your Instagram professional account's posts, with an Inbox, contacts and reports, through Meta's official APIs.":
+    "Software para responder por mensagem privada quem comenta palavras-chave nos posts da sua conta profissional do Instagram, com Inbox, contatos e relatórios, pelas APIs oficiais da Meta.",
+  "Authorized use": "Quem pode usar",
+  "Only with Instagram professional accounts you own or are authorized to manage. You are responsible for the campaigns, keywords, links and messages you configure.":
+    "Só quem é dono ou tem autorização para gerenciar a conta do Instagram que conecta. Você responde pelas campanhas, palavras-chave, links e mensagens que configura.",
+  "Platform rules": "Regras da plataforma",
+  "You agree to follow the Meta Platform Terms, Instagram's policies, the Brazilian data protection law (LGPD) and anti-spam laws. We may limit, pause or turn off campaigns that create a risk of abuse, spam, security problems or a block by Meta.":
+    "Você aceita seguir os Termos da Plataforma da Meta, as regras do Instagram, a LGPD e as leis contra spam. Podemos limitar, pausar ou desligar campanhas que gerem risco de abuso, spam, segurança ou bloqueio pela Meta.",
+  "What is not allowed": "O que não pode",
+  "Spam, illegal content, fraud, or trying to message people who did not interact with your account.":
+    "Mandar spam, conteúdo ilegal, golpe, ou tentar mandar mensagem para quem não interagiu com a sua conta.",
   Availability: "Disponibilidade",
-  "Lead Engine depends on third-party platforms including Meta, email, hosting, database, and queue providers. We work to operate the service reliably, but uninterrupted availability is not guaranteed.":
-    "O Lead Engine depende de plataformas de terceiros, como a Meta e fornecedores de e-mail, hospedagem, banco de dados e fila. Trabalhamos pra manter o serviço estável, mas não garantimos que ele fique no ar sem interrupção.",
-  "Open-Source Core": "Núcleo de código aberto",
-  "The public repository is MIT licensed. Hosted SaaS infrastructure, managed support, agency workflows, analytics, reports, and other paid service features may be provided separately from the open-source core.":
-    "O repositório público tem licença MIT. Infraestrutura hospedada, suporte gerenciado, rotinas de agência, análises, relatórios e outros recursos pagos podem ser oferecidos separados do núcleo de código aberto.",
+  "The service depends on Meta and other providers. We work to keep it running, but we do not guarantee it will always be available without interruption.":
+    "O serviço depende da Meta e de outros fornecedores. Trabalhamos para ficar no ar, mas não garantimos funcionamento sem interrupção.",
+  Cancellation: "Cancelamento",
+  "You can disconnect Instagram and ask for your data to be deleted at any time (see {site}/data-deletion). We may close accounts that break these terms.":
+    "Você pode desconectar o Instagram e pedir a exclusão dos dados quando quiser (veja {site}/data-deletion). Podemos encerrar contas que violem estes termos.",
+  Liability: "Responsabilidade",
+  "We are not responsible for blocks or changes made by Meta, or for the content you send.":
+    "Não respondemos por bloqueios ou mudanças feitas pela Meta, nem pelo conteúdo que você envia.",
+  "Law and courts": "Lei e foro",
+  "Brazilian law applies. Courts of {city}, Brazil.": "Vale a lei brasileira. Foro da comarca de {city}.",
 
+  // Exclusão de dados
   "Data Deletion - Lead Engine": "Exclusão de dados - Lead Engine",
-  "How Lead Engine customers can disconnect Instagram and request account or campaign data deletion.":
-    "Como desconectar o Instagram e pedir a exclusão da conta ou dos dados de campanha no Lead Engine.",
+  "How to delete your Lead Engine data: in the app with Delete for real, or by removing the app on Instagram.":
+    "Como apagar seus dados do Lead Engine: no app, com Excluir de verdade, ou removendo o app pelo Instagram.",
   "Data Deletion": "Exclusão de dados",
-  "Use this page for Meta App Review and customer requests about removing Lead Engine account, workspace, Instagram, and campaign data.":
-    "Use esta página pra revisão do app pela Meta e pros pedidos de remoção de dados da conta, do espaço de trabalho, do Instagram e das campanhas no Lead Engine.",
-  "Disconnect Instagram": "Desconectar o Instagram",
-  "Sign in, open Settings, and select Disconnect. This removes the stored Instagram connection token and stops campaigns from sending private replies for that workspace.":
-    "Entre, abra Configurações e escolha Desconectar. Isso remove a chave de conexão do Instagram guardada e faz as campanhas pararem de mandar respostas privadas por esse espaço de trabalho.",
-  "Delete Workspace Data": "Excluir os dados do espaço de trabalho",
-  "To delete workspace, campaign, log, webhook, billing reference, and operational diagnostic data, contact support from the email address used to sign in. Include the workspace name and the Instagram username connected to the workspace.":
-    "Pra excluir dados do espaço de trabalho, das campanhas, do histórico, de webhook, de referência de cobrança e de diagnóstico, fale com o suporte pelo e-mail que você usa pra entrar. Informe o nome do espaço de trabalho e o usuário do Instagram conectado a ele.",
+  "There are two ways to delete the data of an Instagram account from {product}. Both are below.":
+    "Tem dois caminhos para apagar do {product} os dados de uma conta do Instagram. Os dois estão aqui embaixo.",
+  "Way 1: in the app (Delete for real)": "Caminho 1: pelo app (Excluir de verdade)",
+  "If you are a Lead Engine customer:": "Se você é cliente do Lead Engine:",
+  "Sign in, open Channels and click Disconnect. The Instagram access token is deleted right away, webhooks stop and no more messages are sent. Disconnecting alone keeps your campaigns, contacts and conversations, so you can connect again later.":
+    "Entre no Lead Engine, abra Canais e clique em Desconectar. A chave de acesso do Instagram é apagada na hora, os webhooks param e nenhuma mensagem sai mais. Só desconectar guarda suas campanhas, contatos e conversas, pra você poder conectar de novo depois.",
+  "To delete everything of that account (campaigns, contacts, conversations, media, logs, follower history), still on Channels, use Delete for real (disconnect first) and type the @ to confirm. This cannot be undone. Only the workspace owner can do it.":
+    "Para apagar tudo daquela conta (campanhas, contatos, conversas, mídias, registros, histórico de seguidores), ainda em Canais, use Excluir de verdade (precisa desconectar antes) e digite o @ para confirmar. Não dá para desfazer. Só o dono do espaço de trabalho consegue fazer isso.",
+  "To delete your whole Lead Engine account, email {email} from the address you use to sign in.":
+    "Para apagar sua conta do Lead Engine inteira, mande um e-mail para {email} a partir do e-mail que você usa para entrar.",
+  "Way 2: on Instagram (remove the app)": "Caminho 2: pelo Instagram (remover o app)",
+  "On Instagram, open Settings, then Apps and websites, and remove Lead Engine. Meta tells us right away: first the account is disconnected and its token is deleted, and when Meta sends the data deletion request we delete all the data of that account automatically.":
+    "No Instagram, abra Configurações, depois Apps e sites, e remova o Lead Engine. A Meta avisa a gente na hora: primeiro a conta é desconectada e a chave de acesso é apagada, e quando a Meta manda o pedido de exclusão de dados, apagamos todos os dados daquela conta sozinhos.",
+  "Meta shows you a confirmation code. You can check the status of the request at {site}/data-deletion/status with that code, or type it below.":
+    "A Meta mostra um código de confirmação pra você. Você pode acompanhar o pedido em {site}/data-deletion/status com esse código, ou digitar o código aqui embaixo.",
+  "If you only commented or talked to an account that uses Lead Engine":
+    "Se você só comentou ou conversou com uma conta que usa o Lead Engine",
+  "Email {email} with your Instagram username and the account you talked to. We delete your data within {days} days.":
+    "Mande um e-mail para {email} com o seu @ do Instagram e o @ da conta com quem você falou. Apagamos seus dados em até {days} dias.",
   Verification: "Confirmação",
-  "We may ask you to verify control of the email address or connected business account before deleting data. Deletion requests are processed as quickly as practical unless retention is required for legal, billing, fraud prevention, or security reasons.":
-    "Podemos pedir que você confirme que controla o e-mail ou a conta profissional conectada antes de excluir os dados. Os pedidos de exclusão são atendidos o mais rápido possível, a não ser que a guarda seja exigida por motivo legal, de cobrança, de prevenção a fraude ou de segurança.",
+  "We may ask you to confirm that you control the email or the account before deleting. We keep only what the law requires. Controller: {company}, {email}.":
+    "Podemos pedir pra você confirmar que é dono do e-mail ou da conta antes de apagar. Guardamos só o que a lei obrigar. Responsável: {company}, {email}.",
+  "Check a deletion request": "Acompanhar um pedido de exclusão",
+  "Confirmation code": "Código de confirmação",
+  "Check status": "Ver status",
 
+  // Status do pedido de exclusão (/data-deletion/status)
+  "Deletion request status - Lead Engine": "Status do pedido de exclusão - Lead Engine",
+  "Deletion request status": "Status do pedido de exclusão",
+  "Status of a data deletion request sent by Meta when someone removes {product} on Instagram.":
+    "Status de um pedido de exclusão de dados que a Meta manda quando alguém remove o {product} pelo Instagram.",
+  "Type your confirmation code": "Digite o seu código de confirmação",
+  "Use the code Meta showed you when you asked for the deletion.":
+    "Use o código que a Meta mostrou quando você pediu a exclusão.",
+  "We could not check right now": "Não deu pra conferir agora",
+  "Try again in a few minutes. If it keeps happening, write to {email}.":
+    "Tente de novo em alguns minutos. Se continuar, escreva para {email}.",
+  "Code not found": "Código não encontrado",
+  "Check that the code is right. If you need help, write to {email} with the code.":
+    "Confira se o código está certo. Se precisar de ajuda, escreva para {email} com o código.",
+  "Deletion completed": "Exclusão concluída",
+  "All the data of this Instagram account was deleted from {product}.":
+    "Todos os dados dessa conta do Instagram foram apagados do {product}.",
+  "No data to delete": "Nenhum dado para apagar",
+  "We did not find any data linked to this Instagram account, so there was nothing to delete. If you think this is a mistake, write to {email} with the code.":
+    "Não achamos nenhum dado ligado a essa conta do Instagram, então não havia nada para apagar. Se você acha que é um engano, escreva para {email} com o código.",
+  "Request received, in progress": "Pedido recebido, em andamento",
+  "We are checking this request by hand and will delete the data within {days} days. If you need help, write to {email} with the code.":
+    "Estamos conferindo esse pedido com cuidado e vamos apagar os dados em até {days} dias. Se precisar de ajuda, escreva para {email} com o código.",
+  "Code:": "Código:",
+  "Received:": "Recebido em:",
+  "Finished:": "Concluído em:",
+  "How data deletion works": "Como funciona a exclusão de dados",
+
+  // Apoio à revisão do app pela Meta (/meta-review)
   "Meta App Review Support - Lead Engine": "Apoio à revisão do app pela Meta - Lead Engine",
   "Meta App Review notes for Lead Engine's official Instagram private reply workflow.":
     "Notas pra revisão do app pela Meta sobre o fluxo oficial de respostas privadas no Instagram do Lead Engine.",
@@ -530,11 +622,18 @@ export const ptPublic: Record<string, string> = {
   "Lead Engine is designed for Instagram professional accounts that want to send private replies after keyword comments on their own posts or reels.":
     "O Lead Engine foi feito pra contas profissionais do Instagram que querem mandar respostas privadas depois de comentários com palavra-chave nos próprios posts ou reels.",
   "User Flow": "Fluxo de uso",
-  "A business owner signs in by email, connects an Instagram professional account through Meta OAuth, creates a keyword campaign for a post or reel, and receives a webhook when someone comments. Lead Engine queues the event, deduplicates it, checks rate limits, then sends a private reply using the comment ID.":
-    "O dono do negócio entra pelo e-mail, conecta uma conta profissional do Instagram pelo login oficial da Meta (OAuth), cria uma campanha com palavra-chave pra um post ou reel e recebe um webhook quando alguém comenta. O Lead Engine coloca o evento na fila, descarta repetidos, confere os limites de envio e manda uma resposta privada usando o ID do comentário.",
+  "A business owner signs in with email and password (or a sign-in link, or Google), connects an Instagram professional account through Instagram business login, creates a keyword campaign for a post or reel, and Lead Engine receives a webhook when someone comments. It queues the event, removes duplicates, checks rate limits and sends one private reply using the comment ID. The conversation continues in the Inbox after the person answers.":
+    "O dono do negócio entra com e-mail e senha (ou com link de acesso, ou com Google), conecta uma conta profissional do Instagram pelo login comercial do Instagram, cria uma campanha com palavra-chave pra um post ou reel e o Lead Engine recebe um webhook quando alguém comenta. O evento entra na fila, os repetidos são descartados, os limites de envio são conferidos e sai uma resposta privada usando o ID do comentário. A conversa continua no Inbox depois que a pessoa responde.",
   "Compliance Position": "Como seguimos as regras",
   "The app uses official Meta APIs, verifies webhook signatures, encrypts tokens, avoids scraping, avoids password collection, and sends no more than one private reply for a matched campaign/comment pair.":
     "O app usa as APIs oficiais da Meta, confere a assinatura dos webhooks, guarda as chaves de acesso com criptografia, não raspa dados, não coleta senha e manda no máximo uma resposta privada pra cada par de campanha e comentário.",
+  "Deauthorize and data deletion callbacks": "Callbacks de desautorização e de exclusão de dados",
+  "Deauthorize callback URL: {site}/api/instagram/deauthorize. When someone removes the app on Instagram, the account is disconnected and its token is deleted. Conversations, contacts and campaigns are kept.":
+    "URL de desautorização: {site}/api/instagram/deauthorize. Quando alguém remove o app pelo Instagram, a conta é desconectada e a chave de acesso é apagada. Conversas, contatos e campanhas ficam guardados.",
+  "Data deletion request URL: {site}/api/instagram/data-deletion. The signed_request is checked with HMAC-SHA256 and the app secret, every piece of data of that account is deleted and the answer brings a confirmation code and the status page ({site}/data-deletion/status).":
+    "URL de exclusão de dados: {site}/api/instagram/data-deletion. O signed_request é conferido com HMAC-SHA256 e o segredo do app, todos os dados daquela conta são apagados e a resposta traz um código de confirmação e a página de status ({site}/data-deletion/status).",
+  "Both URLs go in the App Dashboard: Instagram, API setup with Instagram login, Business login settings.":
+    "As duas URLs ficam no painel do app: Instagram, Configuração da API com login do Instagram, Configurações de login comercial.",
   "Review Test Notes": "Notas pro teste da revisão",
   "Reviewers can use a Meta test business, connect an Instagram professional account, create a keyword such as LINK, comment that keyword on the selected media, and confirm that the private reply is sent and logged once.":
     "Quem revisa pode usar um negócio de teste da Meta, conectar uma conta profissional do Instagram, criar uma palavra-chave como LINK, comentar essa palavra na mídia escolhida e confirmar que a resposta privada é enviada e registrada uma vez só.",

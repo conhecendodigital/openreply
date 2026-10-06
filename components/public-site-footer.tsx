@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getT } from "@/lib/i18n/server";
+import LegalCompanyLine from "@/components/legal-company-line";
 
 /** Rodapé do site público (2026-10-04), o mesmo da página inicial. */
 export default async function PublicSiteFooter() {
@@ -15,7 +16,7 @@ export default async function PublicSiteFooter() {
           <Link href="/data-deletion" className="hover:underline">{t("Data deletion")}</Link>
         </nav>
         <p>{t("Uses the official Meta API. Not affiliated with Meta or Instagram.")}</p>
-        <p>© 2026 Lead Engine</p>
+        <LegalCompanyLine />
       </div>
     </footer>
   );
