@@ -110,10 +110,11 @@ export function ServerNotice({ status }: { status: ServerStatus | null }) {
 }
 
 /** Abas das 3 telas do WhatsApp (no celular o menu fica escondido). */
-export function WhatsAppTabs({ active }: { active: "inbox" | "connections" | "agents" }) {
+export function WhatsAppTabs({ active }: { active: "inbox" | "leads" | "connections" | "agents" }) {
   const t = useT();
   const tabs = [
     { key: "inbox", href: "/whatsapp/inbox", label: t("Conversations") },
+    { key: "leads", href: "/whatsapp/leads", label: t("Leads") },
     { key: "connections", href: "/whatsapp/connections", label: t("Connections") },
     { key: "agents", href: "/whatsapp/agents", label: t("Agents") },
   ] as const;

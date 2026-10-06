@@ -8,6 +8,9 @@
  *   entregue e lido, resposta humana, pausar e retomar o agente de IA nessa
  *   conversa, rascunho do agente (aprovar, editar, recusar) e aviso quando a
  *   janela de 24 horas fechou;
+ * - estágio do lead (selo na lista, filtro por estágio) e o painel "Ficha do
+ *   lead" na conversa aberta (o que o cliente já disse, estágio, histórico);
+ * - ?c=<id> abre essa conversa (link do quadro de Leads);
  * - no celular vira lista -> conversa.
  *
  * Tempo real por polling curto (lista a cada 5 s, conversa aberta a cada 3 s):
@@ -18,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/components/lang-provider";
 import { MediaReadView } from "@/components/whatsapp-media-read";
 import { api, btnPrimary, btnSecondary, ConfirmBox, formatPhone, ServerNotice, shortTime, useServerStatus, WhatsAppTabs } from "@/components/whatsapp/ui";
+import { LeadPanel, STAGE_KEYS, StageBadge, useStageName, type LeadStage, type LeadView } from "@/components/whatsapp/lead";
 
 type Contact = { id: string; name: string | null; pushName: string | null; phoneE164: string | null; isGroup: boolean };
 type Conversation = {
@@ -31,6 +35,9 @@ type Conversation = {
   paused: boolean;
   /** Número excluído ("só o número"): só leitura. */
   numberRemoved?: boolean;
+  stage?: LeadStage;
+  stageReason?: string | null;
+  stageManual?: boolean;
 };
 type Message = {
   id: string;
@@ -46,6 +53,7 @@ type Message = {
 };
 type Draft = { runId: string; bubbles: string[]; alert: string | null; agente: string | null; createdAt: string };
 type Thread = {
+  lead?: LeadView | null;
   conversation: Conversation & { agentMode: string; humanTakeoverUntil: string | null };
   session: { id: string; status: string; phoneE164: string | null; displayName: string | null; agentMode: string; removed?: boolean };
   messages: Message[];
@@ -111,7 +119,9 @@ function MediaView({ m }: { m: Message }) {
 export default function WhatsAppInboxPage() {
   const t = useT();
   const server = useServerStatus();
+  const stageName = useStageName();
   const [filter, setFilter] = useState<"all" | "unread" | "drafts">("all");
+  const [stageFilter, setStageFilter] = useState<LeadStage | "">("");
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [list, setList] = useState<Conversation[] | null>(null);
@@ -136,12 +146,20 @@ export default function WhatsAppInboxPage() {
     const params = new URLSearchParams();
     if (filter !== "all") params.set("filter", filter);
     if (debounced) params.set("q", debounced);
+    if (stageFilter) params.set("stage", stageFilter);
     const r = await api<{ conversations: Conversation[] }>(`/api/whatsapp/conversations?${params}`);
     if (r.ok) {
       setList(r.data.conversations);
       setListError(null);
     } else setListError(t(r.error));
-  }, [filter, debounced, t]);
+  }, [filter, debounced, stageFilter, t]);
+
+  // ?c=<id>: abre a conversa vinda do quadro de Leads.
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("c");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- abrir a conversa do link uma vez
+    if (c) setActiveId(c);
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga e polling da lista
@@ -271,6 +289,19 @@ export default function WhatsAppInboxPage() {
                   {label}
                 </button>
               ))}
+              <select
+                value={stageFilter}
+                onChange={(e) => setStageFilter(e.target.value as LeadStage | "")}
+                aria-label={t("Filter by lead stage")}
+                className="ml-auto h-7 min-w-0 rounded-full border border-border bg-surface-hover px-2 text-xs text-foreground focus:border-accent/40 focus:outline-none"
+              >
+                <option value="">{t("Any stage")}</option>
+                {STAGE_KEYS.map((k) => (
+                  <option key={k} value={k}>
+                    {stageName(k)}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -280,7 +311,7 @@ export default function WhatsAppInboxPage() {
               <p className="px-4 py-6 text-sm text-error">{listError}</p>
             ) : list && list.length === 0 ? (
               <p className="px-4 py-6 text-sm text-muted">
-                {debounced || filter !== "all" ? t("Nothing found.") : t("No WhatsApp conversations yet. When someone writes to your number, it shows up here.")}
+                {debounced || filter !== "all" || stageFilter ? t("Nothing found.") : t("No WhatsApp conversations yet. When someone writes to your number, it shows up here.")}
               </p>
             ) : (
               (list ?? []).map((c) => (
@@ -300,6 +331,7 @@ export default function WhatsAppInboxPage() {
                     </span>
                     <span className="mt-0.5 flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-xs text-muted">{c.lastMessagePreview || " "}</span>
+                      {c.stage && c.stage !== "novo" && <StageBadge stage={c.stage} manual={c.stageManual} />}
                       {c.hasDraft && (
                         <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-white" title={t("AI draft waiting for your approval")}>
                           {t("Draft")}
@@ -362,6 +394,17 @@ export default function WhatsAppInboxPage() {
                   </div>
                 )}
               </div>
+              {active?.lead && (
+                <LeadPanel
+                  key={active.conversation.id}
+                  conversationId={active.conversation.id}
+                  lead={active.lead}
+                  onChange={(lead) => {
+                    setThread((cur) => (cur && cur.conversation.id === active.conversation.id ? { ...cur, lead } : cur));
+                    void loadList();
+                  }}
+                />
+              )}
               {active && paused && (
                 <p className="shrink-0 border-b border-border bg-surface-hover px-4 py-2 text-xs text-muted">
                   {t("The AI agent is paused in this conversation until {time}. You answer.", { time: shortTime(active.conversation.humanTakeoverUntil) })}
