@@ -61,6 +61,8 @@ export function formatPhone(e164: string | null): string {
 export type ServerStatus = {
   enabled: boolean;
   gatewayConfigured: boolean;
+  /** uazapi (UAZAPI_SERVER_URL e UAZAPI_ADMIN_TOKEN). Ausente em servidor antigo. */
+  uazapiConfigured?: boolean;
   webhookReady: boolean;
   ai: { anthropic: boolean; openai: boolean };
 };
@@ -89,7 +91,10 @@ export function ServerNotice({ status }: { status: ServerStatus | null }) {
   if (!status) return null;
   const missing: string[] = [];
   if (!status.enabled) missing.push(t("WhatsApp is not turned on on the server yet (WHATSAPP_ENABLED)."));
-  if (!status.gatewayConfigured) missing.push(t("The WhatsApp gateway is not configured on the server yet (OPENWA_BASE_URL and OPENWA_API_KEY)."));
+  // Basta um provedor configurado (uazapi ou OpenWA); o card de cada um explica o que falta.
+  if (!status.gatewayConfigured && !status.uazapiConfigured) {
+    missing.push(t("No WhatsApp provider is configured on the server yet (uazapi: UAZAPI_SERVER_URL and UAZAPI_ADMIN_TOKEN, or OpenWA: OPENWA_BASE_URL and OPENWA_API_KEY)."));
+  }
   if (!status.webhookReady) missing.push(t("The server has no public https address for the webhook yet."));
   if (missing.length === 0) return null;
   return (
