@@ -32,6 +32,7 @@ interface Campaign {
   matchAnyWord: boolean;
   dmTriggerEnabled: boolean;
   dmMessage: string;
+  dmFormat?: "BUTTON" | "TEXT";
   openingDmEnabled: boolean;
   openingDmMessage: string | null;
   openingDmButtonLabel: string | null;
@@ -303,6 +304,11 @@ export default function CampaignDetailPage() {
         <Summary title={t("And then, they will get a DM")}>
           <FieldBox>{campaign.dmMessage}</FieldBox>
           {hasLink && (
+            <FieldBox>
+              {t("DM format")}: {campaign.dmFormat === "TEXT" ? t("Text with the link") : t("Card with a button")}
+            </FieldBox>
+          )}
+          {hasLink && (
             <FieldBox>{campaign.linkButtonLabel || t("Open link")}</FieldBox>
           )}
           {hasSecondLink && (
@@ -432,6 +438,11 @@ export default function CampaignDetailPage() {
             secondLinkButtonLabel={
               campaign.trackedLinks?.[1]?.label ?? "Open link"
             }
+            secondLinkUrl={
+              campaign.trackedLinks?.[1]?.trackedUrl ??
+              campaign.trackedLinks?.[1]?.destinationUrl
+            }
+            dmFormat={campaign.dmFormat === "TEXT" ? "TEXT" : "BUTTON"}
             requireFollow={campaign.requireFollow}
             followPromptMessage={campaign.followPromptMessage ?? ""}
             followPromptButtonLabel={

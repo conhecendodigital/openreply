@@ -33,6 +33,8 @@ import {
 
 import { useT } from "@/components/lang-provider";
 type TriggerScope = "specific" | "any" | "next";
+/** Automation.dmFormat: card with buttons or the link inside the text. */
+type DmFormat = "BUTTON" | "TEXT";
 type MatchMode = "specific" | "any";
 type Trigger = PreviewTrigger;
 
@@ -73,6 +75,7 @@ interface LoadedCampaign {
   matchAnyWord: boolean;
   dmTriggerEnabled: boolean;
   dmMessage: string;
+  dmFormat?: DmFormat | null;
   openingDmEnabled: boolean;
   openingDmMessage: string | null;
   openingDmButtonLabel: string | null;
@@ -209,6 +212,9 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [openingDmButtonLabel, setOpeningDmButtonLabel] = useState("");
 
   const [dmMessage, setDmMessage] = useState("");
+  // A NEW campaign starts as text with the link (shows in every Instagram,
+  // Requests included). Editing loads what is saved (old ones are BUTTON).
+  const [dmFormat, setDmFormat] = useState<DmFormat>(mode === "new" ? "TEXT" : "BUTTON");
   const [linkOpen, setLinkOpen] = useState(false);
   const [trackedDestinationUrl, setTrackedDestinationUrl] = useState("");
   const [linkButtonLabel, setLinkButtonLabel] = useState("Open link");
@@ -318,6 +324,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setOpeningDmMessage(c.openingDmMessage ?? "");
         setOpeningDmButtonLabel(c.openingDmButtonLabel ?? "");
         setDmMessage(c.dmMessage);
+        setDmFormat(c.dmFormat === "TEXT" ? "TEXT" : "BUTTON");
         setLinkButtonLabel(c.linkButtonLabel ?? "Open link");
         setIsActive(c.isActive);
         const link = c.trackedLinks?.[0]?.destinationUrl ?? "";
@@ -509,6 +516,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       keywords: !usesKeywords(trigger) || matchMode === "any" ? [] : keywords,
       dmTriggerEnabled: trigger === "DM" ? true : trigger === "COMMENT" ? dmTriggerEnabled : false,
       dmMessage,
+      dmFormat,
       openingDmEnabled: withOpeningDm,
       openingDmMessage: withOpeningDm ? openingDmMessage : null,
       openingDmButtonLabel: withOpeningDm ? openingDmButtonLabel : null,
@@ -1137,6 +1145,25 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
             <p className="text-xs text-muted">
               {t("{link}")} {t("inserts the tracked link;")} {t("{username}")} {t("personalizes.")}
             </p>
+            <div className="space-y-2 border-t border-border pt-3">
+              <span className="text-sm text-foreground">{t("DM format")}</span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Radio checked={dmFormat === "TEXT"} onSelect={() => setDmFormat("TEXT")}>
+                  {t("Text with the link")}
+                </Radio>
+                <Radio checked={dmFormat === "BUTTON"} onSelect={() => setDmFormat("BUTTON")}>
+                  {t("Card with a button")}
+                </Radio>
+              </div>
+              <p className="text-xs text-muted">
+                {t("Text with a link shows for everyone, even in Requests. The card with a button looks nicer, but some Instagram versions do not show it.")}
+              </p>
+              {dmFormat === "TEXT" && (
+                <p className="text-xs text-muted">
+                  {t("Without {link}, the link goes at the end, on its own line. The second link goes on the line below, with its label. The opening DM and the follow request keep their button.")}
+                </p>
+              )}
+            </div>
           </div>
           <div className="mt-3 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between">
@@ -1230,6 +1257,8 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
               secondLinkOpen && Boolean(secondaryDestinationUrl.trim())
             }
             secondLinkButtonLabel={secondaryButtonLabel || "Open link"}
+            secondLinkUrl={secondaryDestinationUrl.trim() || undefined}
+            dmFormat={dmFormat}
             requireFollow={requireFollow}
             followPromptMessage={followPromptMessage}
             followPromptButtonLabel={followPromptButtonLabel || "i'm following"}

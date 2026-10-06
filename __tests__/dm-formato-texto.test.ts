@@ -10,7 +10,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { migrationNames } from "./helpers/pglite-db";
+import CampaignPreview from "../components/campaign-preview";
 import { composeLinkText, DM_TEXT_LIMIT, parseDmFormat } from "../lib/tracking/message";
 
 const URL1 = "https://app.test/r/abc123?c=42.sig";
@@ -61,6 +64,53 @@ describe("composeLinkText", () => {
 
   it("sem link nenhum: só a mensagem", () => {
     expect(composeLinkText({ message: "Oi {username}", commenterName: "ana" })).toBe("Oi ana");
+  });
+});
+
+describe("prévia da DM na tela da automação", () => {
+  const props = {
+    tab: "dm" as const,
+    onTabChange: () => undefined,
+    username: "omatheus.ai",
+    avatarUrl: null,
+    postThumb: null,
+    caption: "",
+    sampleComment: "LINK",
+    dmTriggerEnabled: false,
+    publicReplyEnabled: false,
+    publicReplyMessage: "",
+    openingDmEnabled: false,
+    openingDmMessage: "",
+    openingDmButtonLabel: "",
+    revealMessage: "Oi {username}, pega aqui",
+    hasLink: true,
+    linkButtonLabel: "Acessar",
+    linkUrl: "https://dest.com/oferta",
+    hasSecondLink: true,
+    secondLinkButtonLabel: "Grupo VIP",
+    secondLinkUrl: "https://dest.com/grupo",
+    requireFollow: false,
+    followPromptMessage: "",
+    followPromptButtonLabel: "",
+    followUpEnabled: false,
+    followUpMessage: "",
+  };
+  const render = (dmFormat: "BUTTON" | "TEXT") =>
+    renderToStaticMarkup(createElement(CampaignPreview, { ...props, dmFormat }));
+
+  it("TEXT: o texto com os links dentro, sem os botões", () => {
+    const html = render("TEXT");
+    expect(html).toContain("Oi username, pega aqui\n");
+    expect(html).toContain("https://dest.com/oferta</span>");
+    expect(html).toMatch(/Grupo VIP: <\/span><span class="text-sky-400[^>]*>https:\/\/dest\.com\/grupo</);
+    expect(html).not.toContain(">Acessar<");
+  });
+
+  it("BUTTON: o cartão com os dois botões", () => {
+    const html = render("BUTTON");
+    expect(html).toContain(">Acessar<");
+    expect(html).toContain(">Grupo VIP<");
+    expect(html).not.toContain("https://dest.com/oferta");
   });
 });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useT } from "@/components/lang-provider";
+import { composeLinkText } from "@/lib/tracking/message";
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -72,6 +73,9 @@ interface CampaignPreviewProps {
   linkUrl?: string;
   hasSecondLink: boolean;
   secondLinkButtonLabel: string;
+  secondLinkUrl?: string;
+  /** BUTTON = card with buttons (default); TEXT = the link inside the text. */
+  dmFormat?: "BUTTON" | "TEXT";
   requireFollow: boolean;
   followPromptMessage: string;
   followPromptButtonLabel: string;
@@ -355,6 +359,8 @@ function DmScreen({
   linkButtonLabel,
   hasSecondLink,
   secondLinkButtonLabel,
+  secondLinkUrl,
+  dmFormat = "BUTTON",
   requireFollow,
   followPromptMessage,
   followPromptButtonLabel,
@@ -377,6 +383,8 @@ function DmScreen({
   linkUrl?: string;
   hasSecondLink: boolean;
   secondLinkButtonLabel: string;
+  secondLinkUrl?: string;
+  dmFormat?: "BUTTON" | "TEXT";
   requireFollow: boolean;
   followPromptMessage: string;
   followPromptButtonLabel: string;
@@ -466,9 +474,48 @@ function DmScreen({
           </>
         )}
         {(() => {
+          // TEXT: exactly the text the worker sends (composeLinkText), with
+          // sample URLs, links highlighted.
+          if (hasLink && dmFormat === "TEXT") {
+            const primary = linkUrl || tr("your link");
+            const second = hasSecondLink ? secondLinkUrl || tr("your second link") : null;
+            const text = revealMessage
+              ? composeLinkText({
+                  message: revealMessage,
+                  commenterName: SAMPLE_USER,
+                  primary,
+                  destinationUrl: linkUrl,
+                  extraLinks: second ? [{ url: second, label: secondLinkButtonLabel }] : [],
+                })
+              : "";
+            const urls = [primary, second].filter((u): u is string => Boolean(u));
+            const escaped = urls.map((u) => u.replace(/[.*+?^$|()[\]{}\\]/g, "\\$&"));
+            const pattern = new RegExp("(" + escaped.join("|") + ")", "g");
+            return (
+              <div className="flex items-end gap-2">
+                <Avatar url={avatarUrl} size={24} />
+                <div className="max-w-[80%] overflow-hidden rounded-2xl rounded-bl-md bg-zinc-800">
+                  <p className="whitespace-pre-wrap break-words px-3 py-2 text-sm">
+                    {!text
+                      ? tr("Write a message")
+                      : text.split(pattern).map((part, i) =>
+                          urls.includes(part) ? (
+                            <span key={i} className="text-sky-400 underline break-all">
+                              {part}
+                            </span>
+                          ) : (
+                            <span key={i}>{part}</span>
+                          )
+                        )}
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          // BUTTON: with a link the worker always sends the card (the text
+          // without {link}, then the buttons).
           const resolved = revealMessage.replace(/\{username\}/g, SAMPLE_USER);
-          const hasToken = resolved.includes("{link}");
-          const showCard = hasLink && hasToken;
+          const showCard = hasLink;
           const bodyText = showCard
             ? resolved.replace(/\s*\{link\}\s*/g, " ").trim()
             : resolved;
@@ -719,6 +766,8 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
             linkButtonLabel={props.linkButtonLabel}
             hasSecondLink={props.hasSecondLink}
             secondLinkButtonLabel={props.secondLinkButtonLabel}
+            secondLinkUrl={props.secondLinkUrl}
+            dmFormat={props.dmFormat}
             requireFollow={props.requireFollow}
             followPromptMessage={props.followPromptMessage}
             followPromptButtonLabel={props.followPromptButtonLabel}
@@ -748,6 +797,8 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
             linkButtonLabel={props.linkButtonLabel}
             hasSecondLink={props.hasSecondLink}
             secondLinkButtonLabel={props.secondLinkButtonLabel}
+            secondLinkUrl={props.secondLinkUrl}
+            dmFormat={props.dmFormat}
             requireFollow={props.requireFollow}
             followPromptMessage={props.followPromptMessage}
             followPromptButtonLabel={props.followPromptButtonLabel}
