@@ -11,8 +11,11 @@ import { ptSite } from "@/lib/i18n/pt-site";
 import { ptPublic } from "@/lib/i18n/pt-public";
 import { ptCapi } from "@/lib/i18n/pt-capi";
 import { ptAuth } from "@/lib/i18n/pt-auth";
+import { ptIa } from "@/lib/i18n/pt-ia";
 
 export const pt: Record<string, string> = {
+  // 2026-10-06: Chaves de IA e Gastos de IA (admin e Configurações), em lib/i18n/pt-ia.ts.
+  ...ptIa,
   // 2026-10-06: fase 0, login novo e Segurança, em lib/i18n/pt-auth.ts.
   ...ptAuth,
   // 2026-10-08: Etapa 5 (Segmentos, Disparos, A/B, Relatórios), em

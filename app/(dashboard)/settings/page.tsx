@@ -6,6 +6,7 @@ import type { AccountOption } from "@/components/account-select";
 import { ApiKeysPanel } from "@/components/api-keys-panel";
 import { MetaCapiPanel } from "@/components/meta-capi-panel";
 import { SecurityPanel } from "@/components/security-panel";
+import { AiUsageReport } from "@/components/ai-usage-report";
 import { InstagramConnectNotice } from "@/components/instagram-connect-notice";
 
 import { useT } from "@/components/lang-provider";
@@ -374,6 +375,12 @@ export default function SettingsPage() {
       </section>
 
       <SecurityPanel />
+
+      <section className="panel rounded p-4 sm:p-6">
+        <h2 className="text-base font-semibold mb-2">{t("My AI spending")}</h2>
+        <p className="mb-4 text-sm text-muted">{t("Only what your agents spent with AI. Nobody else's spending shows up here.")}</p>
+        <AiUsageReport scope="me" />
+      </section>
 
       {canManageMembers && <MetaCapiPanel />}
 

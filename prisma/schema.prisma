@@ -123,6 +123,7 @@ model Workspace {
   waConversations    WaConversation[]
   waMessages         WaMessage[]
   waLabels           WaLabel[]
+  waAiUsage          WaAiUsage[]
 
   @@index([ownerId])
   @@schema("public")
@@ -1893,5 +1894,79 @@ model WaConversationLabel {
 
   @@id([conversationId, labelId])
   @@index([workspaceId, labelId])
+  @@schema("whatsapp")
+}
+
+// ---------------------------------------------------------------------------
+// Chaves de IA da plataforma e gasto de IA (06/10/2026, pedido do dono: "as
+// API quero colocar a chave no admin" e "relatório de gasto das APIs e de
+// clientes"). Só o admin lê e grava as chaves e as configurações (RLS); os
+// agentes leem no servidor pelo papel de sistema (lib/ai/credentials.ts).
+// ---------------------------------------------------------------------------
+
+/// Uma chave por provedor (anthropic, openai, typesafe), usada por todos os
+/// usuários do beta. keyEnc = AES-256-GCM (encryptToken, ENCRYPTION_KEY).
+model PlatformAiCredential {
+  id          String   @id @default(cuid())
+  /// anthropic | openai | typesafe
+  provider    String   @unique
+  keyEnc      String
+  keyLast4    String
+  active      Boolean  @default(true)
+  createdById String
+  updatedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@schema("public")
+}
+
+/// Linha única (id = "global"): modelo de cada agente, tetos diários, tabela
+/// de preços e cotação do dólar. JSON validado em lib/ai/catalog.ts.
+model PlatformAiSettings {
+  id                   String   @id @default("global")
+  agentModels          Json?
+  prices               Json?
+  dailyCapUserUsd      Float    @default(1)
+  dailyCapWorkspaceUsd Float    @default(3)
+  /// Cotação pra mostrar em R$ (opcional). null = só dólar.
+  usdToBrl             Float?
+  updatedById          String?
+  updatedAt            DateTime @updatedAt
+
+  @@schema("public")
+}
+
+/// Gasto de IA: uma linha por chamada paga (ou bloqueada pelo teto). Mesmos
+/// nomes da tabela do branch feat/wa-cerebro, com as colunas extras do
+/// relatório. lib/ai/usage.ts grava e lê.
+model WaAiUsage {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  ownerUserId    String
+  workspaceId    String
+  /// embedding | memory | agent | triage
+  kind           String
+  /// qualificacao | atendimento | suporte | cerebro | triagem
+  agent          String?
+  provider       String
+  model          String
+  contactId      String?
+  conversationId String?
+  tokensIn       Int       @default(0)
+  tokensOut      Int       @default(0)
+  cacheRead      Int       @default(0)
+  cacheWrite     Int       @default(0)
+  /// 1 = US$ 0,000001
+  costMicroUsd   BigInt    @default(0)
+  /// true = não chamou o modelo porque passaria do teto diário.
+  blocked        Boolean   @default(false)
+  refId          String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([ownerUserId, createdAt(sort: Desc)], map: "WaAiUsage_owner_created_idx")
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([createdAt])
   @@schema("whatsapp")
 }

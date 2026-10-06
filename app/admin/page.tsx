@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db/client";
 import { BETA_ALLOWLIST_LIMIT, requirePlatformAdmin } from "@/lib/platform-admin";
 import { listSessionsAsAdmin } from "@/lib/whatsapp/admin-access";
 import { addAllowlistEmail, removeAllowlistEmail } from "./actions";
+import { AiKeysPanel } from "@/components/ai-keys-panel";
+import { AiUsageReport } from "@/components/ai-usage-report";
 
 /**
  * Fase 0 (06/10/2026): painel do admin da plataforma (fora do menu: só o
@@ -98,6 +100,22 @@ export default async function AdminPage() {
             </button>
           </form>
         )}
+      </section>
+
+      <section id="chaves-ia" className="panel rounded p-4 sm:p-6">
+        <h2 className="mb-2 text-base font-semibold">{t("AI keys")}</h2>
+        <p className="mb-4 text-sm text-muted">
+          {t("One key per provider, used by every user in the beta. After you save it, only the last 4 characters show up here. Every change goes to the audit log.")}
+        </p>
+        <AiKeysPanel />
+      </section>
+
+      <section id="gastos-ia" className="panel rounded p-4 sm:p-6">
+        <h2 className="mb-2 text-base font-semibold">{t("AI spending")}</h2>
+        <p className="mb-4 text-sm text-muted">
+          {t("What each call to the AI cost, per user, workspace, agent and model. Estimated with the price table above.")}
+        </p>
+        <AiUsageReport scope="admin" />
       </section>
 
       <section className="panel rounded p-4 sm:p-6">
