@@ -16,7 +16,7 @@
 export type AgentMode = "INHERIT" | "OFF" | "DRAFT" | "AUTO";
 /** Igual ao enum SentBy do plano. */
 export type SentBy = "CONTACT" | "USER_APP" | "USER_PHONE" | "AGENT";
-export type WaProvider = "OPENWA" | "CLOUD_API";
+export type WaProvider = "OPENWA" | "CLOUD_API" | "UAZAPI";
 
 export const AGENTES = ["qualificacao", "atendimento", "suporte"] as const;
 export type AgenteTipo = (typeof AGENTES)[number];

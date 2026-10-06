@@ -1753,6 +1753,8 @@ model AdminAccessLog {
 enum WaProvider {
   OPENWA
   CLOUD_API
+  /// uazapi (06/10/2026): não oficial, com proxy gerenciado por cidade (IP do Brasil).
+  UAZAPI
 
   @@schema("whatsapp")
 }
@@ -1792,8 +1794,8 @@ model WaSession {
   workspaceId       String
   /// Quem conectou o número.
   ownerUserId       String
-  provider          WaProvider
-  /// id no OpenWA ou phone_number_id na Meta.
+  provider          WaProvider  @default(OPENWA)
+  /// id no OpenWA, phone_number_id na Meta ou id da instância na uazapi.
   providerSessionId String      @unique
   phoneE164         String?
   displayName       String?
@@ -1812,6 +1814,13 @@ model WaSession {
   wabaId            String?
   /// Cloud API: token de negócio cifrado (AES-256-GCM). OpenWA não usa.
   accessTokenEnc    String?
+  /// uazapi: token da instância cifrado (AES-256-GCM, ENCRYPTION_KEY).
+  instanceTokenEnc  String?
+  /// uazapi: região do proxy gerenciado (valores de /proxy-managed/*).
+  proxyCountry      String?
+  proxyState        String?
+  proxyCity         String?
+  proxyCityLabel    String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 

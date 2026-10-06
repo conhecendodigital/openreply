@@ -50,6 +50,7 @@ type SessionRow = {
   webhookSecretEnc: string | null;
   riskAcceptedAt: Date | null;
   wabaId: string | null;
+  instanceTokenEnc: string | null;
 };
 
 const SESSION_SELECT = {
@@ -63,6 +64,7 @@ const SESSION_SELECT = {
   webhookSecretEnc: true,
   riskAcceptedAt: true,
   wabaId: true,
+  instanceTokenEnc: true,
 } as const;
 
 function openSecret(enc: string | null): string | null {
@@ -88,6 +90,8 @@ function toSession(row: SessionRow): WaSessionRecord {
     webhookSecret: openSecret(row.webhookSecretEnc),
     riskAcceptedAt: row.riskAcceptedAt,
     wabaId: row.wabaId,
+    // uazapi: token da instância (só aberto no servidor, nunca logado).
+    instanceToken: row.provider === "UAZAPI" ? openSecret(row.instanceTokenEnc) : null,
   };
 }
 
