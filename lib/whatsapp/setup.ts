@@ -24,7 +24,9 @@ export function getWaRepository(): PrismaWaRepository {
 let registered = false;
 
 /** Registra uma vez por processo. Seguro chamar em toda requisição. */
-export function ensureWhatsAppRuntime(): WhatsAppRuntime | null {
+export function ensureWhatsAppRuntime(env: Record<string, string | undefined> = process.env): WhatsAppRuntime | null {
+  // Desligado: nem abre conexão com o banco.
+  if (env.WHATSAPP_ENABLED !== "1") return null;
   if (!registered) {
     registerWhatsAppRuntime({
       repo: getWaRepository(),
@@ -35,7 +37,7 @@ export function ensureWhatsAppRuntime(): WhatsAppRuntime | null {
     });
     registered = true;
   }
-  return getWhatsAppRuntime();
+  return getWhatsAppRuntime(env);
 }
 
 /** Liga ou não (pra tela mostrar o aviso certo). Nunca devolve valor de variável. */

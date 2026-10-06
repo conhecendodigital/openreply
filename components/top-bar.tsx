@@ -26,6 +26,9 @@ const pageTitles: Record<string, string> = {
   "/sequences": "Sequences",
   "/conversation-links": "Conversation links",
   "/channels": "Channels",
+  "/whatsapp/inbox": "WhatsApp",
+  "/whatsapp/connections": "WhatsApp",
+  "/whatsapp/agents": "WhatsApp",
   "/flows": "Flows",
   "/flows/new": "New flow",
   // Etapa 5

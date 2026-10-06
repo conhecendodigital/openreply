@@ -349,7 +349,7 @@ export default function WhatsAppInboxPage() {
                         {t("Automatic on")}
                       </button>
                     ) : (
-                      <button type="button" className={`${btnSecondary} hidden px-3 py-1.5 text-xs md:inline-flex`} onClick={() => setConfirmAuto(true)}>
+                      <button type="button" className="hidden items-center justify-center rounded-lg bg-surface-hover px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-border md:inline-flex" onClick={() => setConfirmAuto(true)}>
                         {t("Send by itself")}
                       </button>
                     )}
@@ -437,7 +437,8 @@ export default function WhatsAppInboxPage() {
                         }}
                         rows={1}
                         maxLength={4000}
-                        placeholder={t("Write a message (Enter sends, Shift+Enter breaks the line)")}
+                        placeholder={t("Write a message")}
+                        title={t("Write a message (Enter sends, Shift+Enter breaks the line)")}
                         aria-label={t("Message")}
                         className="max-h-32 min-h-[42px] flex-1 resize-none rounded-lg border border-border bg-white px-3 py-2.5 text-sm placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
                       />

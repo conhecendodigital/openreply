@@ -94,6 +94,7 @@ export const ptWhatsapp: Record<string, string> = {
   "The 24 hour window is closed. WhatsApp only lets you answer within 24 hours of the contact's last message. When they write again, you can answer.":
     "A janela de 24 horas fechou. O WhatsApp só deixa responder até 24 horas depois da última mensagem do contato. Quando ele escrever de novo, você pode responder.",
   "This number is disconnected. Reconnect it in Connections to answer.": "Este número está desconectado. Reconecte em Conexões pra responder.",
+  "Write a message": "Escreva uma mensagem",
   "Write a message (Enter sends, Shift+Enter breaks the line)": "Escreva uma mensagem (Enter envia, Shift+Enter quebra a linha)",
   "When you answer here, the AI agent pauses in this conversation for 24 hours.": "Quando você responde aqui, o agente de IA pausa nesta conversa por 24 horas.",
   "Let the agent send by itself in this conversation?": "Deixar o agente enviar sozinho nesta conversa?",

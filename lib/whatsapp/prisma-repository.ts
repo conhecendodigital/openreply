@@ -92,10 +92,11 @@ function toSession(row: SessionRow): WaSessionRecord {
 }
 
 export class PrismaWaRepository implements WaRepository {
-  constructor(private readonly base: PrismaClient = getPrisma()) {}
+  /** Sem cliente, usa o de sempre (DATABASE_URL), aberto só na primeira consulta. */
+  constructor(private readonly client?: PrismaClient) {}
 
   private sys<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-    return withSystemRole(fn, this.base);
+    return withSystemRole(fn, this.client ?? getPrisma());
   }
 
   async findSessionByProvider(provider: WaProvider, providerSessionId: string) {
