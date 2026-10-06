@@ -38,6 +38,8 @@ export function isQuizHost(host: string, env: Record<string, string | undefined>
   if (!appHost) return false; // without the app host we cannot tell: behave as the app
   if (host === appHost) return false;
   if (host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.endsWith(".localhost")) return false;
+  // Internal service names (Docker/Dokploy, e.g. openreply-web-qsbqgu:3000, used by the cron) have no dot.
+  if (!host.includes(".")) return false;
   return true;
 }
 

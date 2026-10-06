@@ -17,6 +17,9 @@ describe("isQuizHost", () => {
     expect(isQuizHost("localhost", env)).toBe(false);
     expect(isQuizHost("127.0.0.1", env)).toBe(false);
     expect(isQuizHost("", env)).toBe(false);
+    // o cron chama o web pelo nome interno do serviço (sem ponto)
+    expect(isQuizHost("openreply-web-qsbqgu", env)).toBe(false);
+    expect(isQuizHost("web", env)).toBe(false);
   });
   it("outro host é domínio de quiz; com QUIZ_DOMAINS só os listados", () => {
     expect(isQuizHost("quiz.cloudmatheus.com.br", env)).toBe(true);
