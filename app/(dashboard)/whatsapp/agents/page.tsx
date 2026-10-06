@@ -264,8 +264,7 @@ export default function WhatsAppAgentsPage() {
 
           <TrainPanel onDraft={applyDraft} disabled={saving} />
 
-          {draft && <ReviewPanel draft={draft} saved={draftSaved} onClose={closeDraft} />}
-          {brainMsg && <p className={`text-sm ${brainMsg.ok ? "text-success" : "text-error"}`}>{brainMsg.text}</p>}
+          {draft && <ReviewPanel draft={draft} saved={draftSaved} notice={brainMsg} onClose={closeDraft} />}
 
           <section className="panel space-y-3 rounded-xl p-4 sm:p-5">
             <h2 className="text-base font-semibold">{t("About your business")}</h2>

@@ -129,12 +129,23 @@ function Group({ title, hint, children, tone = "default", count }: { title: stri
 }
 
 /** Painel "Confira antes de salvar". */
-export function ReviewPanel({ draft, saved, onClose }: { draft: RascunhoTreino; saved: boolean; onClose: () => void }) {
+export function ReviewPanel({
+  draft,
+  saved,
+  notice,
+  onClose,
+}: {
+  draft: RascunhoTreino;
+  saved: boolean;
+  /** Resultado do envio do documento pro cérebro, depois do Salvar. */
+  notice?: { ok: boolean; text: string } | null;
+  onClose: () => void;
+}) {
   const t = useT();
   const r = draft.revisar;
   return (
     <section className="panel space-y-3 rounded-xl border border-warning/40 p-4 sm:p-5" aria-label={t("Check before saving")}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div className="min-w-0">
           <h2 className="text-base font-semibold">{saved ? t("What came from the document") : t("Check before saving")}</h2>
           <p className="mt-1 text-sm text-muted">
@@ -142,8 +153,9 @@ export function ReviewPanel({ draft, saved, onClose }: { draft: RascunhoTreino; 
               ? t("Saved. The agents are still turned off. Use the test cases below before turning them on.")
               : t("Draft from {file}. Nothing was saved yet. The fields marked From the document were filled in by the AI: read them, fix what is wrong and click Save.", { file: draft.arquivo.nome })}
           </p>
+          {notice && <p className={`mt-1 text-sm ${notice.ok ? "text-success" : "text-error"}`}>{notice.text}</p>}
         </div>
-        <button type="button" onClick={onClose} className="shrink-0 text-xs text-muted hover:underline">
+        <button type="button" onClick={onClose} className="shrink-0 self-end text-xs text-muted hover:underline sm:self-auto">
           {saved ? t("Close") : t("Discard draft")}
         </button>
       </div>
