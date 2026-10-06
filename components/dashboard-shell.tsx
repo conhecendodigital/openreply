@@ -4,6 +4,7 @@ import { useState } from "react";
 import Sidebar from "@/components/sidebar";
 import TopBar from "@/components/top-bar";
 import ChannelAlertBanner, { type BannerAlert } from "@/components/channel-alert-banner";
+import type { AdminMenuState } from "@/lib/platform-admin";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -12,6 +13,8 @@ interface DashboardShellProps {
   instagramAccountCount: number;
   /** Channels that need attention (banner at the top of every page). */
   channelAlerts?: BannerAlert[];
+  /** Item Admin do menu: só o admin da plataforma (lib/platform-admin.ts). */
+  adminMenu?: AdminMenuState;
 }
 
 export default function DashboardShell({
@@ -20,6 +23,7 @@ export default function DashboardShell({
   instagramUsername,
   instagramAccountCount,
   channelAlerts = [],
+  adminMenu = null,
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -32,6 +36,7 @@ export default function DashboardShell({
         onClose={() => setSidebarOpen(false)}
         workspaceName={workspaceName}
         channelsNeedAttention={channelAlerts.length > 0}
+        adminMenu={adminMenu}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">

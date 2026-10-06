@@ -18,12 +18,16 @@
  * pro nome do grupo quando ele está fechado. A Etapa 6 entra como grupo "Quiz".
  * 2026-10-10: Etapa 6. Grupo "Quiz" (funis interativos), logo depois de Automações.
  * 2026-10-06: grupo "WhatsApp" (Conversas, Conexões, Agentes), logo depois de Conversas.
+ * 2026-10-06: grupo "Admin da plataforma" no fim, só pro admin da plataforma
+ * (adminMenu vem do servidor, lib/platform-admin.ts). Pra qualquer outra
+ * pessoa o grupo não é renderizado.
  */
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LangSwitch, useT } from "@/components/lang-provider";
+import type { AdminMenuState } from "@/lib/platform-admin";
 
 type Icone = (props: { ativo: boolean }) => React.ReactElement;
 
@@ -90,6 +94,9 @@ const icones: Record<string, Icone> = {
   "/settings": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 6h18M3 12h18M3 18h18" /></svg>
   ),
+  "/admin": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="8" cy="15" r="4" /><path {...traco(ativo)} d="m11 12 9-9M17 6l3 3M14.5 8.5l2 2" /></svg>
+  ),
   "/diagnostics": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="12" cy="12" r="9" /><path {...traco(ativo)} d="M12 7v5l3 2" /></svg>
   ),
@@ -152,6 +159,21 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
   },
 ];
 
+type NavSection = { title: string; items: { label: string; href: string; icon?: string }[]; notice?: string };
+
+/** Grupo do admin da plataforma (no fim do menu). null = não aparece. */
+export function adminSection(state: AdminMenuState | null | undefined): NavSection | null {
+  if (state === "admin") return { title: "Platform admin", items: [{ label: "Admin", href: "/admin" }] };
+  if (state === "needs_2fa") {
+    return {
+      title: "Platform admin",
+      items: [{ label: "Admin", href: "/account/two-factor", icon: "/admin" }],
+      notice: "Turn on two-step verification to open Admin.",
+    };
+  }
+  return null;
+}
+
 const isActiveHref = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
 
 /** Which groups the owner left open or closed. Browser only; empty is fine. */
@@ -191,6 +213,8 @@ interface SidebarProps {
   workspaceName: string;
   /** True when some channel needs attention: red dot next to "Channels". */
   channelsNeedAttention?: boolean;
+  /** Platform admin only (computed on the server). */
+  adminMenu?: AdminMenuState;
 }
 
 /** Marca: ícone com o gradiente do Instagram + nome. */
@@ -208,7 +232,7 @@ export function LeadEngineLogo({ className = "" }: { className?: string }) {
   );
 }
 
-export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAttention = false }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAttention = false, adminMenu = null }: SidebarProps) {
   const pathname = usePathname();
   const t = useT();
   // How many AI drafts wait for a human, shown next to "Approvals".
@@ -264,7 +288,7 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label={t("Menu")}>
-          {navSections.map((section, i) => {
+          {[...navSections, ...(adminMenu ? [adminSection(adminMenu)!] : [])].map((section: NavSection, i) => {
             const hasActive = section.items.some((item) => isActiveHref(pathname, item.href));
             const open = openGroups[section.title] ?? hasActive;
             const groupId = `menu-grupo-${i}`;
@@ -305,7 +329,7 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
                   <ul id={groupId} className="mb-2 space-y-0.5 pl-2">
                     {section.items.map((item) => {
                       const isActive = isActiveHref(pathname, item.href);
-                      const Icon = icones[item.href];
+                      const Icon = icones[item.icon ?? item.href];
                       return (
                         <li key={item.href}>
                           <Link
@@ -333,6 +357,7 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
                         </li>
                       );
                     })}
+                    {section.notice && <li className="px-3 pb-1 text-xs text-warning">{t(section.notice)}</li>}
                   </ul>
                 )}
               </div>

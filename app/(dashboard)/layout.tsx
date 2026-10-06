@@ -6,6 +6,7 @@ import { getSecurityState, shouldOfferPassword, SKIP_PASSWORD_COOKIE } from "@/l
 import { prisma } from "@/lib/db/client";
 import { getChannelAlerts, type ChannelAlert } from "@/lib/channels/overview";
 import { ensureWorkspaceForUser } from "@/lib/workspace";
+import { adminMenuState } from "@/lib/platform-admin";
 
 export default async function DashboardLayout({
   children,
@@ -47,6 +48,7 @@ export default async function DashboardLayout({
       instagramUsername={accounts[0]?.username ?? null}
       instagramAccountCount={accounts.length}
       channelAlerts={channelAlerts}
+      adminMenu={adminMenuState(session.user)}
     >
       {children}
     </DashboardShell>

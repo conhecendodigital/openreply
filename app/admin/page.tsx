@@ -1,17 +1,19 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getT } from "@/lib/i18n/server";
 import { prisma } from "@/lib/db/client";
-import { BETA_ALLOWLIST_LIMIT, requirePlatformAdmin } from "@/lib/platform-admin";
+import { adminMenuState, BETA_ALLOWLIST_LIMIT, requirePlatformAdmin } from "@/lib/platform-admin";
+import { auth } from "@/lib/auth";
 import { listSessionsAsAdmin } from "@/lib/whatsapp/admin-access";
 import { addAllowlistEmail, removeAllowlistEmail } from "./actions";
 import { AiKeysPanel } from "@/components/ai-keys-panel";
 import { AiUsageReport } from "@/components/ai-usage-report";
 
 /**
- * Fase 0 (06/10/2026): painel do admin da plataforma (fora do menu: só o
- * admin com 2FA abre, os outros recebem 404). Números e status de
+ * Fase 0 (06/10/2026): painel do admin da plataforma (no menu só pro admin,
+ * grupo "Admin da plataforma"; só o admin com 2FA abre, admin sem 2FA vai pra
+ * tela de ligar o 2FA, os outros recebem 404). Números e status de
  * todo mundo, sem conteúdo de conversa (abrir conversa de outro workspace só
  * com registro de auditoria, lib/whatsapp/admin-access.ts).
  */
@@ -24,7 +26,12 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const admin = await requirePlatformAdmin();
-  if (!admin) notFound();
+  if (!admin) {
+    // Admin da plataforma que ainda não ligou o 2FA: vai pra tela de ligar (não 404).
+    const session = await auth().catch(() => null);
+    if (adminMenuState(session?.user) === "needs_2fa") redirect("/account/two-factor");
+    notFound();
+  }
   const t = await getT();
 
   const [allowlist, users, waSessions] = await Promise.all([
