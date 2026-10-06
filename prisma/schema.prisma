@@ -126,6 +126,7 @@ model Workspace {
   waLabels           WaLabel[]
   waAiUsage          WaAiUsage[]
   waSendBlocks       WaSendBlock[]
+  waNumberDeletions  WaNumberDeletion[]
   waAgentProfiles    WaAgentProfile[]
   waAgentRuns        WaAgentRun[]
   waAgentConfigs     WaAgentConfig[]
@@ -1834,6 +1835,10 @@ model WaSession {
   proxyState        String?
   proxyCity         String?
   proxyCityLabel    String?
+  /// "Excluir só o número": some de Conexões, as conversas ficam só pra leitura.
+  /// Com isso preenchido o webhook e os envios ignoram o número.
+  deletedAt         DateTime?
+  deletedById       String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -2072,6 +2077,34 @@ model WaWebhookEvent {
   createdAt   DateTime   @default(now())
 
   @@index([createdAt])
+  @@schema("whatsapp")
+}
+
+/// Auditoria de "Excluir número" (Conexões): quem, quando, qual opção e se o
+/// provedor respondeu. Sem conteúdo de mensagem. Só cresce: a RLS não deixa
+/// editar nem apagar.
+model WaNumberDeletion {
+  id                   String     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  workspaceId          String
+  /// Id do WaSession (pode não existir mais, na opção que apaga tudo).
+  sessionId            String
+  deletedById          String
+  /// number_only | number_and_conversations | conversations_after
+  mode                 String
+  provider             WaProvider
+  /// Id da sessão no OpenWA ou da instância na uazapi (pra conferir no painel do provedor).
+  providerSessionId    String
+  /// Nome ou número na hora da exclusão.
+  label                String?
+  /// false = o provedor não respondeu; conferir no painel dele.
+  providerOk           Boolean
+  conversationsDeleted Int        @default(0)
+  messagesDeleted      Int        @default(0)
+  createdAt            DateTime   @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@schema("whatsapp")
 }
 
