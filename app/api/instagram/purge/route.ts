@@ -3,6 +3,7 @@ import { getApiCaller } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
 import { clearAccountCache } from "@/lib/contacts/record";
 import { countKeptChannelData } from "@/lib/channels/overview";
+import { purgeInstagramAccountData } from "@/lib/channels/purge";
 import { getCurrentWorkspaceContext } from "@/lib/workspace-access";
 
 /**
@@ -80,25 +81,9 @@ export async function POST(request: NextRequest) {
 
   const deleted = await countKeptChannelData(account.id, account.instagramId).catch(() => null);
 
-  // Explicit order inside one transaction: everything or nothing.
-  await prisma.$transaction(async (tx) => {
-    const byAccount = { instagramAccountId: account.id };
-    await tx.draftReply.deleteMany({ where: byAccount });
-    await tx.outboundMessage.deleteMany({ where: byAccount });
-    await tx.commentModeration.deleteMany({ where: byAccount });
-    await tx.moderationSettings.deleteMany({ where: byAccount });
-    await tx.conversationLink.deleteMany({ where: byAccount }); // + opens
-    await tx.linkClick.deleteMany({ where: byAccount });
-    await tx.dmLog.deleteMany({ where: byAccount });
-    await tx.automation.deleteMany({ where: byAccount }); // + tracked links, sequences, steps, enrollments
-    await tx.contact.deleteMany({ where: byAccount }); // + tags, events, enrollments
-    await tx.followerSnapshot.deleteMany({ where: byAccount });
-    await tx.directMessage.deleteMany({ where: { accountId: account.instagramId } }); // + media
-    await tx.processedComment.deleteMany({
-      where: { instagramAccountId: { in: [account.id, account.instagramId] } },
-    });
-    await tx.instagramAccount.delete({ where: { id: account.id } });
-  });
+  // Explicit order inside one transaction: everything or nothing (shared with
+  // Meta's data deletion callback, lib/channels/purge.ts).
+  const raw = await purgeInstagramAccountData(account);
   clearAccountCache();
 
   await prisma.operationalEvent
@@ -108,7 +93,7 @@ export async function POST(request: NextRequest) {
         source: "SYSTEM",
         level: "WARNING",
         message: `Instagram @${account.username} deleted for real by the owner`,
-        payload: { instagramAccountId: account.id, instagramId: account.instagramId, by: context.userId, deleted },
+        payload: { instagramAccountId: account.id, instagramId: account.instagramId, by: context.userId, deleted, raw },
       },
     })
     .catch(() => undefined);
