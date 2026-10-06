@@ -184,8 +184,9 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
   const consentMode = funnel.settings.pixelConsent ?? "banner";
   const storedConsent = mounted && pixelId ? readConsent() : null;
   const consentChoice = consentPick ?? storedConsent;
-  const pixelAllowed = Boolean(pixelId) && (consentMode === "notice" || consentChoice === "accepted");
-  const showBanner = Boolean(pixelId) && mounted && consentChoice === null;
+  const pixelAllowed = Boolean(pixelId) && (consentMode === "notice" || consentMode === "off" || consentChoice === "accepted");
+  // "off": no notice at all; the privacy policy stays linked in the page footer.
+  const showBanner = Boolean(pixelId) && mounted && consentMode !== "off" && consentChoice === null;
 
   // LGPD: the signed contact token (?c=) already reached the server; take it
   // out of the address bar so the Pixel (which reads the page URL), a shared

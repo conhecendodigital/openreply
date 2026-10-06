@@ -270,7 +270,7 @@ const settingsSchema = z.object({
     .trim()
     .regex(/^(\d{5,20})?$/, "Pixel ID: only digits (5 to 20)")
     .optional(),
-  pixelConsent: z.enum(["banner", "notice"]).optional(),
+  pixelConsent: z.enum(["banner", "notice", "off"]).optional(),
   pixelStepEvents: z.boolean().optional(),
   seo: z
     .object({

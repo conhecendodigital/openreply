@@ -167,6 +167,7 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
               options={[
                 { value: "banner", label: t("Ask first (Pixel only after Accept)") },
                 { value: "notice", label: t("Only inform (Pixel loads right away)") },
+                { value: "off", label: t("No notice (Pixel loads right away)") },
               ]}
               hint={t("Asking first is the safest choice for LGPD.")}
             />
