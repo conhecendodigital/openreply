@@ -14,7 +14,7 @@ O número pessoal do dono foi bloqueado 5 segundos depois de conectar pelo OpenW
 | `UAZAPI_ADMIN_TOKEN` | admintoken: cria e lista instâncias. Nunca vai pro navegador nem pro worker de envio |
 | `UAZAPI_MAX_INSTANCES` | Opcional. Dispositivos do plano (padrão 2). A uazapi não informa o tamanho do plano |
 
-Sem `UAZAPI_SERVER_URL` e `UAZAPI_ADMIN_TOKEN`, a opção uazapi aparece desabilitada na tela, com a explicação. Nada mais muda. O worker (`worker/wa-worker.ts`) também precisa de `UAZAPI_SERVER_URL` pra enviar.
+Desde 06/10/2026 o dono também pode colar a Server URL, o Admin token e os dispositivos em Canais > Conexões e chaves (vale antes destas variáveis, ver docs/canais-chaves.md). Sem nada salvo lá e sem `UAZAPI_SERVER_URL` e `UAZAPI_ADMIN_TOKEN`, a opção uazapi aparece desabilitada na tela, com a explicação. Nada mais muda. O worker (`worker/wa-worker.ts`) também precisa de `UAZAPI_SERVER_URL` pra enviar.
 
 ## Migração
 
