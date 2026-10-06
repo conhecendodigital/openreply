@@ -370,7 +370,9 @@ function AgentCard({
           <h2 className="text-base font-semibold">{t(info.name)}</h2>
           <p className="mt-0.5 text-sm text-muted">{t(info.what)}</p>
         </div>
-        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium">
+        {/* relative: the sr-only checkbox stays inside the switch, so clicking it
+            no longer scrolls the page to an empty spot (looked like a blank screen). */}
+        <label className="relative flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium">
           <span className={agent.ativo ? "text-success" : "text-muted"}>{agent.ativo ? t("Turned on") : t("Turned off")}</span>
           <input
             type="checkbox"
