@@ -14,6 +14,7 @@
  * e checagem) só entra com WHATSAPP_JEV=1, porque manda texto da conversa pra
  * TypeSafe (ponto em aberto de LGPD); sem ele tudo vira rascunho.
  */
+import type { PrismaClient } from "@/app/generated/prisma/client";
 import { getAiCredential, getAiSettings } from "@/lib/ai/credentials";
 import { MODEL_JEV } from "@/lib/ai/catalog";
 import { recordAiUsage } from "@/lib/ai/usage";
@@ -40,8 +41,18 @@ export function jevLigado(env: Record<string, string | undefined> = process.env)
   return env.WHATSAPP_JEV === "1";
 }
 
-export function storeFor(ownerUserId: string, workspaceId: string, deps: { repo: WaRepository; queue: WaQueuePort }) {
-  return new PrismaAgentStore(ownerUserId, workspaceId, { repo: deps.repo, queue: deps.queue, removePendingSend });
+export function storeFor(
+  ownerUserId: string,
+  workspaceId: string,
+  deps: { repo: WaRepository; queue: WaQueuePort; app?: PrismaClient; system?: PrismaClient; removePendingSend?: (outboxId: string) => Promise<boolean> }
+) {
+  return new PrismaAgentStore(ownerUserId, workspaceId, {
+    repo: deps.repo,
+    queue: deps.queue,
+    app: deps.app,
+    system: deps.system,
+    removePendingSend: deps.removePendingSend ?? removePendingSend,
+  });
 }
 
 /** Busca no cérebro do agente (PDFs). Sem chave OpenAI no /admin, volta vazio. */

@@ -33,6 +33,8 @@ type Tx = Parameters<Parameters<typeof withRls>[1]>[0];
 export type PainelDeps = {
   repo: WaRepository;
   queue: WaQueuePort;
+  /** Tira da fila um envio do agente que ainda não começou (BullMQ). */
+  removePendingSend?: (outboxId: string) => Promise<boolean>;
   app?: PrismaClient;
   system?: PrismaClient;
   env?: Record<string, string | undefined>;

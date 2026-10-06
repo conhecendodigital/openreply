@@ -36,7 +36,8 @@ import {
   type SentBy,
 } from "@/lib/whatsapp/agentes/types";
 import { renderMemory } from "@/lib/whatsapp/cerebro/memory";
-import { cerebroForUser } from "@/lib/whatsapp/cerebro/service";
+import { createPrismaSqlExecutor, type PrismaRawLike } from "@/lib/whatsapp/cerebro/sql";
+import { CerebroStore } from "@/lib/whatsapp/cerebro/store";
 import { enqueuePlanned } from "@/lib/whatsapp/outbound";
 import type { WaQueuePort } from "@/lib/whatsapp/queue";
 import type { WaRepository } from "@/lib/whatsapp/repository";
@@ -405,8 +406,9 @@ export class PrismaAgentStore implements AgentStore {
 
   /** Memória do contato = a do cérebro (WaContactMemory), já resumida em texto. */
   async lerMemoria(contactId: string): Promise<MemoriaContato | null> {
-    const { store } = await cerebroForUser(this.ownerUserId, this.workspaceId);
-    const mem = await store.getMemory(this.workspaceId, contactId);
+    // Mesmo executor do cérebro (RLS do dono + workspace, papel le_app).
+    const db = createPrismaSqlExecutor(this.app as unknown as PrismaRawLike, { userId: this.ownerUserId, workspaceId: this.workspaceId });
+    const mem = await new CerebroStore(db).getMemory(this.workspaceId, contactId);
     if (!mem) return null;
     return { resumo: renderMemory(mem) || null, fatos: [], ultimoAgente: null, atualizadoEm: mem.updatedAt };
   }
