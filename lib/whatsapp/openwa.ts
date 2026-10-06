@@ -13,6 +13,7 @@
  *   GET  /api/sessions/:id/qr                  QR atual
  *   GET  /api/sessions/:id                     status
  *   POST /api/sessions/:id/logout              desconectar
+ *   DELETE /api/sessions/:id                   apagar a sessão (só no "Excluir número" de Conexões)
  *   POST /api/sessions/:id/webhooks            registrar nosso webhook com segredo HMAC
  *   POST /api/sessions/:id/messages/send-text  (+ send-image/-video/-audio/-document)
  *   POST /api/sessions/:id/chats/typing        { chatId, state: typing|paused }
@@ -337,5 +338,18 @@ export class OpenWAConnector implements WhatsAppConnector {
 
   async disconnect(): Promise<void> {
     await this.request("POST", this.sessionPath("/logout"));
+  }
+
+  /**
+   * Apaga a sessão no gateway. Só o "Excluir número" de Conexões chama (nunca
+   * o Desconectar). 404 = a sessão já não existe lá, então conta como feito.
+   */
+  async deleteSession(): Promise<void> {
+    try {
+      await this.request("DELETE", this.sessionPath());
+    } catch (error) {
+      if (error instanceof WhatsAppConnectorError && error.status === 404) return;
+      throw error;
+    }
   }
 }
