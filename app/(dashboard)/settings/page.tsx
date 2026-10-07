@@ -9,7 +9,8 @@ import { AiUsageReport } from "@/components/ai-usage-report";
 import { InstagramConnectNotice } from "@/components/instagram-connect-notice";
 
 import { useT } from "@/components/lang-provider";
-import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
+import { CollapsibleSection, SectionsProvider } from "@/components/ui/collapsible-section";
+import { TabPanel, Tabs, type TabItem } from "@/components/ui/tabs";
 
 type ChannelStatus = "ACTIVE" | "NEEDS_RECONNECT" | "DISCONNECTED";
 
@@ -154,6 +155,15 @@ export default function SettingsPage() {
   const needsReconnect = accounts.some((a) => a.status === "NEEDS_RECONNECT");
   const memberCount = membersData?.members.length ?? 0;
   const inviteCount = membersData?.invitations.length ?? 0;
+  // 07/10/2026: uma aba por bloco, no lugar da página com tudo empilhado.
+  const tabs: TabItem[] = [
+    { id: "instagram", label: "Instagram", badge: needsReconnect ? { tone: "warning", label: t("Needs attention") } : null },
+    { id: "equipe", label: t("Team"), badge: memberError ? { tone: "error", label: memberError } : membersData ? { text: String(memberCount) } : null },
+    { id: "seguranca", label: t("Security") },
+    { id: "gastos-ia", label: t("AI spending tab") },
+    ...(canManageMembers ? [{ id: "pixel-meta", label: t("Pixel tab") }, { id: "api-mcp", label: t("API & MCP") }] : []),
+    { id: "uso", label: t("Usage") },
+  ];
 
   return (
     <SectionsProvider page="configuracoes">
@@ -165,8 +175,8 @@ export default function SettingsPage() {
         <InstagramConnectNotice />
       </Suspense>
 
-      <SectionIndex />
-
+      <Tabs page="configuracoes" label={t("Settings sections")} tabs={tabs}>
+      <TabPanel id="instagram">
       <CollapsibleSection
         id="instagram"
         title={t("Instagram Connection")}
@@ -283,7 +293,9 @@ export default function SettingsPage() {
           </a>
         </div>
       </CollapsibleSection>
+      </TabPanel>
 
+      <TabPanel id="equipe">
       <CollapsibleSection
         id="equipe"
         title={t("Team")}
@@ -394,9 +406,13 @@ export default function SettingsPage() {
           </form>
         )}
       </CollapsibleSection>
+      </TabPanel>
 
+      <TabPanel id="seguranca">
       <SecurityPanel />
+      </TabPanel>
 
+      <TabPanel id="gastos-ia">
       <CollapsibleSection
         id="gastos-ia"
         title={t("My AI spending")}
@@ -406,8 +422,10 @@ export default function SettingsPage() {
       >
         <AiUsageReport scope="me" />
       </CollapsibleSection>
+      </TabPanel>
 
       {canManageMembers && (
+        <TabPanel id="pixel-meta">
         <CollapsibleSection
           id="pixel-meta"
           title={t("Meta Pixel and Conversions API")}
@@ -424,10 +442,16 @@ export default function SettingsPage() {
             {t("Open Connections and keys")}
           </a>
         </CollapsibleSection>
+        </TabPanel>
       )}
 
-      {canManageMembers && <ApiKeysPanel />}
+      {canManageMembers && (
+        <TabPanel id="api-mcp">
+          <ApiKeysPanel />
+        </TabPanel>
+      )}
 
+      <TabPanel id="uso">
       <CollapsibleSection
         id="uso"
         title={t("Usage")}
@@ -448,6 +472,8 @@ export default function SettingsPage() {
           </span>
         </div>
       </CollapsibleSection>
+      </TabPanel>
+      </Tabs>
     </div>
     </SectionsProvider>
   );

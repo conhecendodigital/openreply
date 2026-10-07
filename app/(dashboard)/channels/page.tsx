@@ -21,7 +21,8 @@ import { useLang, useT } from "@/components/lang-provider";
 import { useDateTime, useTimeAgo } from "@/components/contact-ui";
 import { channelAlertText, isSeriousAlert, type BannerAlert } from "@/components/channel-alert-banner";
 import { IntegrationsPanel } from "@/components/integrations-panel";
-import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
+import { CollapsibleSection, SectionsProvider } from "@/components/ui/collapsible-section";
+import { TabPanel, Tabs, type TabItem } from "@/components/ui/tabs";
 
 type Status = "ACTIVE" | "NEEDS_RECONNECT" | "DISCONNECTED";
 type Role = "OWNER" | "ADMIN" | "MEMBER";
@@ -150,6 +151,11 @@ export default function ChannelsPage() {
   const igOn = instagram.filter((c) => c.status === "ACTIVE").length;
   const igAlert = instagram.some((c) => c.status === "NEEDS_RECONNECT" || c.alerts.length > 0);
   const comingSoon = data?.comingSoon ?? [];
+  // 07/10/2026: abas Instagram e Conexões e chaves (o link antigo /channels#conexoes abre a segunda).
+  const tabs: TabItem[] = [
+    { id: "instagram", label: "Instagram", aliases: ["em-breve"], badge: instagram.length > 0 ? { text: t("{a} of {b}", { a: igOn, b: instagram.length }), tone: igAlert ? "warning" : "success" } : null },
+    { id: "conexoes", label: t("Connections and keys") },
+  ];
 
   return (
     <SectionsProvider page="canais">
@@ -171,8 +177,8 @@ export default function ChannelsPage() {
         )}
       </div>
 
-      <SectionIndex />
-
+      <Tabs page="canais" label={t("Channel sections")} tabs={tabs}>
+      <TabPanel id="instagram">
       <CollapsibleSection
         id="instagram"
         title={
@@ -225,11 +231,15 @@ export default function ChannelsPage() {
           ))}
         </div>
       </CollapsibleSection>
+      </TabPanel>
 
+      <TabPanel id="conexoes">
       {canManage && <IntegrationsPanel />}
       {role === "MEMBER" && (
         <p className="text-sm text-muted">{t("Only owners and admins see the connection keys.")}</p>
       )}
+      </TabPanel>
+      </Tabs>
     </div>
     </SectionsProvider>
   );

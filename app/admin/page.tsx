@@ -9,7 +9,8 @@ import { listSessionsAsAdmin } from "@/lib/whatsapp/admin-access";
 import { addAllowlistEmail, removeAllowlistEmail } from "./actions";
 import { AiKeysPanel } from "@/components/ai-keys-panel";
 import { AiUsageReport } from "@/components/ai-usage-report";
-import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
+import { CollapsibleSection, SectionsProvider } from "@/components/ui/collapsible-section";
+import { TabPanel, Tabs, type TabItem } from "@/components/ui/tabs";
 
 /**
  * Fase 0 (06/10/2026): painel do admin da plataforma (no menu só pro admin,
@@ -53,6 +54,14 @@ export default async function AdminPage() {
   ]);
 
   const with2fa = users.filter((u) => u.twoFactorEnabled).length;
+  // 07/10/2026: uma aba por parte. Os links antigos (/admin#chaves-ia, #gastos-ia) abrem a aba certa.
+  const tabs: TabItem[] = [
+    { id: "acesso-beta", label: t("Beta access"), badge: { text: t("{a} of {b}", { a: allowlist.length, b: BETA_ALLOWLIST_LIMIT }), tone: allowlist.length >= BETA_ALLOWLIST_LIMIT ? "warning" : "default" } },
+    { id: "usuarios", label: t("Users"), badge: { text: String(users.length) } },
+    { id: "chaves-ia", label: t("AI keys") },
+    { id: "gastos-ia", label: t("AI spending") },
+    { id: "numeros-whatsapp", label: t("WhatsApp numbers"), aliases: ["numeros"], badge: waSessions ? { text: String(waSessions.length) } : { tone: "error", label: t("Could not read the WhatsApp tables.") } },
+  ];
 
   return (
     <SectionsProvider page="admin">
@@ -64,8 +73,8 @@ export default async function AdminPage() {
         </Link>
       </div>
 
-      <SectionIndex sticky={false} />
-
+      <Tabs page="admin" label={t("Admin sections")} tabs={tabs}>
+      <TabPanel id="acesso-beta">
       <CollapsibleSection
         id="acesso-beta"
         title={t("Beta access")}
@@ -118,21 +127,9 @@ export default async function AdminPage() {
           </form>
         )}
       </CollapsibleSection>
+      </TabPanel>
 
-      <CollapsibleSection id="chaves-ia" title={t("AI keys")} defaultOpen={false} summary={t("Keys, model of each agent, daily caps and price table")}>
-        <p className="mb-4 text-sm text-muted">
-          {t("One key per provider, used by every user in the beta. After you save it, only the last 4 characters show up here. Every change goes to the audit log.")}
-        </p>
-        <AiKeysPanel />
-      </CollapsibleSection>
-
-      <CollapsibleSection id="gastos-ia" title={t("AI spending")} summary={t("Per user, workspace, agent and model")}>
-        <p className="mb-4 text-sm text-muted">
-          {t("What each call to the AI cost, per user, workspace, agent and model. Estimated with the price table above.")}
-        </p>
-        <AiUsageReport scope="admin" />
-      </CollapsibleSection>
-
+      <TabPanel id="usuarios">
       <CollapsibleSection
         id="usuarios"
         title={t("Users")}
@@ -165,7 +162,27 @@ export default async function AdminPage() {
           </table>
         </div>
       </CollapsibleSection>
+      </TabPanel>
 
+      <TabPanel id="chaves-ia">
+      <CollapsibleSection id="chaves-ia" title={t("AI keys")} defaultOpen={false} summary={t("Keys, model of each agent, daily caps and price table")}>
+        <p className="mb-4 text-sm text-muted">
+          {t("One key per provider, used by every user in the beta. After you save it, only the last 4 characters show up here. Every change goes to the audit log.")}
+        </p>
+        <AiKeysPanel />
+      </CollapsibleSection>
+      </TabPanel>
+
+      <TabPanel id="gastos-ia">
+      <CollapsibleSection id="gastos-ia" title={t("AI spending")} summary={t("Per user, workspace, agent and model")}>
+        <p className="mb-4 text-sm text-muted">
+          {t("What each call to the AI cost, per user, workspace, agent and model. Estimated with the price table above.")}
+        </p>
+        <AiUsageReport scope="admin" />
+      </CollapsibleSection>
+      </TabPanel>
+
+      <TabPanel id="numeros-whatsapp">
       <CollapsibleSection
         id="numeros-whatsapp"
         title={t("WhatsApp numbers")}
@@ -194,6 +211,8 @@ export default async function AdminPage() {
           </ul>
         )}
       </CollapsibleSection>
+      </TabPanel>
+      </Tabs>
     </div>
     </SectionsProvider>
   );
