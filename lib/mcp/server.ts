@@ -679,18 +679,20 @@ export const TOOLS: Tool[] = [
   {
     name: "listar_dms_sem_resposta",
     description:
-      "Pessoas que mandaram DM e ainda não têm resposta nossa, com etiquetas, últimas mensagens e quantas horas faltam da janela de 24 h. Nunca lista quem o Matheus assumiu.",
+      "Pessoas que mandaram DM e ainda não têm resposta nossa, com etiquetas, últimas mensagens e quantas horas faltam da janela de 24 h. Nunca lista quem o Matheus assumiu. Pula quem só encerrou a conversa (obrigado, recebi, amém, emoji, coração no story): essas não precisam de rascunho.",
     inputSchema: {
       type: "object",
       properties: {
         limite: { type: "integer", description: "Quantas (até 50, padrão 20)" },
         incluirJanelaFechada: { ...bool, description: "true = também quem já passou das 24 h (não dá pra responder pela API)" },
+        incluirEncerradas: { ...bool, description: "true = também quem só agradeceu ou mandou emoji (normalmente não precisa)" },
       },
     },
     async run(args, call) {
       const params = new URLSearchParams();
       if (args.limite !== undefined) params.set("limite", String(args.limite));
       if (args.incluirJanelaFechada === true) params.set("incluirFechadas", "true");
+      if (args.incluirEncerradas === true) params.set("todas", "true");
       const res = await api(call, "GET", `/api/inbox/unanswered?${params.toString()}`);
       if (!res.ok) return res.result;
       return text(res.data);

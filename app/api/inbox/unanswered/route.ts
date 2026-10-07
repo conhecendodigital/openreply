@@ -4,6 +4,7 @@ import { intParam, ok, requireContext } from "@/lib/api-helpers";
 import { CONTEXT_CONTACT_SELECT, presentContact } from "@/lib/inbox/context";
 import { isTakeoverActive } from "@/lib/messaging/takeover";
 import { DEFAULT_WINDOW_MARGIN_MIN, WINDOW_MS } from "@/lib/messaging/window";
+import { needsReply } from "@/lib/inbox/needs-reply";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,10 @@ const MAX_LOOKBACK_DAYS = 30;
  * "No answer" is read from the stored DM history (DirectMessage, written by
  * the webhook itself) so it is right even while the CRM job is a few seconds
  * behind; lastInboundAt/lastOutboundAt only pick the candidates.
+ *
+ * 2026-10-07: a last message that only closes the conversation ("obrigado",
+ * "recebi", an emoji, a heart on a story) is skipped, so the vendedor stops
+ * proposing drafts nobody needs. ?todas=true lists them too.
  */
 export async function GET(request: NextRequest) {
   const auth = await requireContext();
@@ -27,6 +32,7 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const limit = intParam(params.get("limite") ?? params.get("limit"), 20, 1, 50);
   const includeClosed = ["1", "true", "sim"].includes((params.get("incluirFechadas") ?? params.get("includeClosed") ?? "").toLowerCase());
+  const includeClosings = ["1", "true", "sim"].includes((params.get("todas") ?? "").toLowerCase());
   const instagramAccountId = params.get("instagramAccountId");
   const now = new Date();
   const since = includeClosed
@@ -48,6 +54,7 @@ export async function GET(request: NextRequest) {
   });
 
   const out = [];
+  let skippedClosings = 0;
   for (const contact of candidates) {
     if (out.length >= limit) break;
     if (isTakeoverActive(contact, now)) continue;
@@ -57,7 +64,11 @@ export async function GET(request: NextRequest) {
       ? !last.fromMe
       : Boolean(contact.lastInboundAt && (!contact.lastOutboundAt || contact.lastInboundAt > contact.lastOutboundAt));
     if (!unanswered) continue;
+    if (last && !includeClosings && !needsReply(presented.lastMessages)) {
+      skippedClosings++;
+      continue;
+    }
     out.push({ ...presented, pendingDraft: contact.draftReplies[0] ?? null });
   }
-  return ok({ contacts: out, includeClosed });
+  return ok({ contacts: out, includeClosed, skippedClosings });
 }
