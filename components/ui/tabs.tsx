@@ -204,12 +204,14 @@ export function Tabs({
 
   // A aba ativa sempre à vista na barra (no celular ela rola).
   useEffect(() => {
-    const el = listRef.current?.querySelector<HTMLElement>(`#${CSS.escape(tabButtonId(active))}`);
-    try {
-      el?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-    } catch {
-      // navegador antigo
-    }
+    // Rola só a barra: scrollIntoView também empurrava a página pro lado no celular.
+    const list = listRef.current;
+    const el = list?.querySelector<HTMLElement>(`[data-aba="${active}"]`);
+    if (!list || !el) return;
+    const left = el.offsetLeft; // a barra é "relative": offsetLeft já é dentro dela
+    const right = left + el.offsetWidth;
+    if (left < list.scrollLeft) list.scrollLeft = Math.max(0, left - 16);
+    else if (right > list.scrollLeft + list.clientWidth) list.scrollLeft = right - list.clientWidth + 16;
   }, [active]);
 
   const report = useCallback((tabId: string, sectionId: string, value: TabReport | null) => {
@@ -257,7 +259,7 @@ export function Tabs({
           aria-label={label}
           aria-orientation="horizontal"
           onKeyDown={onKeyDown}
-          className="flex min-w-0 gap-1 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="relative flex min-w-0 gap-1 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {tabs.map((tb) => {
             const selected = tb.id === active;
