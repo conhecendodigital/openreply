@@ -59,7 +59,7 @@ export function blocoRegras(r: RegrasNegocio | null | undefined, baseCommand = "
   partes.push(linha("EXCEÇÕES DE SERVIÇO (esses são atendidos)", r.excecoesServico.map((s) => s.descricao)));
   if (r.infoMinima.length) {
     partes.push(
-      `INFORMAÇÕES MÍNIMAS PRA QUALIFICAR (qualificado só com TODAS, ditas pelo cliente): ${r.infoMinima.map((i) => i.campo).join("; ")}. Pergunte uma por vez, só a que falta.`
+      `INFORMAÇÕES MÍNIMAS PRA QUALIFICAR (qualificado só com TODAS, ditas pelo cliente): ${r.infoMinima.map((i) => i.campo).join("; ")}. Pergunte só o que falta. Se faltarem 3 ou mais, junte duas numa pergunta só, do jeito que se fala (ex.: "Qual seu nome e o bairro da obra?"). Com todas ditas, qualifique na hora, sem pergunta extra.`
     );
   }
   if (r.horario) partes.push(`HORÁRIO DE ATENDIMENTO: ${r.horario}`);

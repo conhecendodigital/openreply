@@ -4,7 +4,8 @@
  * Pra cada caso, um modelo faz o papel do cliente (a partir da situação do
  * caso) e o agente de qualificação responde do jeito de sempre: mesmo
  * Comando, mesmas regras duras, mesma verificação e a mesma correção (uma
- * vez). Até MAX_TURNOS trocas. No fim, a decisão do motor é comparada com a
+ * vez). De MAX_TURNOS a MAX_TURNOS_TETO trocas, conforme as informações mínimas
+ * (com 4 informações e 4 trocas o agente nunca chegava a qualificar). No fim, a decisão do motor é comparada com a
  * decisão esperada do caso: passou ou falhou, e quais regras foram quebradas.
  *
  * Nada é gravado em conversa nem enviado pra ninguém. O gasto vai pra Gastos
@@ -22,6 +23,13 @@ import { blocoFicha, blocoRegras, formatoExtra } from "./prompt";
 import { localDaConversa, mensagemDeCorrecaoRegras, verificarResposta, type Verificacao } from "./verificar";
 
 export const MAX_TURNOS = 4;
+export const MAX_TURNOS_TETO = 8;
+
+/** Trocas do teste: uma por informação mínima, mais a abertura e a transferência. */
+export function turnosDoTeste(regras: RegrasNegocio | null | undefined): number {
+  const n = regras?.infoMinima?.length ?? 0;
+  return Math.min(MAX_TURNOS_TETO, Math.max(MAX_TURNOS, n + 2));
+}
 export const MAX_TOKENS_AGENTE = 600;
 export const MAX_TOKENS_CLIENTE = 200;
 
@@ -136,7 +144,8 @@ async function rodarCaso(caso: CasoTeste, e: { regras: RegrasNegocio; profile: A
   });
 
   try {
-    for (let turno = 0; turno < MAX_TURNOS; turno++) {
+    const turnos = turnosDoTeste(e.regras);
+    for (let turno = 0; turno < turnos; turno++) {
       const c = await chamar(SISTEMA_CLIENTE, "", [{ role: "user", content: mensagemCliente(caso, conversa) }], MAX_TOKENS_CLIENTE);
       if (c === null) return fim("teto", "o teto de gasto do dia parou o teste");
       const textoCliente = lerMensagemCliente(c);

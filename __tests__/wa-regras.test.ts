@@ -20,7 +20,7 @@ import { exemploDaRespostaHumana, exemplosParecidos, limparExemplo } from "@/lib
 import { camposDaFicha, conferirExtracao, editarFicha, fichaVazia, juntarFicha, preencherPorRegra } from "@/lib/whatsapp/regras/ficha";
 import { blocoRegras } from "@/lib/whatsapp/regras/prompt";
 import { aplicarMudanca, lerSugestoesIa, sugestoesDosCasos } from "@/lib/whatsapp/regras/sugestoes";
-import { SISTEMA_CLIENTE, testarAgente } from "@/lib/whatsapp/regras/testar";
+import { SISTEMA_CLIENTE, testarAgente, turnosDoTeste } from "@/lib/whatsapp/regras/testar";
 import { cidadesDoTexto, cidadesParaTexto, itensDoTexto, itensParaTexto, lerCidade, regioesDoTexto, regioesParaTexto } from "@/lib/whatsapp/regras/texto";
 import { verificarResposta, type SaidaParaVerificar } from "@/lib/whatsapp/regras/verificar";
 import { regrasDaIa } from "@/lib/whatsapp/treinar/regras";
@@ -825,5 +825,15 @@ describe("montarComando sem extras continua igual", () => {
     const c = montarComando({ agente: "qualificacao", config: { agente: "qualificacao", ativo: true, provider: "anthropic" }, profile: null, trechos: [], memoria: null, historico: [cliente("oi")], nomesDoContato: [] });
     expect(c.sistemaFixo).not.toContain("REGRAS DURAS");
     expect(c.sistemaVariavel).not.toContain("O QUE VOCÊ JÁ SABE");
+  });
+});
+
+describe("trocas do Testar o agente", () => {
+  const com = (n: number) => ({ infoMinima: Array.from({ length: n }, (_, i) => ({ campo: `info ${i}` })) }) as never;
+  it("dá tempo de pedir todas as informações mínimas e transferir", () => {
+    expect(turnosDoTeste(null)).toBe(4);
+    expect(turnosDoTeste(com(1))).toBe(4);
+    expect(turnosDoTeste(com(4))).toBe(6);
+    expect(turnosDoTeste(com(10))).toBe(8);
   });
 });
