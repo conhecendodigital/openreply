@@ -35,7 +35,11 @@ export type CodigoRegra =
   | "confirmou_servico_recusado"
   | "nao_perguntou_local"
   | "perguntou_de_novo"
-  | "promessa";
+  | "promessa"
+  | "passou_fora_da_area"
+  | "passou_servico_recusado"
+  | "seguiu_fora_da_area"
+  | "seguiu_servico_recusado";
 
 export interface Violacao {
   regra: CodigoRegra;
@@ -101,7 +105,7 @@ const CONFIRMA_LOCAL = [
   new RegExp(`\\b(sim|claro|com certeza|certeza|pode sim|opa)\\b[^.?!\\n]{0,25}\\b${VERBO_LOCAL}\\b`),
 ];
 const RECUSA = /\b(nao|infelizmente nao|ainda nao)\s+(atendemos|atende|atendo|trabalhamos|chegamos|cobrimos|fazemos atendimento|temos atendimento|ha atendimento|tem atendimento|vamos conseguir atender|conseguimos atender|podemos atender|atuamos|vamos atender)\b/;
-const SUAVE = /\b(infelizmente|por enquanto|no momento|ainda|analis\w*|avali\w*|verific\w*|disponibilidade|sinto muito|poxa|que pena)\b/;
+const SUAVE = /\b(infelizmente|por enquanto|no momento|ainda|analis\w*|avali\w*|verific\w*|disponibilidade|sinto muito|poxa|que pena|agradec\w*|obrigad\w*|boa sorte|desculp\w*)\b/;
 const CONFIRMA_SERVICO = /\b(fazemos|faz|faco|executamos|conseguimos fazer|consigo fazer|podemos fazer|a gente faz|atendemos|fazemos esse|faz esse)\s+(sim|esse|essa|isso|esse servico|esse tipo|esse tipo de servico)\b/;
 const VERBO_SERVICO = "(fazemos|faz|faco|executamos|a gente faz|trocamos|consertamos|arrumamos|resolvemos|instalamos|fazemos a|fazemos o)";
 const PROMESSA = /\b(garanto|garantimos|te garanto|prometo|prometemos|fica pronto em|sem custo nenhum|com certeza fica|pode ficar tranquil[oa] que (fica|termina|sai))\b/;
@@ -197,9 +201,9 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
   const cidade = local.cidade ?? "esse local";
   const atendidas = listaAtendidas(regras);
   const comoForaDaArea =
-    regras.mensagemForaDaArea || "diga com cuidado que a disponibilidade pra esse local precisa ser analisada antes de seguir, sem recusar de forma seca";
+    regras.mensagemForaDaArea || "diga com gentileza que a empresa não atende essa região, agradeça o contato e encerre, sem pergunta nova e sem passar pra humano";
   const comoServicoRecusado =
-    regras.mensagemServicoRecusado || "diga com educação que a empresa não faz esse tipo de serviço e conte o que ela faz";
+    regras.mensagemServicoRecusado || "diga com educação que a empresa não faz esse tipo de serviço, conte numa frase o que ela faz e encerre, sem pergunta nova";
 
   // Texto da resposta.
   if (fora || cuidado) {
@@ -308,6 +312,22 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
       decisao = "qualificar";
       motivo = "todas as informações mínimas, local e serviço atendidos";
     }
+  } else if (intencao === "analisar" && fora && !excecaoLocal && !cuidado) {
+    violacoes.push({
+      regra: "passou_fora_da_area",
+      paraModelo: `A obra é em ${cidade}, fora da área atendida (${atendidas}), e não é exceção. Não passe pra análise nem pra humano. ${comoForaDaArea}`,
+      paraDono: `Regra do negócio: o agente quis passar pra análise uma obra em ${cidade}, fora de ${atendidas}. Fora da área é recusa.`,
+    });
+    decisao = "fora_da_area";
+    motivo = motivoFora;
+  } else if (intencao === "analisar" && recusado && !fora && !cuidado) {
+    violacoes.push({
+      regra: "passou_servico_recusado",
+      paraModelo: `O cliente pediu ${servico.termo ?? "um serviço"} e a empresa não faz ${servico.descricao ?? "esse tipo de serviço"}. Não passe pra análise nem pra humano. ${comoServicoRecusado}`,
+      paraDono: `Regra do negócio: o agente quis passar pra análise um pedido de ${servico.termo ?? "serviço"} que a empresa não faz.`,
+    });
+    decisao = "servico_recusado";
+    motivo = motivoServico;
   } else if (intencao === "analisar") {
     decisao = "analisar";
     motivo = motivoAnalise;
@@ -321,6 +341,19 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
     } else if (recusado) {
       decisao = "servico_recusado";
       motivo = motivoServico;
+    }
+    // Recusa encerra: sem pergunta nova que estica a conversa.
+    // "..., tá?" e "ok?" no fim são jeito de falar, não pergunta.
+    const perguntasDeVerdade = perguntas.filter((p) => !/(^|[\s,])(ta|ok|okay|beleza|blz|certo|viu|combinado|ne)\s*\??\s*$/.test(p));
+    if ((decisao === "fora_da_area" || decisao === "servico_recusado") && perguntasDeVerdade.length) {
+      violacoes.push({
+        regra: decisao === "fora_da_area" ? "seguiu_fora_da_area" : "seguiu_servico_recusado",
+        paraModelo: `Não faça pergunta: ${decisao === "fora_da_area" ? comoForaDaArea : comoServicoRecusado}.`,
+        paraDono:
+          decisao === "fora_da_area"
+            ? `Regra do negócio: a resposta seguia perguntando numa obra em ${cidade}, fora da área. Fora da área é recusa educada e encerra.`
+            : "Regra do negócio: a resposta seguia perguntando num serviço que a empresa não faz. É recusa educada e encerra.",
+      });
     }
     if (semLocal && e.agente === "qualificacao" && !perguntas.some((p) => PERGUNTA_LOCAL.test(p))) {
       violacoes.push({

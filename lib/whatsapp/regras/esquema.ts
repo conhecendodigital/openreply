@@ -102,6 +102,8 @@ export const RegrasNegocioSchema = z.object({
   versao: z.literal(1).catch(1).default(1),
   cidadesAtendidas: lista(CidadeSchema).default([]),
   cidadesNaoAtendidas: lista(CidadeSchema).default([]),
+  /** Raio em km em volta das cidades atendidas que também conta como atendido (0 = só a lista). */
+  raioKm: z.coerce.number().int().min(0).max(300).catch(0).default(0),
   regioesCuidado: lista(RegiaoCuidadoSchema).default([]),
   /** Exceções de local que vão pra análise (ex.: obra grande fora da região). */
   excecoesLocal: lista(ItemSchema).default([]),

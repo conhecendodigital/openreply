@@ -11,6 +11,7 @@ import { textoPlano } from "@/lib/whatsapp/agentes/comando";
 import type { WaMessageLite } from "@/lib/whatsapp/agentes/types";
 import { rotuloCidade, type Cidade, type InfoMinima, type RegrasNegocio } from "./esquema";
 import { acharTermo, contemTermo, normalizarTexto, UFS } from "./texto";
+import { dentroDoRaio } from "./raio";
 
 /** O que o modelo disse que entendeu (campos extras do JSON da resposta). */
 export interface SinaisModelo {
@@ -72,10 +73,17 @@ function mesmaCidade(a: Cidade, nome: string, uf: string): boolean {
   return !a.uf || !uf || a.uf === uf.toUpperCase();
 }
 
-function classificar(regras: RegrasNegocio, nome: string, uf: string): Mencao["tipo"] {
+function classificarLista(regras: RegrasNegocio, nome: string, uf: string): Mencao["tipo"] {
   if (regras.cidadesAtendidas.some((c) => mesmaCidade(c, nome, uf))) return "atendida";
   if (regras.cidadesNaoAtendidas.some((c) => mesmaCidade(c, nome, uf))) return "nao_atendida";
   return "outra";
+}
+
+/** Lista primeiro (a não atendida listada ganha do raio); fora dela, o raio decide. */
+function classificar(regras: RegrasNegocio, nome: string, uf: string): Mencao["tipo"] {
+  const t = classificarLista(regras, nome, uf);
+  if (t !== "outra") return t;
+  return dentroDoRaio(regras, nome, uf) ? "atendida" : "outra";
 }
 
 /** "Sumaré/SP", "sumare - sp": cidade fora das listas, com UF. */
@@ -128,11 +136,10 @@ function mencoesNoTexto(regras: RegrasNegocio, historico: WaMessageLite[]): Menc
       for (const pos of acharTermo(t, c.cidade)) if (!regiaoEm(pos)) add({ tipo: "nao_atendida", cidade: c, regiao: null, pos });
     }
     for (const x of cidadesComUf(original)) {
-      const tipo = classificar(regras, x.cidade, x.uf);
-      if (tipo !== "outra") continue; // já achada pelo nome acima
+      if (classificarLista(regras, x.cidade, x.uf) !== "outra") continue; // já achada pelo nome acima
       if (regras.regioesCuidado.some((r) => normalizarTexto(r.nome) === normalizarTexto(x.cidade) && x.uf !== "MS")) continue;
       const pos = Math.max(0, t.indexOf(normalizarTexto(x.cidade)));
-      add({ tipo: "outra", cidade: { cidade: x.cidade, uf: x.uf }, regiao: null, pos });
+      add({ tipo: classificar(regras, x.cidade, x.uf), cidade: { cidade: x.cidade, uf: x.uf }, regiao: null, pos });
     }
   });
   return out.sort((a, b) => a.msg - b.msg || a.pos - b.pos);

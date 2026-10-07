@@ -16,8 +16,8 @@ import { blocosDaFicha, type CampoFichaDef, type FichaLead } from "./ficha";
 const DECISAO_TEXTO: Record<string, string> = {
   qualificar: "qualificar",
   analisar: "passar pra análise",
-  fora_da_area: "responder com cuidado que o local precisa ser analisado (fora da área)",
-  servico_recusado: "responder com educação que a empresa não faz esse serviço",
+  fora_da_area: "recusar com educação e encerrar (fora da área)",
+  servico_recusado: "recusar com educação e encerrar (serviço que a empresa não faz)",
   humano: "passar pra uma pessoa",
   continuar: "seguir a conversa",
 };
@@ -32,7 +32,7 @@ export function blocoRegras(r: RegrasNegocio | null | undefined, baseCommand = "
   const partes: string[] = [];
   if (r.cidadesAtendidas.length) {
     partes.push(
-      `ONDE ATENDE (o que vale é o local da OBRA, não onde a pessoa mora): ${r.cidadesAtendidas.map(rotuloCidade).join(", ")}. Qualquer outra cidade está FORA da área.`
+      `ONDE ATENDE (o que vale é o local da OBRA, não onde a pessoa mora): ${r.cidadesAtendidas.map(rotuloCidade).join(", ")}${r.raioKm ? ` e cidades a até ${r.raioKm} km delas` : ""}. Qualquer outra cidade está FORA da área.`
     );
   }
   partes.push(linha("CIDADES NÃO ATENDIDAS", r.cidadesNaoAtendidas.map(rotuloCidade)));
@@ -47,13 +47,13 @@ export function blocoRegras(r: RegrasNegocio | null | undefined, baseCommand = "
   if (r.cidadesAtendidas.length) {
     partes.push("SE AINDA NÃO SABE ONDE É A OBRA: pergunte em qual cidade vai ser a obra. Nunca confirme atendimento antes de saber.");
     partes.push(
-      `FORA DA ÁREA: nunca diga que atende, nunca marque qualificado e nunca recuse de forma seca. ${r.mensagemForaDaArea ? `Como responder: ${r.mensagemForaDaArea}` : "Diga com cuidado que a disponibilidade pra esse local precisa ser analisada."} Se for uma exceção de local, passe pra humano com motivo "para analisar".`
+      `FORA DA ÁREA: recuse com educação e encerre a conversa. ${r.mensagemForaDaArea ? `Como responder: ${r.mensagemForaDaArea}` : "Diga com gentileza que a empresa não atende essa região, agradeça o contato e deseje boa sorte com a obra."} Não faça pergunta nova, não peça mais dados, não passe pra humano e não marque qualificado. Se a pessoa insistir, repita a recusa com gentileza numa frase. Só se for uma das EXCEÇÕES DE LOCAL, passe pra humano com motivo "para analisar".`
     );
   }
   partes.push(linha("SERVIÇOS ACEITOS", r.servicosAceitos));
   if (r.servicosRecusados.length) {
     partes.push(
-      `SERVIÇOS QUE A EMPRESA NÃO FAZ: ${r.servicosRecusados.map((s) => s.descricao).join("; ")}. Nunca diga que faz e nunca marque qualificado. ${r.mensagemServicoRecusado ? `Como responder: ${r.mensagemServicoRecusado}` : "Responda com educação e conte o que a empresa faz."}`
+      `SERVIÇOS QUE A EMPRESA NÃO FAZ: ${r.servicosRecusados.map((s) => s.descricao).join("; ")}. Nunca diga que faz, nunca marque qualificado e não passe pra humano. ${r.mensagemServicoRecusado ? `Como responder: ${r.mensagemServicoRecusado}` : "Recuse com educação, conte numa frase o que a empresa faz e encerre, sem pergunta nova."} Se a pessoa também pedir um serviço que a empresa faz, siga só com esse.`
     );
   }
   partes.push(linha("EXCEÇÕES DE SERVIÇO (esses são atendidos)", r.excecoesServico.map((s) => s.descricao)));

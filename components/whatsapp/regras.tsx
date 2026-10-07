@@ -35,6 +35,7 @@ import type { ResultadoTeste } from "@/lib/whatsapp/regras/testar";
 export type RulesText = {
   cidadesAtendidas: string;
   cidadesNaoAtendidas: string;
+  raioKm: string;
   regioesCuidado: string;
   excecoesLocal: string;
   servicosAceitos: string;
@@ -52,6 +53,7 @@ export function rulesToText(r: RegrasNegocio): RulesText {
   return {
     cidadesAtendidas: cidadesParaTexto(r.cidadesAtendidas),
     cidadesNaoAtendidas: cidadesParaTexto(r.cidadesNaoAtendidas),
+    raioKm: r.raioKm ? String(r.raioKm) : "",
     regioesCuidado: regioesParaTexto(r.regioesCuidado),
     excecoesLocal: itensParaTexto(r.excecoesLocal),
     servicosAceitos: r.servicosAceitos.join("\n"),
@@ -72,6 +74,7 @@ export function textToRules(t: RulesText, antes: RegrasNegocio): RegrasNegocio {
     ...antes,
     cidadesAtendidas: cidadesDoTexto(t.cidadesAtendidas),
     cidadesNaoAtendidas: cidadesDoTexto(t.cidadesNaoAtendidas),
+    raioKm: raioDoTexto(t.raioKm),
     regioesCuidado: regioesDoTexto(t.regioesCuidado),
     excecoesLocal: itensDoTexto(t.excecoesLocal),
     servicosAceitos: textosDoTexto(t.servicosAceitos),
@@ -84,6 +87,12 @@ export function textToRules(t: RulesText, antes: RegrasNegocio): RegrasNegocio {
     mensagemForaDaArea: t.mensagemForaDaArea.trim(),
     mensagemServicoRecusado: t.mensagemServicoRecusado.trim(),
   };
+}
+
+/** "30", "30 km" -> 30. Vazio ou inválido = 0 (só a lista). */
+export function raioDoTexto(s: string): number {
+  const n = Number.parseInt((s ?? "").replace(/\D/g, ""), 10);
+  return Number.isFinite(n) ? Math.min(300, Math.max(0, n)) : 0;
 }
 
 export const DECISION_NAMES: Record<string, string> = {
@@ -266,6 +275,22 @@ export function RulesPanel({
               {chips("cidadesAtendidas", t("Cities served"), t("Example: {x}", { x: "Paulínia/SP" }), t("Type City/UF and press Enter."))}
               {chips("cidadesNaoAtendidas", t("Cities not served"), t("Example: {x}", { x: "Hortolândia/SP" }), t("Type City/UF and press Enter."))}
             </div>
+            <label className="block max-w-xs space-y-1">
+              <span className="text-sm font-medium">{t("Service radius (km)")}</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={300}
+                value={text.raioKm}
+                onChange={(e) => onText({ ...text, raioKm: e.target.value })}
+                placeholder={t("Example: {x}", { x: "30" })}
+                className={INPUT}
+              />
+              <span className="block text-xs text-muted">
+                {t("Cities up to this distance from a city served also count as served. Farther away, the agent declines politely and ends the conversation. Empty: only the list counts.")}
+              </span>
+            </label>
             {PLACE_FIELDS.map(field)}
           </>
         )}

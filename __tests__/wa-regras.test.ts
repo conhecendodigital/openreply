@@ -233,11 +233,11 @@ describe("motor com regras duras", () => {
     const usos: string[] = [];
     const m = modeloFalso([
       respostaAgente({ bolhas: ["Que legal! Atendemos sim, vamos marcar uma reunião?"], qualificado: true, passar: true }),
-      respostaAgente({ bolhas: ["Oi! Pra Sumaré a disponibilidade precisa ser analisada antes de seguir, tá?"], local: { cidade: "Sumaré", uf: "SP" } }),
+      respostaAgente({ bolhas: ["Poxa, infelizmente a gente não atende Sumaré. Obrigado pelo contato e boa sorte com a obra!"], local: { cidade: "Sumaré", uf: "SP" } }),
     ]);
     const r = await processarMensagem(deps(store, m.chamar, { registrarUso: async (u) => void usos.push(u.kind ?? "agent") }), { conversationId: ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
     expect(r.acao).toBe("agendado");
-    if (r.acao === "agendado") expect(r.bolhas.join(" ")).toContain("disponibilidade precisa ser analisada");
+    if (r.acao === "agendado") expect(r.bolhas.join(" ")).toContain("não atende Sumaré");
     expect(ctx.conversation.humanTakeoverUntil).toBeNull();
     // Uma correção só, com a regra explicada.
     const doAgente = m.doAgente();
@@ -835,5 +835,41 @@ describe("trocas do Testar o agente", () => {
     expect(turnosDoTeste(com(1))).toBe(4);
     expect(turnosDoTeste(com(4))).toBe(6);
     expect(turnosDoTeste(com(10))).toBe(8);
+  });
+});
+
+describe("raio de atendimento e recusa que encerra (07/10)", () => {
+  const comRaio = (km: number) => lerRegras({ ...obraBoa(), raioKm: km, mensagemForaDaArea: "" });
+  it("cidade perto conta como atendida; longe é fora; a lista de não atendidas ganha do raio", () => {
+    const r = comRaio(30);
+    expect(detectarLocal(r, [cliente("quero reformar minha casa em Sumaré/SP")]).status).toBe("atendida");
+    expect(detectarLocal(r, [cliente("a obra é em Sorocaba/SP")]).status).toBe("fora");
+    expect(detectarLocal(r, [cliente("obra em Hortolândia/SP")]).status).toBe("fora");
+    expect(detectarLocal(obraBoa(), [cliente("quero reformar minha casa em Sumaré/SP")]).status).toBe("fora");
+    // Cidade que o modelo entendeu (sem UF no texto) também passa pelo raio.
+    const sinais = { ...SINAIS_VAZIOS, localObra: { cidade: "Valinhos", uf: "", bairro: "" } };
+    expect(detectarLocal(r, [cliente("é uma casa em Valinhos")], sinais).status).toBe("atendida");
+    expect(blocoRegras(r)).toContain("cidades a até 30 km delas");
+  });
+  it("fora da área: recusa educada encerra; pergunta ou passar pra análise vira correção", () => {
+    const r = comRaio(30);
+    const h = [cliente("Oi, quero reformar minha casa em Sorocaba/SP")];
+    const ok = verificar(h, saida({ bolhas: ["Poxa, infelizmente a gente não atende Sorocaba. Obrigado pelo contato e boa sorte com a obra!"] }), r);
+    expect(ok.violacoes).toEqual([]);
+    expect(ok.decisao).toBe("fora_da_area");
+    const pergunta = verificar(h, saida({ bolhas: ["Infelizmente não atendemos Sorocaba.", "É casa ou apartamento?"] }), r);
+    expect(pergunta.violacoes.map((x) => x.regra)).toContain("seguiu_fora_da_area");
+    const analise = verificar(h, saida({ bolhas: ["Vou passar pra equipe analisar."], passarPraHumano: true, motivo: "para analisar" }), r);
+    expect(analise.violacoes.map((x) => x.regra)).toContain("passou_fora_da_area");
+    expect(analise.decisao).toBe("fora_da_area");
+    // Exceção de local continua indo pra análise.
+    const grande = verificar([cliente("Tenho uma obra grande em Sorocaba/SP, um prédio")], saida({ bolhas: ["Vou passar pra equipe analisar."], passarPraHumano: true, motivo: "para analisar" }), r);
+    expect(grande.decisao).toBe("analisar");
+  });
+  it("serviço recusado também encerra, e o comando manda recusar", () => {
+    const h = [cliente("quero trocar uma torneira em Paulínia")];
+    const v = verificar(h, saida({ bolhas: ["A gente trabalha só com reformas completas, não faz pequenos reparos.", "Quer que eu anote seu nome?"] }));
+    expect(v.violacoes.map((x) => x.regra)).toContain("seguiu_servico_recusado");
+    expect(blocoRegras(comRaio(0))).toContain("recuse com educação e encerre a conversa");
   });
 });

@@ -57,6 +57,9 @@ export const ptSecoes: Record<string, string> = {
   "1 test case": "1 caso de teste",
   "{n} test cases": "{n} casos de teste",
   "Cities served": "Cidades atendidas",
+  "Service radius (km)": "Raio de atendimento (km)",
+  "Cities up to this distance from a city served also count as served. Farther away, the agent declines politely and ends the conversation. Empty: only the list counts.":
+    "Cidades até essa distância de uma cidade atendida também contam como atendidas. Mais longe, o agente recusa com educação e encerra a conversa. Vazio: vale só a lista.",
   "Type City/UF and press Enter.": "Digite Cidade/UF e aperte Enter.",
   "Cities not served": "Cidades que não atende",
   "Services accepted": "Serviços aceitos",
