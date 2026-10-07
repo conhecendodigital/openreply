@@ -47,10 +47,14 @@ async function isLinkDomainHost(host: string): Promise<boolean> {
   }
 }
 
-/** A link domain shows /r/* (handled before) and the icons. Nothing else of the app. */
+/**
+ * A link domain shows /r/* (handled before), the icons and the published
+ * quizzes at /<slug> like a quiz domain (07/10/2026: comando.../diag keeps
+ * working with the DNS pointed straight at the app, no Cloudflare redirect).
+ * Nothing else of the app.
+ */
 function linkHostResponse(request: NextRequest): NextResponse {
-  if (QUIZ_HOST_FILES.has(request.nextUrl.pathname)) return NextResponse.next();
-  return new NextResponse("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+  return quizHostResponse(request);
 }
 
 const QUIZ_HOST_FILES = new Set([

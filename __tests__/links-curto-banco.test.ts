@@ -254,11 +254,18 @@ describe("domínio do link", () => {
     expect((await clicks()).map((c) => c.trackedLinkId)).toEqual(["tl_a", "tl_b"]);
   });
 
-  it("proxy: no domínio do link só /r/* e os ícones; o resto do app dá 404", async () => {
+  it("proxy: no domínio do link, /r/*, os ícones e os quizzes publicados (/<slug>); nunca o painel", async () => {
     const at = (path: string) => proxy(new NextRequest(`https://${LINK_HOST}${path}`, { headers: { host: LINK_HOST } }));
     expect((await at("/r/njuGA_aEXw/abc1234")).headers.get("x-middleware-next")).toBe("1");
     expect((await at("/favicon.ico")).headers.get("x-middleware-next")).toBe("1");
-    for (const path of ["/", "/diag", "/dashboard", "/login", "/api/mcp", "/api/q/diag/events", "/q/diag", "/settings"]) {
+    // comando.../diag abre o quiz direto (07/10: sem depender da regra do Cloudflare).
+    expect((await at("/diag")).headers.get("x-middleware-rewrite")).toContain("/q/diag");
+    expect((await at("/api/q/diag/events")).headers.get("x-middleware-next")).toBe("1");
+    // Página do painel com nome de uma palavra vira busca de quiz, nunca a página do app.
+    for (const path of ["/dashboard", "/login", "/settings"]) {
+      expect((await at(path)).headers.get("x-middleware-rewrite"), path).toContain(`/q${path}`);
+    }
+    for (const path of ["/", "/api/mcp", "/whatsapp/agents", "/admin/users"]) {
       const res = await at(path);
       expect(res.status, path).toBe(404);
       expect(res.headers.get("x-middleware-rewrite"), path).toBeNull();
