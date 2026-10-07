@@ -9,6 +9,7 @@ import { listSessionsAsAdmin } from "@/lib/whatsapp/admin-access";
 import { addAllowlistEmail, removeAllowlistEmail } from "./actions";
 import { AiKeysPanel } from "@/components/ai-keys-panel";
 import { AiUsageReport } from "@/components/ai-usage-report";
+import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
 
 /**
  * Fase 0 (06/10/2026): painel do admin da plataforma (no menu só pro admin,
@@ -51,8 +52,11 @@ export default async function AdminPage() {
     listSessionsAsAdmin(admin.user.id).catch(() => null),
   ]);
 
+  const with2fa = users.filter((u) => u.twoFactorEnabled).length;
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
+    <SectionsProvider page="admin">
+    <div className="mx-auto max-w-4xl space-y-4 px-4 py-8">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{t("Admin")}</h1>
         <Link href="/dashboard" className="text-sm font-semibold text-accent hover:underline">
@@ -60,8 +64,14 @@ export default async function AdminPage() {
         </Link>
       </div>
 
-      <section className="panel rounded p-4 sm:p-6">
-        <h2 className="mb-2 text-base font-semibold">{t("Beta access")}</h2>
+      <SectionIndex sticky={false} />
+
+      <CollapsibleSection
+        id="acesso-beta"
+        title={t("Beta access")}
+        badge={{ text: t("{a} of {b}", { a: allowlist.length, b: BETA_ALLOWLIST_LIMIT }), tone: allowlist.length >= BETA_ALLOWLIST_LIMIT ? "warning" : "default" }}
+        summary={allowlist.length === 1 ? t("1 email on the list") : t("{n} emails on the list", { n: allowlist.length })}
+      >
         <p className="mb-4 text-sm text-muted">
           {t("Only these emails get in, plus ALLOWED_EMAILS and whoever was invited to a workspace. Up to {n} in the beta.", {
             n: BETA_ALLOWLIST_LIMIT,
@@ -107,26 +117,29 @@ export default async function AdminPage() {
             </button>
           </form>
         )}
-      </section>
+      </CollapsibleSection>
 
-      <section id="chaves-ia" className="panel rounded p-4 sm:p-6">
-        <h2 className="mb-2 text-base font-semibold">{t("AI keys")}</h2>
+      <CollapsibleSection id="chaves-ia" title={t("AI keys")} defaultOpen={false} summary={t("Keys, model of each agent, daily caps and price table")}>
         <p className="mb-4 text-sm text-muted">
           {t("One key per provider, used by every user in the beta. After you save it, only the last 4 characters show up here. Every change goes to the audit log.")}
         </p>
         <AiKeysPanel />
-      </section>
+      </CollapsibleSection>
 
-      <section id="gastos-ia" className="panel rounded p-4 sm:p-6">
-        <h2 className="mb-2 text-base font-semibold">{t("AI spending")}</h2>
+      <CollapsibleSection id="gastos-ia" title={t("AI spending")} summary={t("Per user, workspace, agent and model")}>
         <p className="mb-4 text-sm text-muted">
           {t("What each call to the AI cost, per user, workspace, agent and model. Estimated with the price table above.")}
         </p>
         <AiUsageReport scope="admin" />
-      </section>
+      </CollapsibleSection>
 
-      <section className="panel rounded p-4 sm:p-6">
-        <h2 className="mb-4 text-base font-semibold">{t("Users")}</h2>
+      <CollapsibleSection
+        id="usuarios"
+        title={t("Users")}
+        defaultOpen={false}
+        badge={{ text: String(users.length) }}
+        summary={[users.length === 1 ? t("1 user") : t("{n} users", { n: users.length }), t("{n} with two-step verification", { n: with2fa })].join(" · ")}
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs text-muted">
@@ -151,10 +164,16 @@ export default async function AdminPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="panel rounded p-4 sm:p-6">
-        <h2 className="mb-2 text-base font-semibold">{t("WhatsApp numbers")}</h2>
+      <CollapsibleSection
+        id="numeros-whatsapp"
+        title={t("WhatsApp numbers")}
+        defaultOpen={false}
+        attention={waSessions === null}
+        badge={waSessions ? { text: String(waSessions.length) } : { text: t("Error"), tone: "error" }}
+        summary={waSessions ? (waSessions.length === 1 ? t("1 number") : t("{n} numbers", { n: waSessions.length })) : t("Could not read the WhatsApp tables.")}
+      >
         <p className="mb-4 text-sm text-muted">
           {t("Status and numbers only. Opening a conversation of another workspace is saved in the audit log.")}
         </p>
@@ -174,7 +193,8 @@ export default async function AdminPage() {
             ))}
           </ul>
         )}
-      </section>
+      </CollapsibleSection>
     </div>
+    </SectionsProvider>
   );
 }

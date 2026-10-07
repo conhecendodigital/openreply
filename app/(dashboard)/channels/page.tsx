@@ -21,6 +21,7 @@ import { useLang, useT } from "@/components/lang-provider";
 import { useDateTime, useTimeAgo } from "@/components/contact-ui";
 import { channelAlertText, isSeriousAlert, type BannerAlert } from "@/components/channel-alert-banner";
 import { IntegrationsPanel } from "@/components/integrations-panel";
+import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
 
 type Status = "ACTIVE" | "NEEDS_RECONNECT" | "DISCONNECTED";
 type Role = "OWNER" | "ADMIN" | "MEMBER";
@@ -146,9 +147,13 @@ export default function ChannelsPage() {
 
   const canManage = role === "OWNER" || role === "ADMIN";
   const instagram = data?.instagram ?? [];
+  const igOn = instagram.filter((c) => c.status === "ACTIVE").length;
+  const igAlert = instagram.some((c) => c.status === "NEEDS_RECONNECT" || c.alerts.length > 0);
+  const comingSoon = data?.comingSoon ?? [];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <SectionsProvider page="canais">
+    <div className="mx-auto max-w-3xl space-y-6">
       <Suspense fallback={null}>
         <InstagramConnectNotice />
       </Suspense>
@@ -166,11 +171,21 @@ export default function ChannelsPage() {
         )}
       </div>
 
-      <section className="space-y-4">
-        <h2 className="flex items-center gap-2 text-base font-semibold">
-          <InstagramGlyph className="h-5 w-5" />
-          Instagram
-        </h2>
+      <SectionIndex />
+
+      <CollapsibleSection
+        id="instagram"
+        title={
+          <span className="flex items-center gap-2">
+            <InstagramGlyph className="h-5 w-5" />
+            Instagram
+          </span>
+        }
+        indexLabel="Instagram"
+        attention={igAlert || Boolean(loadError)}
+        badge={instagram.length > 0 ? { text: t("{a} of {b}", { a: igOn, b: instagram.length }), tone: igAlert ? "warning" : "success" } : null}
+        summary={instagram.length === 0 ? t("No Instagram account connected yet") : instagram.map((c) => `@${c.username}`).join(" · ")}
+      >
 
         {loading && <div className="panel h-56 animate-pulse rounded-xl" />}
 
@@ -189,28 +204,34 @@ export default function ChannelsPage() {
           </div>
         )}
 
-        {instagram.map((card) => (
-          <InstagramChannelCard key={card.id} card={card} role={role} onChanged={refresh} />
-        ))}
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold">{t("Coming soon")}</h2>
-          <p className="mt-1 text-sm text-muted">{t("Channels we can turn on next, and what each one needs.")}</p>
+        <div className="space-y-4">
+          {instagram.map((card) => (
+            <InstagramChannelCard key={card.id} card={card} role={role} onChanged={refresh} />
+          ))}
         </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="em-breve"
+        title={t("Coming soon")}
+        defaultOpen={false}
+        badge={{ text: String(comingSoon.length) }}
+        summary={comingSoon.map((c) => c.name).join(" · ")}
+        description={t("Channels we can turn on next, and what each one needs.")}
+      >
         <div className="grid gap-3 sm:grid-cols-2">
-          {(data?.comingSoon ?? []).map((channel) => (
+          {comingSoon.map((channel) => (
             <ComingSoonCard key={channel.platform} channel={channel} />
           ))}
         </div>
-      </section>
+      </CollapsibleSection>
 
       {canManage && <IntegrationsPanel />}
       {role === "MEMBER" && (
         <p className="text-sm text-muted">{t("Only owners and admins see the connection keys.")}</p>
       )}
     </div>
+    </SectionsProvider>
   );
 }
 
@@ -366,8 +387,17 @@ function InstagramChannelCard({
       </dl>
 
       <div className="space-y-4 p-4 sm:p-5">
+        <CollapsibleSection
+          id={`ig-${card.id}-tecnico`}
+          variant="group"
+          hideFromIndex
+          defaultOpen={false}
+          attention={(card.missingWebhookFields?.length ?? 0) > 0}
+          title={t("Subscribed webhooks")}
+          badge={(card.missingWebhookFields?.length ?? 0) > 0 ? { text: t("Not subscribed yet"), tone: "warning" } : { text: String(card.webhookFields.length) }}
+          summary={[card.webhookFields.slice(0, 4).join(", ") || t("None"), card.lastError ? t("Last error") : ""].filter(Boolean).join(" · ")}
+        >
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Subscribed webhooks")}</p>
           {card.webhookFields.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {card.webhookFields.map((field) => (
@@ -412,6 +442,7 @@ function InstagramChannelCard({
             <p className="mt-0.5 break-words font-mono">{card.lastError}</p>
           </div>
         )}
+        </CollapsibleSection>
 
         {test && (
           <div

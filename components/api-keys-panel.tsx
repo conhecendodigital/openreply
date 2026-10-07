@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 
 import { useT } from "@/components/lang-provider";
 interface ApiKey {
@@ -84,8 +85,14 @@ export function ApiKeysPanel() {
   }
 
   return (
-    <section className="panel rounded p-4 sm:p-6">
-      <h2 className="text-base font-semibold mb-2">{t("API & MCP")}</h2>
+    <CollapsibleSection
+      id="api-mcp"
+      title={t("API & MCP")}
+      defaultOpen={false}
+      attention={Boolean(error) || Boolean(newKey)}
+      summary={data ? (data.tokens.length === 1 ? t("1 key") : t("{n} keys", { n: data.tokens.length })) : undefined}
+      badge={data ? { text: String(data.tokens.length) } : null}
+    >
       <p className="mb-6 text-sm text-muted">
         {t("Keys for scripts and AI agents (MCP). Send them as")}{" "}
         <code className="text-foreground">{t("Authorization: Bearer <key>")}</code>{t(". A key reads, creates things turned off and proposes drafts. Turning on, sending, deleting and managing members or keys stay with a person.")}
@@ -189,6 +196,6 @@ export function ApiKeysPanel() {
         </button>
         {error && <p className="sm:col-span-2 text-sm text-error">{error}</p>}
       </form>
-    </section>
+    </CollapsibleSection>
   );
 }

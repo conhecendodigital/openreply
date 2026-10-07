@@ -9,6 +9,7 @@ import { AiUsageReport } from "@/components/ai-usage-report";
 import { InstagramConnectNotice } from "@/components/instagram-connect-notice";
 
 import { useT } from "@/components/lang-provider";
+import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
 
 type ChannelStatus = "ACTIVE" | "NEEDS_RECONNECT" | "DISCONNECTED";
 
@@ -150,8 +151,13 @@ export default function SettingsPage() {
     membersData?.currentUserRole === "OWNER" ||
     membersData?.currentUserRole === "ADMIN";
 
+  const needsReconnect = accounts.some((a) => a.status === "NEEDS_RECONNECT");
+  const memberCount = membersData?.members.length ?? 0;
+  const inviteCount = membersData?.invitations.length ?? 0;
+
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <SectionsProvider page="configuracoes">
+    <div className="max-w-2xl mx-auto space-y-4">
       {/* Surfaces the ?instagram= code the OAuth routes redirect back with.
           Needs a Suspense boundary: useSearchParams in a prerendered client
           page fails the production build without one. */}
@@ -159,8 +165,15 @@ export default function SettingsPage() {
         <InstagramConnectNotice />
       </Suspense>
 
-      <section className="panel rounded p-4 sm:p-6">
-        <h2 className="text-base font-semibold mb-6">{t("Instagram Connection")}</h2>
+      <SectionIndex />
+
+      <CollapsibleSection
+        id="instagram"
+        title={t("Instagram Connection")}
+        attention={needsReconnect}
+        badge={onAccounts.length > 0 ? { text: t("Connected"), tone: "success" } : { text: t("Not connected"), tone: "warning" }}
+        summary={t("{n} of {total} Instagram profiles on", { n: onAccounts.length, total: accounts.length })}
+      >
 
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 py-3 border-b border-border">
@@ -269,10 +282,19 @@ export default function SettingsPage() {
             {accounts.length > 0 ? t("Connect another account") : t("Connect Instagram")}
           </a>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="panel rounded p-4 sm:p-6">
-        <h2 className="text-base font-semibold mb-6">{t("Team")}</h2>
+      <CollapsibleSection
+        id="equipe"
+        title={t("Team")}
+        defaultOpen={false}
+        attention={Boolean(memberError)}
+        badge={{ text: String(memberCount) }}
+        summary={[
+          memberCount === 1 ? t("1 member") : t("{n} members", { n: memberCount }),
+          inviteCount === 1 ? t("1 pending invite") : t("{n} pending invites", { n: inviteCount }),
+        ].join(" · ")}
+      >
         <div className="space-y-3">
           {membersData?.members.map((member) => (
             <div
@@ -371,19 +393,27 @@ export default function SettingsPage() {
             )}
           </form>
         )}
-      </section>
+      </CollapsibleSection>
 
       <SecurityPanel />
 
-      <section className="panel rounded p-4 sm:p-6">
-        <h2 className="text-base font-semibold mb-2">{t("My AI spending")}</h2>
-        <p className="mb-4 text-sm text-muted">{t("Only what your agents spent with AI. Nobody else's spending shows up here.")}</p>
+      <CollapsibleSection
+        id="gastos-ia"
+        title={t("My AI spending")}
+        defaultOpen={false}
+        summary={t("Only what your agents spent with AI. Nobody else's spending shows up here.")}
+        description={t("Only what your agents spent with AI. Nobody else's spending shows up here.")}
+      >
         <AiUsageReport scope="me" />
-      </section>
+      </CollapsibleSection>
 
       {canManageMembers && (
-        <section className="panel rounded p-4 sm:p-6">
-          <h2 className="mb-2 text-base font-semibold">{t("Meta Pixel and Conversions API")}</h2>
+        <CollapsibleSection
+          id="pixel-meta"
+          title={t("Meta Pixel and Conversions API")}
+          defaultOpen={false}
+          summary={t("Now in Channels, Connections and keys")}
+        >
           <p className="mb-4 text-sm text-muted">
             {t("The Meta Pixel and the Conversions API moved to Channels, in Connections and keys. Everything you saved is still there.")}
           </p>
@@ -393,13 +423,17 @@ export default function SettingsPage() {
           >
             {t("Open Connections and keys")}
           </a>
-        </section>
+        </CollapsibleSection>
       )}
 
       {canManageMembers && <ApiKeysPanel />}
 
-      <section className="panel rounded p-4 sm:p-6">
-        <h2 className="text-base font-semibold mb-6">{t("Usage")}</h2>
+      <CollapsibleSection
+        id="uso"
+        title={t("Usage")}
+        defaultOpen={false}
+        summary={t("{n} DMs sent this month", { n: data?.workspace.dmsSentThisPeriod ?? 0 })}
+      >
         <div className="flex items-center justify-between gap-3 py-3">
           <div>
             <p className="text-sm font-medium text-foreground">
@@ -413,7 +447,8 @@ export default function SettingsPage() {
             {data?.workspace.dmsSentThisPeriod ?? 0}
           </span>
         </div>
-      </section>
+      </CollapsibleSection>
     </div>
+    </SectionsProvider>
   );
 }

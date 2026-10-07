@@ -1,5 +1,6 @@
 "use client";
 
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { useEffect, useState } from "react";
 import { useT } from "@/components/lang-provider";
 
@@ -156,8 +157,15 @@ export function MetaCapiPanel() {
   const ready = tokenSaved && Boolean(data?.pixelId);
 
   return (
-    <section className="panel rounded p-4 sm:p-6">
-      <h2 className="mb-2 text-base font-semibold">{t("Meta Pixel and Conversions API")}</h2>
+    <CollapsibleSection
+      id="conexao-meta"
+      variant="group"
+      hideFromIndex
+      defaultOpen={false}
+      title={t("Meta Pixel and Conversions API")}
+      badge={ready ? { text: t("Configured"), tone: "success" } : { text: t("Not configured"), tone: "default" }}
+      summary={[data?.pixelId ? t("Pixel {id}", { id: data.pixelId }) : t("No Pixel yet"), tokenSaved ? t("Token saved") : t("No token yet")].join(" · ")}
+    >
       <p className="mb-6 text-sm text-muted">
         {t("The quizzes send Lead, InitiateCheckout and the Hotmart Purchase to Meta from the server too, with the same event id as the Pixel in the browser, so nothing is counted twice. It only sends when the visitor accepted the cookies (or when the quiz only informs).")}
       </p>
@@ -302,6 +310,6 @@ export function MetaCapiPanel() {
           </div>
         )}
       </form>
-    </section>
+    </CollapsibleSection>
   );
 }

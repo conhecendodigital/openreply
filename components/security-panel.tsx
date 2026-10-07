@@ -11,6 +11,7 @@ import { useT } from "@/components/lang-provider";
 import { authClient, authErrorKey } from "@/lib/auth-client";
 import { CreatePasswordForm } from "@/components/auth/create-password-form";
 import { BackupCodes } from "@/components/auth/two-factor-setup";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 
 type Security = {
   email: string | null;
@@ -262,16 +263,35 @@ export function SecurityPanel() {
   }
 
   return (
-    <section className="panel rounded p-4 sm:p-6" aria-labelledby="security-title">
-      <h2 id="security-title" className="mb-6 text-base font-semibold">
-        {t("Security")}
-      </h2>
+    <CollapsibleSection
+      id="seguranca"
+      title={t("Security")}
+      defaultOpen={false}
+      attention={Boolean(security?.twoFactorRequired && !security.twoFactorEnabled)}
+      badge={
+        security
+          ? security.twoFactorEnabled
+            ? { text: t("Two-step on"), tone: "success" }
+            : { text: t("Two-step off"), tone: security.twoFactorRequired ? "warning" : "default" }
+          : null
+      }
+      summary={
+        security
+          ? [
+              security.hasPassword ? t("Password created") : t("No password yet"),
+              security.twoFactorEnabled ? t("Two-step on") : t("Two-step off"),
+              security.hasGoogle ? t("Google connected") : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : undefined
+      }
+    >
       {!security ? (
         <p className="text-sm text-muted">{t("Loading...")}</p>
       ) : (
-        <div className="space-y-8">
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">{t("Password")}</h3>
+        <div className="space-y-2">
+          <CollapsibleSection id="seguranca-senha" variant="group" hideFromIndex defaultOpen={!security.hasPassword} title={t("Password")} summary={security.hasPassword ? t("Password created") : t("No password yet")}>
             {security.hasPassword ? (
               <ChangePassword />
             ) : (
@@ -280,11 +300,10 @@ export function SecurityPanel() {
                 <CreatePasswordForm onDone={load} />
               </div>
             )}
-          </div>
+          </CollapsibleSection>
 
           {security.googleEnabled && (
-            <div>
-              <h3 className="mb-2 text-sm font-semibold">{t("Google")}</h3>
+            <CollapsibleSection id="seguranca-google" variant="group" hideFromIndex defaultOpen={false} title={t("Google")} summary={security.hasGoogle ? t("Google connected") : t("Google not connected")}>
               {security.hasGoogle ? (
                 <p className="text-sm text-green-700">{t("Connected. You can sign in with Google.")}</p>
               ) : (
@@ -292,20 +311,26 @@ export function SecurityPanel() {
                   {t("Connect Google")}
                 </button>
               )}
-            </div>
+            </CollapsibleSection>
           )}
 
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">{t("Two-step verification")}</h3>
+          <CollapsibleSection
+            id="seguranca-2fa"
+            variant="group"
+            hideFromIndex
+            defaultOpen={!security.twoFactorEnabled}
+            attention={security.twoFactorRequired && !security.twoFactorEnabled}
+            title={t("Two-step verification")}
+            summary={security.twoFactorEnabled ? t("Two-step on") : t("Two-step off")}
+          >
             <TwoFactorBox security={security} reload={load} />
-          </div>
+          </CollapsibleSection>
 
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">{t("Active sessions")}</h3>
+          <CollapsibleSection id="seguranca-sessoes" variant="group" hideFromIndex defaultOpen={false} title={t("Active sessions")} summary={t("Where your account is open now")}>
             <Sessions />
-          </div>
+          </CollapsibleSection>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

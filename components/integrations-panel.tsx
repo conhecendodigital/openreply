@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/components/lang-provider";
 import { useDateTime } from "@/components/contact-ui";
 import { MetaCapiPanel } from "@/components/meta-capi-panel";
+import { CollapsibleSection, type SectionBadge } from "@/components/ui/collapsible-section";
 
 type Kind = "url" | "secret" | "number";
 type Source = "workspace" | "env" | "none";
@@ -162,13 +163,17 @@ export function IntegrationsPanel({ initial = null }: { initial?: IntegrationsDa
   }, [initial, load]);
 
   return (
-    <section id="conexoes" className="scroll-mt-6 space-y-4">
-      <div>
-        <h2 className="text-base font-semibold">{t("Connections and keys")}</h2>
-        <p className="mt-1 text-sm text-muted">
-          {t("Paste and change here the keys of the services the Lead Engine uses. What you save here counts before the server settings. Keys are saved encrypted and never show again: you only see the last 4 characters.")}
-        </p>
-      </div>
+    <CollapsibleSection
+      id="conexoes"
+      title={t("Connections and keys")}
+      attention={Boolean(error) || Boolean(data?.services.some((s) => !s.workspaceComplete && s.fields.some((f) => f.saved && f.kind !== "number")))}
+      summary={
+        data
+          ? data.services.map((s) => `${t(SERVICE_TEXT[s.service].title)}: ${t(sourceBadge(s).text)}`).join(" · ")
+          : undefined
+      }
+      description={t("Paste and change here the keys of the services the Lead Engine uses. What you save here counts before the server settings. Keys are saved encrypted and never show again: you only see the last 4 characters.")}
+    >
 
       {error && (
         <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-sm text-error">
@@ -194,15 +199,17 @@ export function IntegrationsPanel({ initial = null }: { initial?: IntegrationsDa
             <ServiceCard key={service.service} service={service} onChanged={load} />
           ))}
 
-          <div className="panel rounded-xl p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-semibold">{t("WhatsApp · Official API (Cloud API)")}</h3>
-              <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold text-muted">{t("Coming soon")}</span>
-            </div>
-            <p className="mt-2 text-sm text-muted">
-              {t("Coming after Meta approves the app. There is nothing to paste here yet.")}
-            </p>
-          </div>
+          <CollapsibleSection
+            id="conexao-oficial"
+            variant="group"
+            hideFromIndex
+            defaultOpen={false}
+            title={t("WhatsApp · Official API (Cloud API)")}
+            badge={{ text: t("Coming soon") }}
+            summary={t("Coming after Meta approves the app. There is nothing to paste here yet.")}
+          >
+            <p className="text-sm text-muted">{t("Coming after Meta approves the app. There is nothing to paste here yet.")}</p>
+          </CollapsibleSection>
 
           <MetaCapiPanel />
 
@@ -211,19 +218,15 @@ export function IntegrationsPanel({ initial = null }: { initial?: IntegrationsDa
           {data.audit.length > 0 && <AuditList audit={data.audit} />}
         </>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
-function SourceBadge({ service }: { service: ServiceView }) {
-  const t = useT();
-  if (service.source === "workspace") {
-    return <span className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">{t("Using what you saved here")}</span>;
-  }
-  if (service.source === "env") {
-    return <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold text-foreground">{t("Using the server settings")}</span>;
-  }
-  return <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-foreground">{t("Not configured")}</span>;
+/** De onde vem a configuração do serviço (texto em inglês = chave do i18n). */
+function sourceBadge(service: ServiceView): SectionBadge {
+  if (service.source === "workspace") return { text: "Using what you saved here", tone: "success" };
+  if (service.source === "env") return { text: "Using the server settings", tone: "default" };
+  return { text: "Not configured", tone: "warning" };
 }
 
 function ServiceCard({ service, onChanged }: { service: ServiceView; onChanged: () => Promise<void> }) {
@@ -250,12 +253,20 @@ function ServiceCard({ service, onChanged }: { service: ServiceView; onChanged: 
   }
 
   return (
-    <article className="panel rounded-xl p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold">{t(text.title)}</h3>
-        <SourceBadge service={service} />
-      </div>
-      <p className="mt-1 text-sm text-muted">{t(text.where)}</p>
+    <CollapsibleSection
+      id={`conexao-${service.service}`}
+      variant="group"
+      hideFromIndex
+      title={t(text.title)}
+      defaultOpen={service.source === "none" || partial}
+      attention={partial}
+      badge={{ ...sourceBadge(service), text: t(sourceBadge(service).text) }}
+      summary={service.fields
+        .filter((f) => f.kind !== "number")
+        .map((f) => (f.saved ? t("{field} saved", { field: t(FIELD_TEXT[service.service]?.[f.field]?.label ?? f.field) }) : t("{field} missing", { field: t(FIELD_TEXT[service.service]?.[f.field]?.label ?? f.field) })))
+        .join(" · ")}
+    >
+      <p className="text-sm text-muted">{t(text.where)}</p>
       {partial && (
         <p className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs">
           {t("Fill in the address and the key here. Until both are saved, the server settings keep counting.")}
@@ -284,7 +295,7 @@ function ServiceCard({ service, onChanged }: { service: ServiceView; onChanged: 
         )}
         {testError && <p className="text-sm text-error">{testError}</p>}
       </div>
-    </article>
+    </CollapsibleSection>
   );
 }
 
@@ -455,12 +466,18 @@ const AI_LABEL: Record<string, string> = { anthropic: "Claude (Anthropic)", open
 function AiStatusCard({ ai }: { ai: Record<string, boolean> }) {
   const t = useT();
   return (
-    <article className="panel rounded-xl p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold">{t("AI keys (platform)")}</h3>
-        <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold text-muted">{t("Only you see this")}</span>
-      </div>
-      <p className="mt-1 text-sm text-muted">
+    <CollapsibleSection
+      id="conexao-ia"
+      variant="group"
+      hideFromIndex
+      defaultOpen={false}
+      title={t("AI keys (platform)")}
+      badge={{ text: t("Only you see this") }}
+      summary={Object.entries(ai)
+        .map(([provider, configured]) => `${AI_LABEL[provider] ?? provider}: ${configured ? t("Configured") : t("Not configured")}`)
+        .join(" · ")}
+    >
+      <p className="text-sm text-muted">
         {t("These keys are for the whole platform, not only this workspace. You change them in Admin, AI keys.")}
       </p>
       <ul className="mt-3 space-y-1.5 text-sm">
@@ -476,7 +493,7 @@ function AiStatusCard({ ai }: { ai: Record<string, boolean> }) {
       <a href="/admin#chaves-ia" className={`${btnSecondary} mt-4`}>
         {t("Open AI keys in Admin")}
       </a>
-    </article>
+    </CollapsibleSection>
   );
 }
 
@@ -491,9 +508,16 @@ function AuditList({ audit }: { audit: AuditView[] }) {
   const t = useT();
   const dateTime = useDateTime();
   return (
-    <details className="panel rounded-xl p-4 sm:p-5">
-      <summary className="cursor-pointer text-sm font-semibold">{t("Recent changes")}</summary>
-      <ul className="mt-3 space-y-1.5 text-sm">
+    <CollapsibleSection
+      id="conexao-historico"
+      variant="group"
+      hideFromIndex
+      defaultOpen={false}
+      title={t("Recent changes")}
+      badge={{ text: String(audit.length) }}
+      summary={audit[0] ? dateTime(audit[0].createdAt) : undefined}
+    >
+      <ul className="space-y-1.5 text-sm">
         {audit.map((a, i) => {
           const fieldLabel = a.field ? FIELD_TEXT[a.service]?.[a.field]?.label : null;
           const serviceLabel = SERVICE_TEXT[a.service as ServiceView["service"]]?.title ?? a.service;
@@ -511,6 +535,6 @@ function AuditList({ audit }: { audit: AuditView[] }) {
           );
         })}
       </ul>
-    </details>
+    </CollapsibleSection>
   );
 }

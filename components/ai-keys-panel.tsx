@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/components/lang-provider";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 
 type Provider = "anthropic" | "openai" | "typesafe";
 type ChatProvider = "anthropic" | "openai";
@@ -222,9 +223,15 @@ function SettingsForm({ initial, onSaved }: { initial: Settings; onSaved: () => 
   };
 
   return (
-    <form onSubmit={save} className="space-y-6">
-      <div>
-        <h3 className="mb-2 text-sm font-semibold">{t("Model of each agent")}</h3>
+    <form onSubmit={save} className="space-y-3">
+      <CollapsibleSection
+        id="ia-modelos"
+        variant="group"
+        hideFromIndex
+        defaultOpen={false}
+        title={t("Model of each agent")}
+        summary={AGENTS.map((agent) => `${agentName[agent]}: ${s.agents[agent].model}`).join(" · ")}
+      >
         <p className="mb-3 text-sm text-muted">
           {t("The everyday model answers most messages. The hard case model only comes in when the conversation is hard or the Jev is unsure.")}
         </p>
@@ -268,10 +275,16 @@ function SettingsForm({ initial, onSaved }: { initial: Settings; onSaved: () => 
             );
           })}
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div>
-        <h3 className="mb-2 text-sm font-semibold">{t("Daily spending caps")}</h3>
+      <CollapsibleSection
+        id="ia-tetos"
+        variant="group"
+        hideFromIndex
+        defaultOpen={false}
+        title={t("Daily spending caps")}
+        summary={[t("Per user: US$ {n}", { n: s.dailyCapUserUsd }), t("Per workspace: US$ {n}", { n: s.dailyCapWorkspaceUsd })].join(" · ")}
+      >
         <p className="mb-3 text-sm text-muted">
           {t("When the day's spending reaches the cap, the agent stops calling the AI until midnight (Brasília time). At 80% a warning shows up here.")}
         </p>
@@ -292,10 +305,16 @@ function SettingsForm({ initial, onSaved }: { initial: Settings; onSaved: () => 
               onChange={(e) => setS({ ...s, usdToBrl: e.target.value === "" ? null : Number(e.target.value) })} className={INPUT} />
           </label>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div>
-        <h3 className="mb-2 text-sm font-semibold">{t("Price table")}</h3>
+      <CollapsibleSection
+        id="ia-precos"
+        variant="group"
+        hideFromIndex
+        defaultOpen={false}
+        title={t("Price table")}
+        summary={prices.length === 1 ? t("1 model") : t("{n} models", { n: prices.length })}
+      >
         <p className="mb-3 text-sm text-muted">
           {t("Dollars per 1 million tokens. Prices change: check the Anthropic, OpenAI and TypeSafe pages and edit here. Each call keeps the price of the moment it happened.")}
         </p>
@@ -348,7 +367,7 @@ function SettingsForm({ initial, onSaved }: { initial: Settings; onSaved: () => 
         >
           {t("Add model")}
         </button>
-      </div>
+      </CollapsibleSection>
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={busy} className={BUTTON}>
