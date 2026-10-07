@@ -15,6 +15,7 @@ import { contrastRatio } from "@/lib/funnels/validate";
 import { isAllowedImageUrl, isHttpsUrl, isLocalPath } from "@/lib/funnels/media";
 import type { FunnelDefinition, FunnelSettings, FunnelTheme } from "@/lib/funnels/types";
 import { updateSettings } from "@/components/funnels/editor-model";
+import { MediaUploadControl } from "@/components/funnels/media-upload";
 import { CheckField, FieldShell, SelectField, TextField, inputClass } from "@/components/funnels/form-controls";
 
 type SetDef = (update: (d: FunnelDefinition) => FunnelDefinition) => void;
@@ -228,6 +229,10 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
               onChange={(v) => set({ seo: { ...s.seo, imageUrl: opt(v) } })}
               error={urlError(s.seo?.imageUrl, isAllowedImageUrl)}
             />
+            <MediaUploadControl kind="image" onUploaded={(url) => set({ seo: { ...s.seo, imageUrl: url } })} />
+            <p className="text-xs text-muted">
+              {t("This is the image of the card when the quiz link is shared (Instagram, WhatsApp). Best size: 1200 x 630 pixels. Without one, the first image of the cover goes.")}
+            </p>
             <CheckField
               label={t("Show on Google")}
               hint={t("Off by default: quizzes are usually only for who comes from Instagram.")}

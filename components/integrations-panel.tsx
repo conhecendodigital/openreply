@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/components/lang-provider";
 import { useDateTime } from "@/components/contact-ui";
 import { MetaCapiPanel } from "@/components/meta-capi-panel";
+import { LinkDomainPanel } from "@/components/link-domain-panel";
 import { CollapsibleSection, type SectionBadge } from "@/components/ui/collapsible-section";
 
 type Kind = "url" | "secret" | "number";
@@ -212,6 +213,8 @@ export function IntegrationsPanel({ initial = null }: { initial?: IntegrationsDa
           </CollapsibleSection>
 
           <MetaCapiPanel />
+
+          <LinkDomainPanel />
 
           {data.ai && <AiStatusCard ai={data.ai} />}
 

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/client";
 import { calculateCtr, normalizeTopKeywords } from "@/lib/tracking/analytics";
 import { buildTrackedUrl, DM_FORMATS, parseDmFormat } from "@/lib/tracking/message";
 import { generateTrackedLinkSlug } from "@/lib/tracking/server";
+import { getWorkspaceLinkDomain, linkBaseUrl } from "@/lib/links/domain";
 import { buildReportUrl, generateReportShareSlug } from "@/lib/reports/share";
 import {
   canManageWorkspace,
@@ -26,6 +27,40 @@ export const dynamic = "force-dynamic";
 // lowercase). Left out on create = BUTTON (the column default), so old
 // clients and the CSV import keep the card; the campaign screen sends TEXT.
 const dmFormatSchema = z.preprocess((v) => parseDmFormat(v) ?? v, z.enum(DM_FORMATS));
+
+// Preview of the primary link (07/10/2026): what Instagram, WhatsApp and
+// others show in the link's card. Empty / null = from the quiz cover or the
+// destination page (lib/links/preview.ts). undefined on PATCH = unchanged.
+const linkPreviewFields = {
+  linkPreviewTitle: z.string().trim().max(120).optional().nullable(),
+  linkPreviewDescription: z.string().trim().max(300).optional().nullable(),
+  linkPreviewImageUrl: z
+    .union([
+      z
+        .string()
+        .trim()
+        .max(2048)
+        .url()
+        .refine((v) => v.startsWith("https://"), "Use an https:// image link"),
+      z.literal(""),
+    ])
+    .optional()
+    .nullable(),
+};
+
+/** The three fields as TrackedLink columns ("" -> null). Only the ones sent. */
+function previewColumns(data: {
+  linkPreviewTitle?: string | null;
+  linkPreviewDescription?: string | null;
+  linkPreviewImageUrl?: string | null;
+}): { previewTitle?: string | null; previewDescription?: string | null; previewImageUrl?: string | null } {
+  const col = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() || null);
+  const out: { previewTitle?: string | null; previewDescription?: string | null; previewImageUrl?: string | null } = {};
+  if (data.linkPreviewTitle !== undefined) out.previewTitle = col(data.linkPreviewTitle);
+  if (data.linkPreviewDescription !== undefined) out.previewDescription = col(data.linkPreviewDescription);
+  if (data.linkPreviewImageUrl !== undefined) out.previewImageUrl = col(data.linkPreviewImageUrl);
+  return out;
+}
 
 const createAutomationSchema = z
   .object({
@@ -76,6 +111,7 @@ const createAutomationSchema = z
       .optional()
       .nullable(),
     secondaryButtonLabel: z.string().max(20).optional().nullable(),
+    ...linkPreviewFields,
     isActive: z.boolean().optional().default(true),
     wholeWordMatch: z.boolean().optional().default(true),
   })
@@ -145,6 +181,7 @@ const updateAutomationSchema = z.object({
     .optional()
     .nullable(),
   secondaryButtonLabel: z.string().max(20).optional().nullable(),
+  ...linkPreviewFields,
 });
 
 /** Fields an API key may still change while the campaign is ON. */
@@ -158,7 +195,14 @@ function editedCampaignFields(
   body: Record<string, unknown>,
   existing: Record<string, unknown>
 ): string[] {
-  const linkFields = new Set(["trackedDestinationUrl", "secondaryDestinationUrl", "secondaryButtonLabel"]);
+  const linkFields = new Set([
+    "trackedDestinationUrl",
+    "secondaryDestinationUrl",
+    "secondaryButtonLabel",
+    "linkPreviewTitle",
+    "linkPreviewDescription",
+    "linkPreviewImageUrl",
+  ]);
   return Object.entries(body)
     .filter(([field, value]) => {
       if (value === undefined) return false;
@@ -198,6 +242,9 @@ export async function GET(request: NextRequest) {
           slug: true,
           label: true,
           destinationUrl: true,
+          previewTitle: true,
+          previewDescription: true,
+          previewImageUrl: true,
           _count: { select: { clicks: true } },
         },
         orderBy: { createdAt: "asc" },
@@ -290,6 +337,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // The workspace's link domain, when it has one (07/10/2026).
+  const linkBase = linkBaseUrl(await getWorkspaceLinkDomain(workspaceId));
+
   return NextResponse.json(
     {
     success: true,
@@ -306,7 +356,7 @@ export async function GET(request: NextRequest) {
         ...automation,
         trackedLinks: automation.trackedLinks.map((link) => ({
           ...link,
-          trackedUrl: buildTrackedUrl(link.slug),
+          trackedUrl: buildTrackedUrl(link.slug, linkBase),
         })),
         reportUrl: automation.reportShareSlug
           ? buildReportUrl(automation.reportShareSlug)
@@ -401,6 +451,9 @@ export async function POST(request: NextRequest) {
     slug: string;
     label: string;
     destinationUrl: string;
+    previewTitle?: string | null;
+    previewDescription?: string | null;
+    previewImageUrl?: string | null;
   }[] = [];
   if (trackedDestinationUrl) {
     linkCreates.push({
@@ -408,6 +461,7 @@ export async function POST(request: NextRequest) {
       slug: generateTrackedLinkSlug(),
       label: "Primary campaign link",
       destinationUrl: trackedDestinationUrl,
+      ...previewColumns(parsed.data),
     });
   }
   if (secondaryDestinationUrl) {
@@ -557,8 +611,12 @@ export async function PATCH(request: NextRequest) {
     trackedDestinationUrl,
     secondaryDestinationUrl,
     secondaryButtonLabel,
+    linkPreviewTitle,
+    linkPreviewDescription,
+    linkPreviewImageUrl,
     ...automationData
   } = parsed.data;
+  const preview = previewColumns({ linkPreviewTitle, linkPreviewDescription, linkPreviewImageUrl });
 
   const byApiKey = await isApiTokenRequest();
   // Owner's rule: an API key never turns a campaign on (turning it OFF is
@@ -688,7 +746,7 @@ export async function PATCH(request: NextRequest) {
     } else if (primaryLink) {
       await prisma.trackedLink.update({
         where: { id: primaryLink.id },
-        data: { destinationUrl: trackedDestinationUrl },
+        data: { destinationUrl: trackedDestinationUrl, ...preview },
       });
     } else {
       await prisma.trackedLink.create({
@@ -698,8 +756,19 @@ export async function PATCH(request: NextRequest) {
           slug: generateTrackedLinkSlug(),
           label: "Primary campaign link",
           destinationUrl: trackedDestinationUrl,
+          ...preview,
         },
       });
+    }
+  } else if (Object.keys(preview).length > 0) {
+    // Only the preview changed: the primary link keeps its destination.
+    const primaryLink = await prisma.trackedLink.findFirst({
+      where: { automationId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (primaryLink) {
+      await prisma.trackedLink.update({ where: { id: primaryLink.id }, data: preview });
     }
   }
 

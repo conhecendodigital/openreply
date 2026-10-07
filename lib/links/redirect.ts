@@ -19,14 +19,10 @@ import { recordFlowLinkClick } from "@/lib/flows/links";
 import { recordBroadcastLinkClick } from "@/lib/broadcasts/links";
 // Etapa 6: a link to one of our quizzes carries who clicked (signed c=).
 import { withFunnelContact } from "@/lib/funnels/contact-link";
-import { isAppHost, requestHost } from "@/lib/links/hosts";
+import { isAppHost, LINK_PING_BODY, LINK_PING_SLUG, requestHost } from "@/lib/links/hosts";
 import { workspaceForLinkHost } from "@/lib/links/domain";
 import { previewResponse, resolveLinkPreview, wantsPreview, type PreviewSource } from "@/lib/links/preview";
 import { getPublishedFunnelBySlug } from "@/lib/funnels/public";
-
-/** /r/_ping answers this, so saving a link domain can check it reaches us. */
-export const LINK_PING_SLUG = "_ping";
-export const LINK_PING_BODY = "lead-engine-link-ok";
 
 export type LinkRecipient = { igUserId: string; dmLogId: string | null };
 

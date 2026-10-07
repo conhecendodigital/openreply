@@ -256,9 +256,13 @@ type UploadUrlAnswer = { uploadUrl: string; publicUrl: string; headers: Record<s
  * The uploader of one funnel, or null when the server has no storage
  * configured (then the screens only ask for a link, as before).
  */
-export function getMediaUploader(config?: (MediaUploadConfig & { funnelId: string }) | null): MediaUploader | null {
-  if (!config || !config.enabled || !config.funnelId) return null;
-  const base = `/api/funnels/${encodeURIComponent(config.funnelId)}/media`;
+export function getMediaUploader(
+  config?: (MediaUploadConfig & { funnelId: string; endpoint?: string }) | null
+): MediaUploader | null {
+  if (!config || !config.enabled || (!config.funnelId && !config.endpoint)) return null;
+  // endpoint: another place that signs uploads (07/10/2026: the preview image
+  // of a tracked link, /api/links/preview-image). Same answer shape.
+  const base = config.endpoint ?? `/api/funnels/${encodeURIComponent(config.funnelId)}/media`;
   return {
     async upload(file, { kind, onProgress, signal }) {
       const check = checkMediaFile(file, kind);

@@ -517,7 +517,11 @@ export default function FunnelEditor({ funnelId }: { funnelId: string }) {
         </section>
       </div>
 
-      {showSettings && <SettingsPanel def={def} setDef={setDef} onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <MediaUploadProvider value={mediaState}>
+          <SettingsPanel def={def} setDef={setDef} onClose={() => setShowSettings(false)} />
+        </MediaUploadProvider>
+      )}
       {showPublish && (
         <PublishDialog
           def={def}

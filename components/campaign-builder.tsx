@@ -33,6 +33,8 @@ import {
 } from "@/lib/import-queue";
 
 import { useT } from "@/components/lang-provider";
+import { MediaUploadControl, MediaUploadProvider } from "@/components/funnels/media-upload";
+import { getMediaUploader, type MediaUploadConfig, type MediaUploader } from "@/lib/funnels/media";
 type TriggerScope = "specific" | "any" | "next";
 /** Automation.dmFormat: card with buttons or the link inside the text. */
 type DmFormat = "BUTTON" | "TEXT";
@@ -92,7 +94,13 @@ interface LoadedCampaign {
   publicReplyMessages: string[];
   isActive: boolean;
   instagramAccountId: string;
-  trackedLinks?: { destinationUrl: string; label?: string | null }[];
+  trackedLinks?: {
+    destinationUrl: string;
+    label?: string | null;
+    previewTitle?: string | null;
+    previewDescription?: string | null;
+    previewImageUrl?: string | null;
+  }[];
 }
 
 interface CampaignBuilderProps {
@@ -228,6 +236,12 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [secondLinkOpen, setSecondLinkOpen] = useState(false);
   const [secondaryDestinationUrl, setSecondaryDestinationUrl] = useState("");
   const [secondaryButtonLabel, setSecondaryButtonLabel] = useState("Open link");
+  // Preview of the link (07/10/2026): the card Instagram/WhatsApp show.
+  const [linkPreviewOpen, setLinkPreviewOpen] = useState(false);
+  const [linkPreviewTitle, setLinkPreviewTitle] = useState("");
+  const [linkPreviewDescription, setLinkPreviewDescription] = useState("");
+  const [linkPreviewImageUrl, setLinkPreviewImageUrl] = useState("");
+  const [previewUploader, setPreviewUploader] = useState<MediaUploader | null>(null);
   const [requireFollow, setRequireFollow] = useState(false);
   const [followPromptMessage, setFollowPromptMessage] = useState("");
   const [followPromptButtonLabel, setFollowPromptButtonLabel] =
@@ -295,6 +309,23 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       .catch(() => setAccounts([]));
   }, []);
 
+  // Upload of the preview image: only when the server has the storage on.
+  useEffect(() => {
+    if (!linkPreviewOpen || previewUploader) return;
+    let cancelled = false;
+    fetch("/api/links/preview-image", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((payload) => {
+        if (cancelled || !payload?.success) return;
+        const config = payload.data as MediaUploadConfig;
+        setPreviewUploader(getMediaUploader({ ...config, funnelId: "", endpoint: "/api/links/preview-image" }));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [linkPreviewOpen, previewUploader]);
+
   // Prefill when editing.
   useEffect(() => {
     if (mode !== "edit" || !campaignId) return;
@@ -337,6 +368,11 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         const link = c.trackedLinks?.[0]?.destinationUrl ?? "";
         setTrackedDestinationUrl(link);
         setLinkOpen(Boolean(link));
+        const first = c.trackedLinks?.[0];
+        setLinkPreviewTitle(first?.previewTitle ?? "");
+        setLinkPreviewDescription(first?.previewDescription ?? "");
+        setLinkPreviewImageUrl(first?.previewImageUrl ?? "");
+        setLinkPreviewOpen(Boolean(first?.previewTitle || first?.previewDescription || first?.previewImageUrl));
         const secondLink = c.trackedLinks?.[1];
         setSecondaryDestinationUrl(secondLink?.destinationUrl ?? "");
         setSecondaryButtonLabel(secondLink?.label ?? "Open link");
@@ -532,6 +568,9 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         ? publicReplyMessages.map((m) => m.trim()).filter(Boolean)
         : [],
       trackedDestinationUrl: trackedDestinationUrl.trim() || "",
+      linkPreviewTitle: linkPreviewTitle.trim() || null,
+      linkPreviewDescription: linkPreviewDescription.trim() || null,
+      linkPreviewImageUrl: linkPreviewImageUrl.trim() || null,
       linkButtonLabel: linkButtonLabel.trim() || "Open link",
       secondaryDestinationUrl: secondaryDestinationUrl.trim() || "",
       secondaryButtonLabel: secondaryButtonLabel.trim() || "Open link",
@@ -1129,6 +1168,51 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                   maxLength={20}
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
                 />
+                {linkPreviewOpen ? (
+                  <div className="space-y-2 rounded-lg border border-border p-3">
+                    <span className="text-sm text-foreground">{t("Link preview")}</span>
+                    <p className="text-xs text-muted">
+                      {t("What Instagram and WhatsApp show in the link's card. Empty fields come from the quiz cover or from the page of the link.")}
+                    </p>
+                    <input
+                      value={linkPreviewTitle}
+                      onChange={(e) => setLinkPreviewTitle(e.target.value)}
+                      placeholder={t("Preview title")}
+                      maxLength={120}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
+                    />
+                    <textarea
+                      value={linkPreviewDescription}
+                      onChange={(e) => setLinkPreviewDescription(e.target.value)}
+                      placeholder={t("Preview description")}
+                      rows={2}
+                      maxLength={300}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
+                    />
+                    <input
+                      value={linkPreviewImageUrl}
+                      onChange={(e) => setLinkPreviewImageUrl(e.target.value)}
+                      placeholder={t("Preview image link (https://)")}
+                      type="url"
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
+                    />
+                    {linkPreviewImageUrl.trim() && !linkPreviewImageUrl.trim().startsWith("https://") && (
+                      <p className="text-xs text-error">{t("Use an https:// image link")}</p>
+                    )}
+                    <MediaUploadProvider value={{ uploader: previewUploader, files: [], addFile: () => undefined }}>
+                      <MediaUploadControl kind="image" onUploaded={setLinkPreviewImageUrl} />
+                    </MediaUploadProvider>
+                    <p className="text-xs text-muted">{t("Best size: 1200 x 630 pixels.")}</p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setLinkPreviewOpen(true)}
+                    className="w-full rounded-lg border border-border py-2 text-sm text-muted hover:text-foreground"
+                  >
+                    {t("+ Change the link preview")}
+                  </button>
+                )}
                 {secondLinkOpen ? (
                   <div className="space-y-2 border-t border-border pt-2">
                     <input

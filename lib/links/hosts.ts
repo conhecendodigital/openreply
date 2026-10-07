@@ -55,3 +55,7 @@ export function listedQuizDomains(env: Env = process.env): string[] {
 export function requestHost(request: Request): string {
   return hostOf(request.headers.get("host") ?? request.headers.get("x-forwarded-host") ?? new URL(request.url).host);
 }
+
+/** /r/_ping answers this, so saving a link domain can check it reaches us. */
+export const LINK_PING_SLUG = "_ping";
+export const LINK_PING_BODY = "lead-engine-link-ok";
