@@ -5,7 +5,7 @@ import { getBaseUrl } from "@/lib/env";
 import { hitRateLimit } from "@/lib/http-rate-limit";
 import { invalidateLinkDomainCache, linkBaseUrl, normalizeLinkDomain } from "@/lib/links/domain";
 import { domainReachesUs } from "@/lib/links/domain-check";
-import { canManageWorkspace, getCurrentWorkspaceContext } from "@/lib/workspace-access";
+import { canManageWorkspace, getCurrentWorkspaceContext, type WorkspaceContext } from "@/lib/workspace-access";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
-async function gate() {
+async function gate(): Promise<{ error: NextResponse } | { context: WorkspaceContext }> {
   if (await isApiTokenRequest()) {
     return { error: json({ success: false, error: "API keys cannot use this route. Do it in the Lead Engine.", code: "human_only" }, 403) };
   }

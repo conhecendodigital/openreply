@@ -151,6 +151,21 @@ vi.mock("@/lib/queue/client", () => ({
   safeJobKey: (v: string) => Buffer.from(v).toString("base64url"),
 }));
 
+// 07/10/2026: short link per person. By default the code cannot be saved
+// (like a database hiccup), so every older test keeps the signed ?c= link.
+const shortLink = vi.hoisted(() => ({ code: null as string | null, domain: null as string | null, calls: [] as unknown[] }));
+vi.mock("@/lib/links/codes", () => ({
+  ensureRecipientCode: vi.fn(async (input: unknown) => {
+    shortLink.calls.push(input);
+    if (!shortLink.code) throw new Error("db down");
+    return shortLink.code;
+  }),
+}));
+vi.mock("@/lib/links/domain", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../lib/links/domain")>();
+  return { ...real, getWorkspaceLinkDomain: vi.fn(async () => shortLink.domain) };
+});
+
 vi.mock("bullmq", () => {
   function MockWorker(_name: string, processor: unknown) {
     (global as Record<string, unknown>).__dmWorkerProcessor = processor;
@@ -1396,5 +1411,58 @@ describe("DM Worker — DM format (card or text with the link)", () => {
 
     expect(mockSendDirectMessageWithLinkButton).not.toHaveBeenCalled();
     expect(mockSendDirectMessage.mock.calls[0][3]).toMatch(TRACKED);
+  });
+});
+
+// 07/10/2026: the worker builds the SHORT link (/r/<slug>/<code>) on the
+// workspace's link domain, in the text and in the button.
+describe("DM Worker — short link on the link domain", () => {
+  const withLink = (extra: Record<string, unknown> = {}) => ({
+    ...mockAutomation,
+    dmMessage: "Oi {username}! Pega aqui: {link}",
+    linkButtonLabel: "Acessar",
+    trackedLinks: [{ slug: "abc123", label: "Primary campaign link", destinationUrl: "https://quiz.cloudmatheus.com.br/diag" }],
+    ...extra,
+  });
+
+  beforeEach(() => {
+    shortLink.code = "k3J9xQ2";
+    shortLink.domain = "comando.cloudmatheus.com.br";
+    shortLink.calls = [];
+    mockPrisma.dmLog.create.mockResolvedValue({ id: "log_1" });
+  });
+
+  it("TEXT: https://<domain>/r/<slug>/<code>, no ?c=, and the code points at the DM", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([withLink({ dmFormat: "TEXT" })]);
+    await getProcessor()(createMockJob());
+
+    const text = mockSendPrivateReply.mock.calls[0]?.[3] as string;
+    expect(text).toBe("Oi commenter_user! Pega aqui: https://comando.cloudmatheus.com.br/r/abc123/k3J9xQ2");
+    expect(text).not.toContain("?c=");
+    expect(shortLink.calls).toEqual([
+      { workspaceId: "workspace_123", slug: "abc123", igUserId: "commenter_999", dmLogId: "log_1" },
+    ]);
+  });
+
+  it("BUTTON: the button URL is the same short link", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([withLink({ dmFormat: "BUTTON" })]);
+    await getProcessor()(createMockJob());
+
+    const [, , , , buttons] = mockSendPrivateReplyWithLinkButton.mock.calls[0];
+    expect(buttons[0].url).toBe("https://comando.cloudmatheus.com.br/r/abc123/k3J9xQ2");
+  });
+
+  it("no link domain: short link on the app address", async () => {
+    shortLink.domain = null;
+    mockPrisma.automation.findMany.mockResolvedValue([withLink({ dmFormat: "TEXT" })]);
+    await getProcessor()(createMockJob());
+    expect(mockSendPrivateReply.mock.calls[0]?.[3]).toMatch(/ http:\/\/localhost:3000\/r\/abc123\/k3J9xQ2$/);
+  });
+
+  it("code could not be saved: the old signed ?c= on the link domain, the DM still goes", async () => {
+    shortLink.code = null;
+    mockPrisma.automation.findMany.mockResolvedValue([withLink({ dmFormat: "TEXT" })]);
+    await getProcessor()(createMockJob());
+    expect(mockSendPrivateReply.mock.calls[0]?.[3]).toMatch(/https:\/\/comando\.cloudmatheus\.com\.br\/r\/abc123\?c=commenter_999\./);
   });
 });
