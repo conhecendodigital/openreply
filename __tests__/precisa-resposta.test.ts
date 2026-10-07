@@ -5,7 +5,7 @@ const them = (text: string | null, storyReply = false) => ({ fromMe: false, text
 const us = (text: string) => ({ fromMe: true, text, storyReply: false });
 
 describe("isClosingMessage", () => {
-  it.each(["Obrigado!", "muito obrigada Matheus 🙏", "recebi", "valeu mano", "Amém", "Deus abençoe", "kkkkkk", "🔥🔥", "❤️", "top demais", "show", "ok", "obrigadooo"])(
+  it.each(["Obrigado!", "muito obrigada Matheus 🙏", "recebi", "valeu mano", "Amém", "Deus abençoe", "kkkkkk", "🔥🔥", "❤️", "top demais", "show", "ok", "obrigadooo", "Obrigado pela resposta", "valeu pela dica"])(
     "encerra: %s",
     (t) => expect(isClosingMessage(t)).toBe(true)
   );
@@ -19,6 +19,10 @@ describe("needsReply", () => {
   it("coração no story ou repost sem texto não precisa", () => {
     expect(needsReply([them(null, true)])).toBe(false);
     expect(needsReply([them("😍", true)])).toBe(false);
+    expect(needsReply([them("2", true)])).toBe(false);
+    expect(needsReply([them("A", true)])).toBe(false);
+    expect(needsReply([them("sim", true)])).toBe(true);
+    expect(needsReply([them("2")])).toBe(true); // fora do story, "2" pode ser resposta
   });
   it("se a nossa última perguntou algo, precisa", () => {
     expect(needsReply([us("Opa, tudo bem?"), them(null, true)])).toBe(true);

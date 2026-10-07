@@ -24,7 +24,7 @@ const CLOSING = new Set(
 const FILLER = new Set(
   (
     "muito muita mto mt mano irmao irma amigo amiga matheus math thais deus a o e de do da te ti voce vc cê ce " +
-    "pra pro por isso esse essa tudo ja aqui entao ta tá ai sempre mesmo mais nada sim senhor que q meu minha"
+    "pra pro por pela pelo pelas pelos isso esse essa tudo ja aqui entao ta tá ai sempre mesmo mais nada sim senhor que q meu minha resposta dica dicas conteudo video post"
   ).split(/\s+/)
 );
 // "sim", "quero", "manda"... answer something or ask for something: always reply.
@@ -63,5 +63,7 @@ export function needsReply(messages: Msg[]): boolean {
   if (ours?.text?.includes("?")) return true;
   const text = last.text?.trim() ?? "";
   if (!text) return !last.storyReply; // a heart or a repost of a story: no; an audio or a photo: yes
+  // A vote on a story poll or quiz ("2", "A", "sim" is still kept by ASKS): no.
+  if (last.storyReply && /^[\p{L}\p{N}]{1,3}[.!]?$/u.test(text) && !ASKS.test(plain(text))) return false;
   return !isClosingMessage(text);
 }
