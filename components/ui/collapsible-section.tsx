@@ -58,6 +58,7 @@ function writeSaved(page: string, map: Record<string, boolean>) {
 export type SectionTone = "default" | "success" | "warning" | "error" | "accent";
 export type SectionBadge = { text: string; tone?: SectionTone };
 
+type Snapshot = { open: Record<string, boolean>; entries: Entry[] };
 type Entry = { id: string; title: string; tone?: SectionTone; el: () => HTMLElement | null; defaultOpen: boolean };
 
 /** Estado de uma página: o que está aberto e quais seções existem (pro índice). */
@@ -66,7 +67,7 @@ export class SectionsStore {
   private loaded = false;
   private entries: Entry[] = [];
   private listeners = new Set<() => void>();
-  private snapshot: { open: Record<string, boolean>; entries: Entry[] } = { open: {}, entries: [] };
+  private snapshot: Snapshot = { open: {}, entries: [] };
 
   constructor(readonly page: string | null) {
     this.load();
@@ -129,7 +130,7 @@ export class SectionsStore {
   }
 }
 
-const SERVER_SNAPSHOT = { open: {}, entries: [] as Entry[] };
+const SERVER_SNAPSHOT: Snapshot = { open: {}, entries: [] };
 const Ctx = createContext<SectionsStore | null>(null);
 
 function useStoreSnapshot(store: SectionsStore) {
@@ -137,7 +138,7 @@ function useStoreSnapshot(store: SectionsStore) {
 }
 
 /** Envolve a página. `page` é a chave do localStorage (ex.: "whatsapp-agentes"). */
-export function SectionsProvider({ page, children }: { page: string; children: React.ReactNode }) {
+export function SectionsProvider({ page, children }: { page: string; children?: React.ReactNode }) {
   const [store] = useState(() => new SectionsStore(page));
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }
@@ -152,7 +153,14 @@ function prefersReducedMotion(): boolean {
 
 /** Abre a seção e rola até ela. */
 export function openAndScroll(store: SectionsStore | null, id: string) {
-  store?.set(id, true);
+  // Abre também as seções em volta (um grupo dentro de um cartão fechado).
+  const ids = [id];
+  let parent = document.getElementById(id)?.parentElement?.closest<HTMLElement>("[data-secao]");
+  while (parent) {
+    ids.push(parent.id);
+    parent = parent.parentElement?.closest<HTMLElement>("[data-secao]");
+  }
+  store?.setMany(Object.fromEntries(ids.map((x) => [x, true])));
   const go = () => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -229,7 +237,7 @@ export type CollapsibleSectionProps = {
   /** Fica fora do índice da página (ex.: grupos internos). */
   hideFromIndex?: boolean;
   headingLevel?: 2 | 3;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 };
 
 export function CollapsibleSection({

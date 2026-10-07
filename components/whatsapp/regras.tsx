@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/components/lang-provider";
 import { FromDocBadge } from "@/components/whatsapp/treinar";
+import { ChipListInput, CollapsibleSection } from "@/components/ui/collapsible-section";
 import { api, btnPrimary, btnSecondary, INPUT } from "@/components/whatsapp/ui";
 import { DECISOES, type Decisao, type RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
 import { ESTAGIOS, NOME_ESTAGIO, type ConfigEstagio, type Estagio } from "@/lib/whatsapp/regras/estagio";
@@ -25,6 +26,7 @@ import {
   textosDoTexto,
 } from "@/lib/whatsapp/regras/texto";
 import type { CampoTreino } from "@/lib/whatsapp/treinar/esquema";
+import type { TFunction } from "@/lib/i18n";
 import type { LearningReport } from "@/lib/whatsapp/regras/painel";
 import type { ResultadoTeste } from "@/lib/whatsapp/regras/testar";
 
@@ -113,24 +115,80 @@ export const RULE_NAMES: Record<string, string> = {
 
 type TextField = { key: keyof RulesText; label: string; hint?: string; rows?: number; placeholder?: string };
 
-const FIELDS: TextField[] = [
-  { key: "cidadesAtendidas", label: "Cities served (one per line, City/UF)", placeholder: "Paulínia/SP" },
-  { key: "cidadesNaoAtendidas", label: "Cities not served (one per line)", placeholder: "Hortolândia/SP" },
+/** Linhas preenchidas de uma caixa "uma por linha". */
+export function countLines(s: string): number {
+  return s.split("\n").filter((l) => l.trim()).length;
+}
+
+/** Grupos das regras (e a seção Sobre o seu negócio), na ordem da tela. */
+export const RULE_GROUPS = [
+  { id: "regras-onde", title: "Where you serve" },
+  { id: "regras-servicos", title: "Services" },
+  { id: "regras-qualificacao", title: "Qualification" },
+  { id: "regras-horario", title: "Hours and what never to promise" },
+  { id: "regras-quem", title: "Who takes over" },
+  { id: "regras-mensagens", title: "Approved messages" },
+  { id: "regras-casos", title: "Test cases" },
+] as const;
+export type RuleGroupId = (typeof RULE_GROUPS)[number]["id"];
+
+/** Resumo de uma linha de cada grupo, com o que está na tela agora (antes do Salvar também). */
+export function ruleGroupSummaries(t: TFunction, text: RulesText, rules: RegrasNegocio): Record<RuleGroupId, string> {
+  const atendidas = countLines(text.cidadesAtendidas);
+  const fora = countLines(text.cidadesNaoAtendidas);
+  const cuidado = countLines(text.regioesCuidado);
+  const excLocal = countLines(text.excecoesLocal);
+  const aceitos = countLines(text.servicosAceitos);
+  const recusados = countLines(text.servicosRecusados);
+  const excServ = countLines(text.excecoesServico);
+  const infos = countLines(text.infoMinima);
+  const nunca = countLines(text.nuncaPrometer);
+  const resumo = countLines(text.resumoEquipe);
+  const msgs = rules.mensagensAprovadas.length;
+  const casos = rules.casosTeste.length;
+  return {
+    "regras-onde": [
+      atendidas === 1 ? t("1 city served") : t("{n} cities served", { n: atendidas }),
+      t("{n} not served", { n: fora }),
+      t("{n} with care", { n: cuidado }),
+      excLocal === 1 ? t("1 exception") : t("{n} exceptions", { n: excLocal }),
+    ].join(" · "),
+    "regras-servicos": [
+      aceitos === 1 ? t("1 service accepted") : t("{n} services accepted", { n: aceitos }),
+      t("{n} refused", { n: recusados }),
+      excServ === 1 ? t("1 exception") : t("{n} exceptions", { n: excServ }),
+    ].join(" · "),
+    "regras-qualificacao": infos === 1 ? t("1 minimum information") : t("{n} minimum informations", { n: infos }),
+    "regras-horario": [
+      text.horario.trim() ? t("Business hours filled in") : t("No business hours"),
+      t("{n} never promise", { n: nunca }),
+    ].join(" · "),
+    "regras-quem": [
+      rules.responsavel.nome ? t("In charge: {name}", { name: rules.responsavel.nome }) : t("Nobody in charge yet"),
+      t("{n} in the team summary", { n: resumo }),
+    ].join(" · "),
+    "regras-mensagens": msgs === 1 ? t("1 approved message") : t("{n} approved messages", { n: msgs }),
+    "regras-casos": casos === 1 ? t("1 test case") : t("{n} test cases", { n: casos }),
+  };
+}
+
+const PLACE_FIELDS: TextField[] = [
   { key: "regioesCuidado", label: "Neighborhoods or regions that go for review", hint: "Format: name, City/UF | what to do", placeholder: "Campo Grande, Campinas/SP | send for review" },
   { key: "excecoesLocal", label: "Place exceptions that go for review", hint: "Format: description | words the customer would use", placeholder: "Big job outside the region | big job, building" },
-  { key: "servicosAceitos", label: "Services accepted (one per line)" },
-  { key: "servicosRecusados", label: "Services the company does not do", hint: "Format: description | words the customer would use", placeholder: "Small isolated repair | change faucet, leak" },
-  { key: "excecoesServico", label: "Service exceptions (accepted anyway)", hint: "Format: description | words the customer would use", placeholder: "Stones | granite, marble" },
-  { key: "infoMinima", label: "Minimum information to qualify", hint: "Format: information | words that show it. Qualified only with all of them.", placeholder: "Keys situation | keys" },
-  { key: "resumoEquipe", label: "What goes in the summary for the team (one per line)" },
-  { key: "nuncaPrometer", label: "Never promise (one per line)", placeholder: "price" },
+  { key: "mensagemForaDaArea", label: "How to answer when the place is outside the area", rows: 2 },
 ];
 
-const LONG_FIELDS: TextField[] = [
-  { key: "horario", label: "Business hours", rows: 2 },
-  { key: "mensagemForaDaArea", label: "How to answer when the place is outside the area", rows: 2 },
+const SERVICE_FIELDS: TextField[] = [
+  { key: "servicosRecusados", label: "Services the company does not do", hint: "Format: description | words the customer would use", placeholder: "Small isolated repair | change faucet, leak" },
+  { key: "excecoesServico", label: "Service exceptions (accepted anyway)", hint: "Format: description | words the customer would use", placeholder: "Stones | granite, marble" },
   { key: "mensagemServicoRecusado", label: "How to answer when the company does not do the service", rows: 2 },
 ];
+
+const QUALIFY_FIELDS: TextField[] = [
+  { key: "infoMinima", label: "Minimum information to qualify", hint: "Format: information | words that show it. Qualified only with all of them.", placeholder: "Keys situation | keys" },
+];
+
+const HOURS_FIELDS: TextField[] = [{ key: "horario", label: "Business hours", rows: 2 }];
 
 export function RulesPanel({
   text,
@@ -146,6 +204,7 @@ export function RulesPanel({
   fromDoc: Set<CampoTreino>;
 }) {
   const t = useT();
+  const sums = ruleGroupSummaries(t, text, rules);
   const field = (f: TextField) => (
     <label key={f.key} className="block space-y-1">
       <span className="text-sm font-medium">{t(f.label)}</span>
@@ -159,6 +218,21 @@ export function RulesPanel({
       {f.hint && <span className="block text-xs text-muted">{t(f.hint)}</span>}
     </label>
   );
+  const chips = (key: keyof RulesText, label: string, placeholder?: string, hint?: string) => (
+    <ChipListInput
+      id={`regra-${key}`}
+      value={text[key]}
+      onChange={(v) => onText({ ...text, [key]: v })}
+      label={label}
+      placeholder={placeholder}
+      hint={hint}
+    />
+  );
+  const group = (id: RuleGroupId, title: string, children: React.ReactNode, extra?: { description?: React.ReactNode }) => (
+    <CollapsibleSection id={id} title={t(title)} summary={sums[id]} variant="group" hideFromIndex defaultOpen={false} description={extra?.description}>
+      {children}
+    </CollapsibleSection>
+  );
 
   function toggle(i: number, d: Decisao) {
     const casos = rules.casosTeste.map((c, j) => {
@@ -171,54 +245,121 @@ export function RulesPanel({
   }
 
   return (
-    <section className="panel space-y-4 rounded-xl p-4 sm:p-5">
-      <div>
-        <h2 className="text-base font-semibold">
+    <CollapsibleSection
+      id="regras"
+      title={
+        <>
           {t("Business rules")}
           <FromDocBadge field="rules" fields={fromDoc} />
-        </h2>
-        <p className="mt-1 text-sm text-muted">
-          {t("The system checks these rules by itself in every answer, before sending or marking a lead as qualified. They only change when you click Save or accept a suggestion.")}
-        </p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">{FIELDS.map(field)}</div>
-      <div className="space-y-3">{LONG_FIELDS.map(field)}</div>
-
-      <div className="space-y-2 rounded-lg border border-border p-3">
-        <p className="text-sm font-medium">{t("Test cases and the expected decision")}</p>
-        {rules.casosTeste.length === 0 ? (
-          <p className="text-xs text-muted">{t("No test cases yet. They come from the decision examples of the document.")}</p>
-        ) : (
-          <ol className="space-y-3">
-            {rules.casosTeste.map((c, i) => (
-              <li key={i} className="space-y-1 text-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <span>
-                    {i + 1}. {c.situacao}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onRules({ ...rules, casosTeste: rules.casosTeste.filter((_, j) => j !== i) })}
-                    className="shrink-0 text-xs text-error hover:underline"
-                  >
-                    {t("Remove")}
-                  </button>
-                </div>
-                {c.decisao && <span className="block text-xs text-muted">{c.decisao}</span>}
-                <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  {DECISOES.map((d) => (
-                    <label key={d} className="flex items-center gap-1 text-xs">
-                      <input type="checkbox" checked={c.esperado.includes(d)} onChange={() => toggle(i, d)} className="h-3.5 w-3.5" />
-                      {t(DECISION_NAMES[d])}
-                    </label>
-                  ))}
-                </div>
-              </li>
-            ))}
-          </ol>
+        </>
+      }
+      indexLabel={t("Business rules")}
+      summary={[sums["regras-onde"].split(" · ")[0], sums["regras-servicos"].split(" · ")[0], sums["regras-casos"]].join(" · ")}
+      description={t("The system checks these rules by itself in every answer, before sending or marking a lead as qualified. They only change when you click Save or accept a suggestion.")}
+    >
+      <div className="space-y-2">
+        {group(
+          "regras-onde",
+          "Where you serve",
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {chips("cidadesAtendidas", t("Cities served"), t("Example: {x}", { x: "Paulínia/SP" }), t("Type City/UF and press Enter."))}
+              {chips("cidadesNaoAtendidas", t("Cities not served"), t("Example: {x}", { x: "Hortolândia/SP" }), t("Type City/UF and press Enter."))}
+            </div>
+            {PLACE_FIELDS.map(field)}
+          </>
+        )}
+        {group(
+          "regras-servicos",
+          "Services",
+          <>
+            {chips("servicosAceitos", t("Services accepted"))}
+            <div className="grid gap-3 sm:grid-cols-2">{SERVICE_FIELDS.slice(0, 2).map(field)}</div>
+            {SERVICE_FIELDS.slice(2).map(field)}
+          </>
+        )}
+        {group("regras-qualificacao", "Qualification", <>{QUALIFY_FIELDS.map(field)}</>)}
+        {group(
+          "regras-horario",
+          "Hours and what never to promise",
+          <>
+            {HOURS_FIELDS.map(field)}
+            {chips("nuncaPrometer", t("Never promise"), t("Example: {x}", { x: t("price") }))}
+          </>
+        )}
+        {group(
+          "regras-quem",
+          "Who takes over",
+          <>
+            <dl className="grid gap-2 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-muted">{t("Person in charge")}</dt>
+                <dd>{rules.responsavel.nome || t("Not defined")}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">{t("Phone of the person in charge")}</dt>
+                <dd>{rules.responsavel.telefone || t("Not defined")}</dd>
+              </div>
+            </dl>
+            {chips("resumoEquipe", t("What goes in the summary for the team"))}
+            <p className="text-xs text-muted">{t("The WhatsApp alert to the person in charge is in Lead stages.")}</p>
+          </>
+        )}
+        {group(
+          "regras-mensagens",
+          "Approved messages",
+          rules.mensagensAprovadas.length === 0 ? (
+            <p className="text-xs text-muted">{t("No approved message yet. They come from the document.")}</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {rules.mensagensAprovadas.map((m, i) => (
+                <li key={i} className="rounded-md bg-surface-hover/60 p-2">
+                  {m.quando && <span className="block text-xs font-semibold text-muted">{m.quando}</span>}
+                  <span className="block whitespace-pre-wrap">{m.texto}</span>
+                </li>
+              ))}
+            </ul>
+          ),
+          { description: t("They went in word for word. The agent uses the exact text.") }
+        )}
+        {group(
+          "regras-casos",
+          "Test cases",
+          rules.casosTeste.length === 0 ? (
+            <p className="text-xs text-muted">{t("No test cases yet. They come from the decision examples of the document.")}</p>
+          ) : (
+            <ol className="space-y-3">
+              {rules.casosTeste.map((c, i) => (
+                <li key={i} className="space-y-1 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <span>
+                      {i + 1}. {c.situacao}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onRules({ ...rules, casosTeste: rules.casosTeste.filter((_, j) => j !== i) })}
+                      className="shrink-0 text-xs text-error hover:underline"
+                    >
+                      {t("Remove")}
+                    </button>
+                  </div>
+                  {c.decisao && <span className="block text-xs text-muted">{c.decisao}</span>}
+                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    {DECISOES.map((d) => (
+                      <label key={d} className="flex items-center gap-1 text-xs">
+                        <input type="checkbox" checked={c.esperado.includes(d)} onChange={() => toggle(i, d)} className="h-3.5 w-3.5" />
+                        {t(DECISION_NAMES[d])}
+                      </label>
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ),
+          { description: t("Test cases and the expected decision") }
         )}
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -236,12 +377,22 @@ export function StagesPanel({
   onNotify: (n: { ligado: boolean; telefone: string }) => void;
 }) {
   const t = useT();
+  const hidden = ESTAGIOS.filter((e) => stages[e]?.oculto).length;
+  const renamed = ESTAGIOS.filter((e) => (stages[e]?.nome ?? "").trim()).length;
   return (
-    <section className="panel space-y-4 rounded-xl p-4 sm:p-5">
-      <div>
-        <h2 className="text-base font-semibold">{t("Lead stages")}</h2>
-        <p className="mt-1 text-sm text-muted">{t("The agent moves each lead by itself, following the rules above. Leave the name empty to use the standard one.")}</p>
-      </div>
+    <CollapsibleSection
+      id="estagios"
+      title={t("Lead stages")}
+      defaultOpen={false}
+      summary={[
+        t("{n} stages", { n: ESTAGIOS.length }),
+        t("{n} renamed", { n: renamed }),
+        t("{n} hidden", { n: hidden }),
+        notify.ligado ? t("Alert to the person in charge on") : t("Alert to the person in charge off"),
+      ].join(" · ")}
+      badge={notify.ligado ? { text: t("Alert on"), tone: "success" } : null}
+      description={t("The agent moves each lead by itself, following the rules above. Leave the name empty to use the standard one.")}
+    >
       <ul className="space-y-2">
         {ESTAGIOS.map((e) => (
           <li key={e} className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -284,7 +435,7 @@ export function StagesPanel({
           className={INPUT}
         />
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -348,15 +499,28 @@ export function LearningPanel({ sessionId, onChanged }: { sessionId: string; onC
     void load();
   }
 
+  const pending = report?.suggestions.length ?? 0;
   return (
-    <section className="panel space-y-4 rounded-xl p-4 sm:p-5">
+    <CollapsibleSection
+      id="aprendeu"
+      title={t("What the agent learned")}
+      defaultOpen={false}
+      attention={pending > 0 || Boolean(error)}
+      badge={pending > 0 ? { text: pending === 1 ? t("1 suggestion") : t("{n} suggestions", { n: pending }), tone: "accent" } : null}
+      summary={
+        report
+          ? [
+              pending === 1 ? t("1 suggestion") : t("{n} suggestions", { n: pending }),
+              t("{n} errors blocked", { n: report.blocked.total }),
+              report.examples.length === 1 ? t("1 learned example") : t("{n} learned examples", { n: report.examples.length }),
+            ].join(" · ")
+          : undefined
+      }
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold">{t("What the agent learned")}</h2>
-          <p className="mt-1 text-sm text-muted">
-            {t("When you edit a draft or answer in place of the agent, the answer becomes an example of how your company talks. Rules never change by themselves: only with your click.")}
-          </p>
-        </div>
+        <p className="min-w-0 text-sm text-muted">
+          {t("When you edit a draft or answer in place of the agent, the answer becomes an example of how your company talks. Rules never change by themselves: only with your click.")}
+        </p>
         <button type="button" onClick={() => void generate()} disabled={busy} className={`${btnSecondary} shrink-0`}>
           {busy ? t("Wait…") : t("Generate suggestions with AI")}
         </button>
@@ -491,7 +655,7 @@ export function LearningPanel({ sessionId, onChanged }: { sessionId: string; onC
           </div>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -513,15 +677,26 @@ export function TestPanel({ sessionId, hasCases, dirty }: { sessionId: string; h
     else setError(t(r.error));
   }
 
+  const failed = result ? result.total - result.passaram : 0;
   return (
-    <section className="panel space-y-3 rounded-xl p-4 sm:p-5">
+    <CollapsibleSection
+      id="testar"
+      title={t("Test the agent")}
+      defaultOpen={false}
+      attention={Boolean(error) || failed > 0}
+      badge={
+        result
+          ? { text: t("{a} of {b} passed", { a: result.passaram, b: result.total }), tone: failed > 0 ? "warning" : "success" }
+          : !hasCases
+            ? { text: t("No test cases"), tone: "default" }
+            : null
+      }
+      summary={hasCases ? t("Test cases ready. Open to run the test.") : t("There are no test cases yet. Train with a document that has decision examples.")}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold">{t("Test the agent")}</h2>
-          <p className="mt-1 text-sm text-muted">
-            {t("The AI plays the customer of each test case and the Qualification agent answers with the saved rules. Nothing is sent to anyone.")}
-          </p>
-        </div>
+        <p className="min-w-0 text-sm text-muted">
+          {t("The AI plays the customer of each test case and the Qualification agent answers with the saved rules. Nothing is sent to anyone.")}
+        </p>
         <button type="button" onClick={() => void run()} disabled={busy || !hasCases} className={`${btnPrimary} shrink-0`}>
           {busy ? t("Testing…") : t("Test the agent")}
         </button>
@@ -573,6 +748,6 @@ export function TestPanel({ sessionId, hasCases, dirty }: { sessionId: string; h
           </ol>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

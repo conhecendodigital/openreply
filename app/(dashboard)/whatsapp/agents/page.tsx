@@ -21,8 +21,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useT } from "@/components/lang-provider";
-import { FromDocBadge, ReviewPanel, TRAIN_ACCEPT, TrainPanel } from "@/components/whatsapp/treinar";
-import { LearningPanel, RulesPanel, rulesToText, StagesPanel, TestPanel, textToRules, type RulesText } from "@/components/whatsapp/regras";
+import { FromDocBadge, ReviewPanel, TRAIN_ACCEPT, TrainPanel, type ReviewLink } from "@/components/whatsapp/treinar";
+import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
+import { LearningPanel, RULE_GROUPS, ruleGroupSummaries, RulesPanel, rulesToText, StagesPanel, TestPanel, textToRules, type RulesText } from "@/components/whatsapp/regras";
 import type { RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
 import type { ConfigEstagio, Estagio } from "@/lib/whatsapp/regras/estagio";
 import { api, btnPrimary, btnSecondary, formatPhone, INPUT, ServerNotice, StatusPill, useServerStatus, WhatsAppTabs, type WaStatus } from "@/components/whatsapp/ui";
@@ -218,8 +219,27 @@ export default function WhatsAppAgentsPage() {
 
   const noAiKey = server && !server.ai.anthropic && !server.ai.openai;
   const anyOn = Boolean(view?.agents.some((a) => a.ativo));
+  const onCount = view?.agents.filter((a) => a.ativo).length ?? 0;
+  const factsCount = factsText.split("\n").filter((f) => f.trim()).length;
+  const aboutSummary = view
+    ? [
+        view.profile.baseCommand.trim() ? view.profile.baseCommand.trim().split("\n")[0].slice(0, 90) : t("No Base Comando yet"),
+        factsCount === 1 ? t("1 price or deadline") : t("{n} prices and deadlines", { n: factsCount }),
+      ].join(" · ")
+    : "";
+  const ruleSums = view && rulesText ? ruleGroupSummaries(t, rulesText, view.rules) : null;
+  const reviewLinks: ReviewLink[] = ruleSums
+    ? [{ id: "sobre", title: t("Company and goal"), summary: aboutSummary }, ...RULE_GROUPS.map((g) => ({ id: g.id, title: t(g.title), summary: ruleSums[g.id] }))]
+    : [];
+  const modeText = view ? (view.numberMode === "OFF" ? t("Turned off") : view.numberMode === "DRAFT" ? t("On, as drafts") : t("On, automatic")) : "";
+  const sessionLabel = (() => {
+    const s = view?.sessions.find((x) => x.id === view.sessionId);
+    return s ? (s.label.startsWith("+") ? formatPhone(s.label) : s.label) : "";
+  })();
+  const rhythmFromDoc = fromDoc.has("delay") || fromDoc.has("quietHours") || fromDoc.has("maxAutoPerDay");
 
   return (
+    <SectionsProvider page="whatsapp-agentes">
     <div className="mx-auto max-w-3xl space-y-6 pb-24">
       <div className="space-y-3">
         <h1 className="text-lg font-semibold text-foreground">{t("WhatsApp")}</h1>
@@ -253,7 +273,14 @@ export default function WhatsAppAgentsPage() {
 
       {view && view.sessionId && (
         <>
-          <section className="panel space-y-4 rounded-xl p-4 sm:p-5">
+          <SectionIndex />
+          <CollapsibleSection
+            id="numero"
+            title={t("Agents on this number")}
+            summary={[sessionLabel, modeText, onCount === 1 ? t("1 agent on") : t("{n} agents on", { n: onCount })].filter(Boolean).join(" · ")}
+            badge={{ text: modeText, tone: view.numberMode === "OFF" ? "default" : "success" }}
+            attention={view.numberMode !== "OFF" && !anyOn}
+          >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <label className="block min-w-0 flex-1 space-y-1">
                 <span className="text-sm font-medium">{t("Number")}</span>
@@ -271,7 +298,7 @@ export default function WhatsAppAgentsPage() {
             </div>
 
             <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">{t("Agents on this number")}</legend>
+              <legend className="sr-only">{t("Agents on this number")}</legend>
               <label className="flex items-start gap-3 rounded-lg border border-border p-3">
                 <input type="radio" name="mode" checked={view.numberMode === "OFF"} onChange={() => setView({ ...view, numberMode: "OFF" })} className="mt-0.5 h-4 w-4" />
                 <span>
@@ -299,14 +326,19 @@ export default function WhatsAppAgentsPage() {
               </label>
               {view.numberMode !== "OFF" && !anyOn && <p className="text-xs text-warning">{t("Turn on at least one agent below, or nothing happens.")}</p>}
             </fieldset>
-          </section>
+          </CollapsibleSection>
 
-          <TrainPanel onDraft={applyDraft} disabled={saving} />
+          <TrainPanel onDraft={applyDraft} disabled={saving} defaultOpen={!view.profile.baseCommand.trim()} />
 
-          {draft && <ReviewPanel draft={draft} saved={draftSaved} notice={brainMsg} onClose={closeDraft} />}
+          {draft && <ReviewPanel draft={draft} saved={draftSaved} notice={brainMsg} onClose={closeDraft} links={reviewLinks} />}
 
-          <section className="panel space-y-3 rounded-xl p-4 sm:p-5">
-            <h2 className="text-base font-semibold">{t("About your business")}</h2>
+          <CollapsibleSection
+            id="sobre"
+            title={t("About your business")}
+            summary={aboutSummary}
+            badge={fromDoc.has("baseCommand") || fromDoc.has("facts") ? { text: t("From the document"), tone: "accent" } : null}
+            attention={fromDoc.has("baseCommand") || fromDoc.has("facts")}
+          >
             <label className="block space-y-1">
               <span className="text-sm font-medium">
                 {t("Base Comando: what you sell, how you talk, what the agent may promise")}
@@ -329,7 +361,7 @@ export default function WhatsAppAgentsPage() {
               <textarea value={factsText} onChange={(e) => setFactsText(e.target.value)} rows={fromDoc.has("facts") ? 8 : 4} placeholder={t("Example: Evaluation costs R$ 80")} className={INPUT} />
               <span className="block text-xs text-muted">{t("The agent never quotes a price, deadline, percentage or link that is not here or in the PDFs. If it does, the answer stays as a draft with a warning.")}</span>
             </label>
-          </section>
+          </CollapsibleSection>
 
           {rulesText && (
             <RulesPanel
@@ -351,16 +383,19 @@ export default function WhatsAppAgentsPage() {
 
           <StagesPanel stages={view.stages} onStages={(stages) => patchView({ stages })} notify={view.notifyOwner} onNotify={(notifyOwner) => patchView({ notifyOwner })} />
 
-          <section className="panel space-y-4 rounded-xl p-4 sm:p-5">
-            <div>
-              <h2 className="text-base font-semibold">
-                {t("Human rhythm")}
-                <FromDocBadge field="delay" fields={fromDoc} />
-                <FromDocBadge field="quietHours" fields={fromDoc} />
-                <FromDocBadge field="maxAutoPerDay" fields={fromDoc} />
-              </h2>
-              <p className="mt-1 text-sm text-muted">{t("Only used when you let the agent send by itself in a conversation. Drafts you approve go out in a few seconds.")}</p>
-            </div>
+          <CollapsibleSection
+            id="ritmo"
+            title={t("Human rhythm")}
+            defaultOpen={false}
+            attention={rhythmFromDoc}
+            badge={rhythmFromDoc ? { text: t("From the document"), tone: "accent" } : null}
+            summary={[
+              t("Waits {a} to {b} s", { a: view.profile.delayMinSeconds, b: view.profile.delayMaxSeconds }),
+              t("Quiet {a} to {b}", { a: view.profile.quietStart, b: view.profile.quietEnd }),
+              t("Up to {n} per day", { n: view.profile.maxAutoPerDay }),
+            ].join(" · ")}
+            description={t("Only used when you let the agent send by itself in a conversation. Drafts you approve go out in a few seconds.")}
+          >
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block space-y-1">
                 <span className="text-sm font-medium">{t("Wait before answering, from (seconds)")}</span>
@@ -396,7 +431,7 @@ export default function WhatsAppAgentsPage() {
               </label>
             </div>
             <p className="text-xs text-muted">{t("During quiet hours and after the daily limit, answers stay as drafts. The daily AI spending cap is set in /admin.")}</p>
-          </section>
+          </CollapsibleSection>
 
           <TestPanel sessionId={view.sessionId} hasCases={view.rules.casosTeste.length > 0} dirty={dirty} />
 
@@ -418,6 +453,7 @@ export default function WhatsAppAgentsPage() {
         </>
       )}
     </div>
+    </SectionsProvider>
   );
 }
 
@@ -434,13 +470,18 @@ function AgentCard({
 }) {
   const t = useT();
   const info = AGENT_INFO[agent.agente];
+  const filled = fromDoc.has(`agent:${agent.agente}`);
+  const firstLine = agent.instrucoes.trim().split("\n")[0]?.slice(0, 90);
   return (
-    <section className="panel space-y-3 rounded-xl p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold">{t(info.name)}</h2>
-          <p className="mt-0.5 text-sm text-muted">{t(info.what)}</p>
-        </div>
+    <CollapsibleSection
+      id={`agente-${agent.agente}`}
+      title={t(info.name)}
+      defaultOpen={agent.ativo}
+      attention={filled}
+      badge={filled ? { text: t("From the document"), tone: "accent" } : null}
+      summary={firstLine || t("No instructions yet")}
+      actions={
+        <>
         {/* relative: the sr-only checkbox stays inside the switch, so clicking it
             no longer scrolls the page to an empty spot (looked like a blank screen). */}
         <label className="relative flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium">
@@ -456,7 +497,10 @@ function AgentCard({
           />
           <span className="relative h-6 w-11 rounded-full bg-zinc-300 transition-colors peer-checked:bg-success peer-focus-visible:ring-2 peer-focus-visible:ring-accent after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5" />
         </label>
-      </div>
+        </>
+      }
+    >
+      <p className="text-sm text-muted">{t(info.what)}</p>
       <label className="block space-y-1">
         <span className="text-sm font-medium">
           {t("Instructions for this agent")}
@@ -472,7 +516,7 @@ function AgentCard({
         />
       </label>
       <KnowledgeDocs agente={agent.agente} refresh={docsRefresh} />
-    </section>
+    </CollapsibleSection>
   );
 }
 

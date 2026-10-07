@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
 import { useT } from "@/components/lang-provider";
 import {
   api,
@@ -235,12 +236,16 @@ export default function WhatsAppConnectionsPage() {
     );
   }
 
+  const sectionCount = (sessions?.length ?? 0) + (showNew ? 1 : 0) + (removed.length > 0 ? 1 : 0);
+
   return (
+    <SectionsProvider page="whatsapp-conexoes">
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="space-y-3">
         <h1 className="text-lg font-semibold text-foreground">{t("WhatsApp")}</h1>
         <WhatsAppTabs active="connections" />
       </div>
+      {sectionCount > 2 && <SectionIndex />}
 
       <ServerNotice status={server} />
 
@@ -284,19 +289,28 @@ export default function WhatsAppConnectionsPage() {
 
       <div className="space-y-4">
         {(sessions ?? []).map((s) => (
-          <article key={s.id} className="panel overflow-hidden rounded-xl">
-            <div className="flex items-start gap-4 p-4 sm:p-5">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#25d366] text-white" aria-hidden="true">
-                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.4z" />
-                  <path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.4-1.8-1.2-2.2-2.2l1-1-1-2z" />
-                </svg>
+          <CollapsibleSection
+            key={s.id}
+            id={`numero-${s.id}`}
+            className="overflow-hidden"
+            title={
+              <span className="flex min-w-0 items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#25d366] text-white" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.4z" />
+                    <path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.4-1.8-1.2-2.2-2.2l1-1-1-2z" />
+                  </svg>
+                </span>
+                <span className="truncate">{s.displayName || formatPhone(s.phoneE164) || t("New number")}</span>
               </span>
+            }
+            indexLabel={s.displayName || formatPhone(s.phoneE164) || t("New number")}
+            summary={[s.phoneE164 ? formatPhone(s.phoneE164) : "", t("{c} conversations, {m} messages saved", { c: s.conversationCount, m: s.messageCount })].filter(Boolean).join(" · ")}
+            attention={pairing?.id === s.id || reconnecting === s.id || s.status === "RESTRICTED" || s.status === "BANNED" || s.status === "QR_READY"}
+            actions={<StatusPill status={s.status} />}
+          >
+            <div className="flex items-start gap-4">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <p className="truncate text-base font-semibold">{s.displayName || formatPhone(s.phoneE164) || t("New number")}</p>
-                  <StatusPill status={s.status} />
-                </div>
                 <p className="truncate text-sm text-muted">{s.phoneE164 ? formatPhone(s.phoneE164) : t("The number shows up after you read the QR code.")}</p>
                 <p className="mt-0.5 text-xs text-muted">
                   {t("{c} conversations, {m} messages saved", { c: s.conversationCount, m: s.messageCount })}
@@ -312,13 +326,13 @@ export default function WhatsAppConnectionsPage() {
               </div>
             </div>
 
-            {pairing?.id === s.id && <PairingBox pairing={pairing} status={s.status} />}
+            {pairing?.id === s.id && <div className="-mx-4 sm:-mx-5"><PairingBox pairing={pairing} status={s.status} /></div>}
 
             {reconnecting === s.id && s.provider === "UAZAPI" && (
-              <ReconnectUazapi busy={busy} onCancel={() => setReconnecting(null)} onConnect={(body) => void reconnect(s, body)} />
+              <div className="-mx-4 sm:-mx-5"><ReconnectUazapi busy={busy} onCancel={() => setReconnecting(null)} onConnect={(body) => void reconnect(s, body)} /></div>
             )}
 
-            <div className="flex flex-wrap gap-2 border-t border-border px-4 py-3 sm:px-5">
+            <div className="-mx-4 flex flex-wrap gap-2 border-t border-border px-4 pt-3 sm:-mx-5 sm:px-5">
               {s.status !== "CONNECTED" && pairing?.id !== s.id && s.provider === "OPENWA" && (
                 <button type="button" className={btnPrimary} disabled={busy} onClick={() => void reconnect(s)}>
                   {t("Show QR code")}
@@ -357,17 +371,20 @@ export default function WhatsAppConnectionsPage() {
                 </button>
               )}
             </div>
-          </article>
+          </CollapsibleSection>
         ))}
       </div>
 
       {removed.length > 0 && (
-        <section className="space-y-2" aria-labelledby="wa-removed-title">
-          <h2 id="wa-removed-title" className="text-sm font-semibold text-foreground">
-            {t("Deleted numbers with saved conversations")}
-          </h2>
-          <p className="text-sm text-muted">{t("These numbers left Connections. Their conversations stay in Conversations, only for reading.")}</p>
-          <ul className="panel divide-y divide-border rounded-xl">
+        <CollapsibleSection
+          id="numeros-excluidos"
+          title={t("Deleted numbers with saved conversations")}
+          defaultOpen={false}
+          badge={{ text: String(removed.length) }}
+          summary={t("These numbers left Connections. Their conversations stay in Conversations, only for reading.")}
+          description={t("These numbers left Connections. Their conversations stay in Conversations, only for reading.")}
+        >
+          <ul className="divide-y divide-border rounded-lg border border-border">
             {removed.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
                 <div className="min-w-0 flex-1">
@@ -393,7 +410,7 @@ export default function WhatsAppConnectionsPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </CollapsibleSection>
       )}
 
       {confirmDelete && (
@@ -424,6 +441,7 @@ export default function WhatsAppConnectionsPage() {
         />
       )}
     </div>
+    </SectionsProvider>
   );
 }
 
@@ -694,11 +712,14 @@ function NewNumberCard({
   const cityLabel = (c: Region) => (c.state ? `${c.label} (${c.state.toUpperCase()})` : c.label);
 
   return (
-    <section className="panel space-y-5 rounded-xl p-4 sm:p-5">
-      <div>
-        <h2 className="text-base font-semibold">{t("Connect a number")}</h2>
-        <p className="mt-1 text-sm text-muted">{t("Choose how this number connects. Both ways are unofficial (WhatsApp Web), so use a number only for this.")}</p>
-      </div>
+    <CollapsibleSection
+      id="conectar"
+      title={t("Connect a number")}
+      attention={Boolean(error)}
+      summary={isUazapi ? (city ? t("uazapi, Brazilian IP ({city})", { city }) : t("uazapi")) : t("QR code (experimental)")}
+      description={t("Choose how this number connects. Both ways are unofficial (WhatsApp Web), so use a number only for this.")}
+    >
+      <div className="space-y-5">
 
       <fieldset className="grid gap-3 sm:grid-cols-2">
         <legend className="sr-only">{t("Provider")}</legend>
@@ -767,13 +788,16 @@ function NewNumberCard({
       </label>
 
       {isUazapi && uazapiReady && (
-        <div className="space-y-3 rounded-lg border border-border p-3">
-          <div>
-            <p className="text-sm font-semibold">{t("Where the connection goes out")}</p>
-            <p className="mt-0.5 text-sm text-muted">
-              {t("Without a city it does not connect. WhatsApp distrusts a Brazilian number that shows up coming from a server abroad. The proxy makes the connection go out through an IP in Brazil.")}
-            </p>
-          </div>
+        <CollapsibleSection
+          id="conectar-saida"
+          variant="group"
+          hideFromIndex
+          title={t("Where the connection goes out")}
+          attention={Boolean(regionError)}
+          summary={city ? cityLabel((cities ?? []).find((c) => c.value === city) ?? { value: city, label: city }) : t("Choose the city")}
+          badge={city ? null : { text: t("Choose the city"), tone: "warning" }}
+          description={t("Without a city it does not connect. WhatsApp distrusts a Brazilian number that shows up coming from a server abroad. The proxy makes the connection go out through an IP in Brazil.")}
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1">
               <span className="text-sm">{t("Country")}</span>
@@ -808,7 +832,7 @@ function NewNumberCard({
           {country !== "br" && <p className="text-xs text-warning">{t("For a Brazilian number, keep Brazil.")}</p>}
           {regionError && <p className="text-sm text-error">{regionError}</p>}
           <MethodPicker method={method} phone={phone} onMethod={setMethod} onPhone={setPhone} />
-        </div>
+        </CollapsibleSection>
       )}
 
       <div className={`rounded-lg border p-3 text-sm ${isUazapi ? "border-warning/30 bg-warning/10" : "border-error/40 bg-error/10"}`}>
@@ -834,6 +858,7 @@ function NewNumberCard({
           {busy ? t("Connecting…") : isUazapi && method === "code" ? t("Generate code") : t("Generate QR code")}
         </button>
       </div>
-    </section>
+      </div>
+    </CollapsibleSection>
   );
 }
