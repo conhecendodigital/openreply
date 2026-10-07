@@ -123,7 +123,7 @@ export function TrainPanel({
       }
     >
       <p className="text-sm text-muted">
-        {t("Send the briefing the company filled in (PDF or Word, up to 8 MB). The AI fills in every field below as a draft. Nothing is saved and no agent turns on until you check and click Save.")}
+        {t("Send the briefing the company filled in (PDF or Word, up to 8 MB). The AI fills in the fields of every tab as a draft. Nothing is saved and no agent turns on until you check and click Save.")}
       </p>
       {busy && <p className="text-xs text-muted" role="status">{t("The AI is reading the whole document. This can take up to 2 minutes. Keep this page open.")}</p>}
       {error && <p className="text-sm text-error" role="alert">{error}</p>}

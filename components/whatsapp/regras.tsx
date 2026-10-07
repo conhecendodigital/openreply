@@ -391,7 +391,7 @@ export function StagesPanel({
         notify.ligado ? t("Alert to the person in charge on") : t("Alert to the person in charge off"),
       ].join(" · ")}
       badge={notify.ligado ? { text: t("Alert on"), tone: "success" } : null}
-      description={t("The agent moves each lead by itself, following the rules above. Leave the name empty to use the standard one.")}
+      description={t("The agent moves each lead by itself, following the Rules tab. Leave the name empty to use the standard one.")}
     >
       <ul className="space-y-2">
         {ESTAGIOS.map((e) => (

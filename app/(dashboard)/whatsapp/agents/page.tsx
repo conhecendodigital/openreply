@@ -16,13 +16,18 @@
  *   responsável, "O que o agente aprendeu" e "Testar o agente"
  *   (components/whatsapp/regras.tsx).
  * IA e chave de API nunca ligam nada sozinhas. A chave é a do /admin.
+ *
+ * 07/10/2026: a página virou abas (Número e modo, Treinar, Negócio, Regras,
+ * Agentes, Leads, Ritmo, Testar, Aprendizado), uma parte por vez. O estado do
+ * formulário continua um só e o Salvar fixo embaixo salva todas as abas.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useT } from "@/components/lang-provider";
 import { FromDocBadge, ReviewPanel, TRAIN_ACCEPT, TrainPanel, type ReviewLink } from "@/components/whatsapp/treinar";
-import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
+import { CollapsibleSection, SectionsProvider } from "@/components/ui/collapsible-section";
+import { checkFieldsInTabs, TabPanel, Tabs, type TabItem } from "@/components/ui/tabs";
 import { LearningPanel, RULE_GROUPS, ruleGroupSummaries, RulesPanel, rulesToText, StagesPanel, TestPanel, textToRules, type RulesText } from "@/components/whatsapp/regras";
 import type { RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
 import type { ConfigEstagio, Estagio } from "@/lib/whatsapp/regras/estagio";
@@ -99,6 +104,7 @@ export default function WhatsAppAgentsPage() {
   const [fromDoc, setFromDoc] = useState<Set<CampoTreino>>(new Set());
   const [brainMsg, setBrainMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [docsRefresh, setDocsRefresh] = useState(0);
+  const pageRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(
     async (sessionId?: string | null) => {
@@ -185,6 +191,11 @@ export default function WhatsAppAgentsPage() {
 
   async function save() {
     if (!view?.sessionId) return;
+    // Campo inválido em qualquer aba: abre a aba dele e não salva.
+    if (!checkFieldsInTabs(pageRef.current)) {
+      setSaved({ ok: false, text: t("Fix the marked field before saving.") });
+      return;
+    }
     setSaving(true);
     setSaved(null);
     const r = await api<AgentsView>("/api/whatsapp/agents", {
@@ -237,10 +248,48 @@ export default function WhatsAppAgentsPage() {
     return s ? (s.label.startsWith("+") ? formatPhone(s.label) : s.label) : "";
   })();
   const rhythmFromDoc = fromDoc.has("delay") || fromDoc.has("quietHours") || fromDoc.has("maxAutoPerDay");
+  const toCheck = draft ? draft.revisar.pendencias.length + draft.revisar.naoAchei.length + draft.revisar.contradicoes.length : 0;
+  const fromDocBadge = { tone: "accent" as const, label: t("From the document") };
+  const agentsFromDoc = view?.agents.some((a) => fromDoc.has(`agent:${a.agente}`)) ?? false;
+  const numberOnNoAgent = Boolean(view && view.numberMode !== "OFF" && !anyOn);
+  const tabs: TabItem[] = view
+    ? [
+        {
+          id: "numero",
+          label: t("Number and mode"),
+          badge: numberOnNoAgent ? { tone: "warning", label: t("Turn on at least one agent in the Agents tab, or nothing happens.") } : view.numberMode !== "OFF" ? { tone: "success", label: modeText } : null,
+        },
+        {
+          id: "treinar",
+          label: t("Train"),
+          badge:
+            draft && !draftSaved
+              ? toCheck > 0
+                ? { text: String(toCheck), tone: "warning", label: toCheck === 1 ? t("1 to check") : t("{n} to check", { n: toCheck }) }
+                : { text: t("Draft"), tone: "accent" }
+              : null,
+        },
+        { id: "negocio", label: t("Business"), aliases: ["sobre"], badge: fromDoc.has("baseCommand") || fromDoc.has("facts") ? fromDocBadge : null },
+        { id: "regras", label: t("Rules"), badge: fromDoc.has("rules") ? fromDocBadge : null },
+        {
+          id: "agentes",
+          label: t("Agents"),
+          badge: numberOnNoAgent
+            ? { text: "0", tone: "warning", label: t("Turn on at least one agent in the Agents tab, or nothing happens.") }
+            : agentsFromDoc
+              ? fromDocBadge
+              : { text: String(onCount), tone: onCount > 0 ? "success" : "default", label: onCount === 1 ? t("1 agent on") : t("{n} agents on", { n: onCount }) },
+        },
+        { id: "leads", label: t("Leads"), aliases: ["estagios"] },
+        { id: "ritmo", label: t("Rhythm"), badge: rhythmFromDoc ? fromDocBadge : null },
+        { id: "testar", label: t("Test") },
+        { id: "aprendizado", label: t("Learning"), aliases: ["aprendeu"] },
+      ]
+    : [];
 
   return (
     <SectionsProvider page="whatsapp-agentes">
-    <div className="mx-auto max-w-3xl space-y-6 pb-24">
+    <div ref={pageRef} className="mx-auto max-w-3xl space-y-6 pb-24">
       <div className="space-y-3">
         <h1 className="text-lg font-semibold text-foreground">{t("WhatsApp")}</h1>
         <WhatsAppTabs active="agents" />
@@ -273,7 +322,8 @@ export default function WhatsAppAgentsPage() {
 
       {view && view.sessionId && (
         <>
-          <SectionIndex />
+          <Tabs page="whatsapp-agentes" label={t("Agent settings")} tabs={tabs}>
+          <TabPanel id="numero">
           <CollapsibleSection
             id="numero"
             title={t("Agents on this number")}
@@ -311,7 +361,7 @@ export default function WhatsAppAgentsPage() {
                 <span>
                   <span className="block text-sm font-semibold">{t("On, as drafts")}</span>
                   <span className="block text-xs text-muted">
-                    {t("The agents you turn on below write the answer and it waits for you. You approve, edit or discard it in Conversations.")}
+                    {t("The agents you turn on in the Agents tab write the answer and it waits for you. You approve, edit or discard it in Conversations.")}
                   </span>
                 </span>
               </label>
@@ -320,18 +370,22 @@ export default function WhatsAppAgentsPage() {
                 <span>
                   <span className="block text-sm font-semibold">{t("On, automatic")}</span>
                   <span className="block text-xs text-muted">
-                    {t("The agents answer by themselves, with the human delay, quiet hours and daily limit below. They hand the conversation to you only when the lead is qualified or asks for a person. An answer with a price, deadline or phone that is not in your data stays as a draft.")}
+                    {t("The agents answer by themselves, with the human delay, quiet hours and daily limit of the Rhythm tab. They hand the conversation to you only when the lead is qualified or asks for a person. An answer with a price, deadline or phone that is not in your data stays as a draft.")}
                   </span>
                 </span>
               </label>
-              {view.numberMode !== "OFF" && !anyOn && <p className="text-xs text-warning">{t("Turn on at least one agent below, or nothing happens.")}</p>}
+              {view.numberMode !== "OFF" && !anyOn && <p className="text-xs text-warning">{t("Turn on at least one agent in the Agents tab, or nothing happens.")}</p>}
             </fieldset>
           </CollapsibleSection>
+          </TabPanel>
 
+          <TabPanel id="treinar">
           <TrainPanel onDraft={applyDraft} disabled={saving} defaultOpen={!view.profile.baseCommand.trim()} />
 
           {draft && <ReviewPanel draft={draft} saved={draftSaved} notice={brainMsg} onClose={closeDraft} links={reviewLinks} />}
+          </TabPanel>
 
+          <TabPanel id="negocio">
           <CollapsibleSection
             id="sobre"
             title={t("About your business")}
@@ -362,7 +416,9 @@ export default function WhatsAppAgentsPage() {
               <span className="block text-xs text-muted">{t("The agent never quotes a price, deadline, percentage or link that is not here or in the PDFs. If it does, the answer stays as a draft with a warning.")}</span>
             </label>
           </CollapsibleSection>
+          </TabPanel>
 
+          <TabPanel id="regras">
           {rulesText && (
             <RulesPanel
               text={rulesText}
@@ -376,13 +432,20 @@ export default function WhatsAppAgentsPage() {
               fromDoc={fromDoc}
             />
           )}
+          </TabPanel>
 
+          <TabPanel id="agentes">
+          {numberOnNoAgent && <p className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm">{t("The number is on, but every agent is off. Turn on at least one below, or nothing happens.")}</p>}
           {view.agents.map((a) => (
             <AgentCard key={a.agente} agent={a} onChange={(p) => patchAgent(a.agente, p)} fromDoc={fromDoc} docsRefresh={docsRefresh} />
           ))}
+          </TabPanel>
 
+          <TabPanel id="leads">
           <StagesPanel stages={view.stages} onStages={(stages) => patchView({ stages })} notify={view.notifyOwner} onNotify={(notifyOwner) => patchView({ notifyOwner })} />
+          </TabPanel>
 
+          <TabPanel id="ritmo">
           <CollapsibleSection
             id="ritmo"
             title={t("Human rhythm")}
@@ -432,10 +495,16 @@ export default function WhatsAppAgentsPage() {
             </div>
             <p className="text-xs text-muted">{t("During quiet hours and after the daily limit, answers stay as drafts. The daily AI spending cap is set in /admin.")}</p>
           </CollapsibleSection>
+          </TabPanel>
 
+          <TabPanel id="testar">
           <TestPanel sessionId={view.sessionId} hasCases={view.rules.casosTeste.length > 0} dirty={dirty} />
+          </TabPanel>
 
+          <TabPanel id="aprendizado">
           <LearningPanel sessionId={view.sessionId} onChanged={() => void load(view.sessionId)} />
+          </TabPanel>
+          </Tabs>
 
           <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur lg:left-64">
             <div className="mx-auto flex max-w-3xl items-center justify-end gap-3">
