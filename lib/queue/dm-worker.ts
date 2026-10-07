@@ -53,13 +53,13 @@ import {
 } from "@/lib/billing/usage";
 import { recordWorkerAlert } from "@/lib/ops/worker-health";
 import {
-  buildTrackedUrl,
   composeLinkText,
   renderMessageWithTracking,
   renderMessageWithoutLink,
   type DmFormatValue,
 } from "@/lib/tracking/message";
-import { recipientQuery } from "@/lib/tracking/recipient";
+import { linkUrlResolver } from "@/lib/links/urls";
+import { getWorkspaceLinkDomain, linkBaseUrl } from "@/lib/links/domain";
 import {
   AUTO_TAGS,
   addTagSafe,
@@ -174,14 +174,33 @@ type WorkerTrackedLink = {
  * `linkButtonLabel`; each additional link uses its own stored `label`. Capped at
  * Meta's 3-button limit for a button template.
  */
+type LinkUrl = (link: WorkerTrackedLink) => string;
+
+/**
+ * The URL of each tracked link for this person (07/10/2026): the short
+ * /r/<slug>/<code> on the workspace's link domain, so /r credits the click to
+ * them (lib/links/urls.ts; falls back to the old signed ?c= by itself).
+ */
+async function linkUrlsFor(
+  automation: { workspaceId?: string | null; trackedLinks: WorkerTrackedLink[] },
+  recipientId: string | null | undefined,
+  dmLogId?: string | null
+): Promise<LinkUrl> {
+  return linkUrlResolver({
+    workspaceId: automation.workspaceId ?? null,
+    slugs: automation.trackedLinks.slice(0, 3).map((l) => l.slug),
+    recipientId: recipientId ?? null,
+    dmLogId: dmLogId ?? null,
+  });
+}
+
 function buildLinkButtons(
   trackedLinks: WorkerTrackedLink[],
   primaryLabel: string | null,
-  recipientId?: string | null
+  url: LinkUrl
 ): { title: string; url: string }[] {
   return trackedLinks.slice(0, 3).map((link, index) => ({
-    // The signed recipient lets /r/<slug> credit the click to this person.
-    url: buildTrackedUrl(link.slug, undefined, recipientQuery(link.slug, recipientId)),
+    url: url(link),
     title: (index === 0 ? primaryLabel : link.label) || link.label || "Open link",
   }));
 }
@@ -201,11 +220,9 @@ function buildTrackedLinkText(
   message: string,
   commenterName: string | null | undefined,
   trackedLinks: WorkerTrackedLink[],
-  recipientId?: string | null
+  url: LinkUrl
 ): string {
   const [first, ...rest] = trackedLinks.slice(0, 3);
-  const url = (link: WorkerTrackedLink) =>
-    buildTrackedUrl(link.slug, undefined, recipientQuery(link.slug, recipientId));
   return composeLinkText({
     message,
     commenterName,
@@ -216,6 +233,8 @@ function buildTrackedLinkText(
 }
 
 type RevealAutomation = {
+  /** For the link domain and the short code of each link. */
+  workspaceId?: string | null;
   dmMessage: string;
   /** BUTTON (card) or TEXT (link inside the text). Missing = BUTTON. */
   dmFormat?: DmFormatValue | null;
@@ -249,13 +268,15 @@ async function sendRevealDirectMessage(
     return;
   }
 
+  const linkUrl = await linkUrlsFor(automation, userId);
+
   // TEXT format: one text message with the tracked link inside, no card.
   if (automation.dmFormat === "TEXT") {
     const text = buildTrackedLinkText(
       automation.dmMessage,
       commenterName,
       automation.trackedLinks,
-      userId
+      linkUrl
     );
     await ledger(text, (o) =>
       sendDirectMessage(accessToken, automation.instagramAccount.instagramId, userId, text, o)
@@ -272,7 +293,7 @@ async function sendRevealDirectMessage(
   const buttons = buildLinkButtons(
     automation.trackedLinks,
     automation.linkButtonLabel,
-    userId
+    linkUrl
   );
 
   try {
@@ -299,7 +320,7 @@ async function sendRevealDirectMessage(
       automation.dmMessage,
       commenterName,
       automation.trackedLinks,
-      userId
+      linkUrl
     );
     try {
       await ledger(fallbackText, (o) =>
@@ -519,8 +540,9 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     // Ensure a log row exists before the public reply leg (which updates it).
     // Only (re)set PENDING when the DM will actually be attempted, so a prior
     // SENT is never clobbered while we come back just to retry the public reply.
+    let createdLogId: string | null = null;
     if (!existingLog) {
-      await prisma.dmLog.create({
+      const createdLog = await prisma.dmLog.create({
         data: {
           workspaceId: automation.workspaceId,
           automationId: automation.id,
@@ -534,6 +556,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           attempts: job.attemptsMade + 1,
         },
       });
+      createdLogId = createdLog?.id ?? null;
     } else if (needsDm) {
       await prisma.dmLog.update({
         where: {
@@ -547,6 +570,8 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         },
       });
     }
+    // The DM that will carry the link (the short code points at it).
+    const dmLogId = existingLog?.id ?? createdLogId;
 
     // Public reply leg — decoupled from the DM and posted first so a DM failure
     // (e.g. a non-follower whose messaging is restricted) never suppresses it.
@@ -568,6 +593,8 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           message: chosen,
           commenterName,
           trackedLinks: automation.trackedLinks,
+          // Public: no person in the link, but on the workspace's link domain.
+          baseUrl: linkBaseUrl(await getWorkspaceLinkDomain(automation.workspaceId)),
         });
         // The channel may have been turned off since the job started
         // (moderation ran in between): re-check right before posting.
@@ -834,7 +861,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           copy.dmMessage,
           commenterName,
           automation.trackedLinks,
-          commenterId
+          await linkUrlsFor(automation, commenterId, dmLogId)
         );
         await ledger(linkText, (o) =>
           sendPrivateReply(
@@ -852,10 +879,11 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             message: copy.dmMessage,
             commenterName,
           }) || "Here's your link:";
+        const linkUrl = await linkUrlsFor(automation, commenterId, dmLogId);
         const buttons = buildLinkButtons(
           automation.trackedLinks,
           automation.linkButtonLabel,
-          commenterId
+          linkUrl
         );
 
         try {
@@ -883,7 +911,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             copy.dmMessage,
             commenterName,
             automation.trackedLinks,
-            commenterId
+            linkUrl
           );
           try {
             await ledger(fallbackMessage, (o) =>
