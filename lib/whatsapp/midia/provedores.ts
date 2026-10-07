@@ -14,6 +14,7 @@ import { ANTHROPIC_URL, ANTHROPIC_VERSION, OPENAI_URL } from "@/lib/whatsapp/age
 import type { IaProvider } from "@/lib/whatsapp/agentes/types";
 import { formatoAudio, type FormatoImagem } from "./formatos";
 import { MODELO_WHISPER, VISAO_MAX_TOKENS_SAIDA } from "./limites";
+import { openAiReasoningEffort } from "@/lib/ai/catalog";
 
 export const OPENAI_TRANSCRICAO_URL = "https://api.openai.com/v1/audio/transcriptions";
 
@@ -191,7 +192,7 @@ async function descreverOpenAI(p: PedidoDescricao): Promise<Descricao> {
   const body = {
     model: p.modelo,
     max_completion_tokens: VISAO_MAX_TOKENS_SAIDA,
-    reasoning_effort: "minimal",
+    reasoning_effort: openAiReasoningEffort(p.modelo),
     messages: [
       { role: "system", content: INSTRUCAO_FOTO },
       {

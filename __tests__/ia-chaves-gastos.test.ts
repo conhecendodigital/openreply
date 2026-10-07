@@ -10,6 +10,7 @@
  * - custo pela tabela de preços, filtros do relatório, CSV sem fórmula,
  *   alerta de 80% do teto.
  */
+import { openAiReasoningEffort } from "@/lib/ai/catalog";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
 import type { PrismaClient } from "../app/generated/prisma/client";
@@ -522,5 +523,21 @@ describe("Gastos de IA", () => {
     const data = (await mine.json()).data;
     expect(data.byUser.map((u: { key: string }) => u.key)).toEqual(["u_caio"]);
     expect(JSON.stringify(data)).not.toContain("bia@ex.com");
+  });
+});
+
+describe("modelos Luna da OpenAI", () => {
+  it("aparecem mesmo com tabela de preço salva antes", () => {
+    const s = normalizeSettings({ prices: { "gpt-5-mini": { provider: "openai", input: 0.3, output: 2 } } });
+    expect(s.prices["gpt-5-mini"].input).toBe(0.3);
+    expect(s.prices["gpt-6-luna"]).toMatchObject({ provider: "openai", input: 0.1, output: 0.5 });
+    expect(s.prices["gpt-5.6-luna"]).toMatchObject({ provider: "openai", input: 0.2, output: 1.2 });
+    const a = normalizeSettings({ agentModels: { atendimento: { provider: "openai", model: "gpt-6-luna", hardModel: "gpt-5.6-luna" } } });
+    expect(a.agents.atendimento).toMatchObject({ model: "gpt-6-luna", hardModel: "gpt-5.6-luna" });
+  });
+  it("Luna não recebe minimal (a OpenAI recusa)", () => {
+    expect(openAiReasoningEffort("gpt-5-mini")).toBe("minimal");
+    expect(openAiReasoningEffort("gpt-6-luna")).toBe("low");
+    expect(openAiReasoningEffort("gpt-5.6-luna")).toBe("low");
   });
 });

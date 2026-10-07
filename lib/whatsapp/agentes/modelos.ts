@@ -28,6 +28,8 @@ export const PRECOS: Record<string, Preco> = {
   [MODELO_SONNET]: { provider: "anthropic", entrada: 2, saida: 10, cacheLeitura: 0.2, cacheEscrita: 2.5 },
   [MODELO_GPT_MINI]: { provider: "openai", entrada: 0.25, saida: 2, cacheLeitura: 0.025, cacheEscrita: 0.25 },
   "gpt-5": { provider: "openai", entrada: 1.25, saida: 10, cacheLeitura: 0.125, cacheEscrita: 1.25 },
+  "gpt-6-luna": { provider: "openai", entrada: 0.1, saida: 0.5, cacheLeitura: 0.01, cacheEscrita: 0 },
+  "gpt-5.6-luna": { provider: "openai", entrada: 0.2, saida: 1.2, cacheLeitura: 0.02, cacheEscrita: 0 },
 };
 
 /** Modelos que a tela pode oferecer. Qualquer outro é recusado (preço desconhecido quebra o teto). */

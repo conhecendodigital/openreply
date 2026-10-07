@@ -13,6 +13,7 @@
  * corpo da resposta do provedor (que às vezes ecoa parte dela).
  */
 import type { IaProvider, Uso } from "./types";
+import { openAiReasoningEffort } from "@/lib/ai/catalog";
 
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 export const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -149,7 +150,7 @@ async function chamarOpenAI(p: PedidoModelo): Promise<RespostaModelo> {
   const body: Record<string, unknown> = {
     model: p.modelo,
     max_completion_tokens: p.maxTokens,
-    reasoning_effort: "minimal",
+    reasoning_effort: openAiReasoningEffort(p.modelo),
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: p.sistemaFixo },

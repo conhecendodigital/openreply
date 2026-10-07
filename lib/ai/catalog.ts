@@ -31,6 +31,9 @@ export function isUsageAgent(value: unknown): value is UsageAgent {
 export const MODEL_HAIKU = "claude-haiku-4-5-20251001";
 export const MODEL_SONNET = "claude-sonnet-5";
 export const MODEL_GPT_MINI = "gpt-5-mini";
+/** OpenAI direto, conferidos em 07/10/2026 em developers.openai.com/api/docs/models. */
+export const MODEL_GPT6_LUNA = "gpt-6-luna";
+export const MODEL_GPT56_LUNA = "gpt-5.6-luna";
 export const MODEL_EMBEDDING = "text-embedding-3-small";
 export const MODEL_JEV = "jev-latest";
 
@@ -52,6 +55,8 @@ export const DEFAULT_PRICES: Record<string, ModelPrice> = {
   [MODEL_HAIKU]: { provider: "anthropic", input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
   [MODEL_SONNET]: { provider: "anthropic", input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   [MODEL_GPT_MINI]: { provider: "openai", input: 0.25, output: 2, cacheRead: 0.025, cacheWrite: 0 },
+  [MODEL_GPT6_LUNA]: { provider: "openai", input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0 },
+  [MODEL_GPT56_LUNA]: { provider: "openai", input: 0.2, output: 1.2, cacheRead: 0.02, cacheWrite: 0 },
   [MODEL_EMBEDDING]: { provider: "openai", input: 0.02, output: 0, cacheRead: 0, cacheWrite: 0 },
   // scripts/jev.py: US$ 0,042 por milhão de tokens.
   [MODEL_JEV]: { provider: "typesafe", input: 0.042, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -60,8 +65,16 @@ export const DEFAULT_PRICES: Record<string, ModelPrice> = {
 /** Modelos de conversa que cada agente pode usar (os selects da tela). */
 export const CHAT_MODELS: Record<"anthropic" | "openai", string[]> = {
   anthropic: [MODEL_HAIKU, MODEL_SONNET],
-  openai: [MODEL_GPT_MINI],
+  openai: [MODEL_GPT_MINI, MODEL_GPT6_LUNA, MODEL_GPT56_LUNA],
 };
+
+/**
+ * reasoning_effort da OpenAI: a família gpt-5 aceita "minimal"; os Luna não
+ * (aceitam none, low, medium...). "low" pensa um pouco antes de responder.
+ */
+export function openAiReasoningEffort(model: string): "minimal" | "low" {
+  return model === "gpt-5" || model.startsWith("gpt-5-") ? "minimal" : "low";
+}
 
 export type AgentModelConfig = {
   provider: "anthropic" | "openai";
@@ -173,7 +186,8 @@ export function normalizeSettings(
   const base = defaultSettings();
   if (!row) return base;
   const saved = normalizePrices(row.prices);
-  const prices = Object.keys(saved).length ? saved : base.prices;
+  // Modelo novo do código aparece mesmo com tabela salva; o preço salvo no /admin vale por cima.
+  const prices = Object.keys(saved).length ? { ...base.prices, ...saved } : base.prices;
   const agentsRaw = (row.agentModels && typeof row.agentModels === "object" ? row.agentModels : {}) as Record<string, unknown>;
   const agents = Object.fromEntries(AI_AGENTS.map((a) => [a, normalizeAgent(agentsRaw[a], prices)])) as Record<
     AiAgent,
