@@ -355,7 +355,8 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
             : "Regra do negócio: a resposta seguia perguntando num serviço que a empresa não faz. É recusa educada e encerra.",
       });
     }
-    if (semLocal && e.agente === "qualificacao" && !perguntas.some((p) => PERGUNTA_LOCAL.test(p))) {
+    // Serviço recusado encerra a conversa: não precisa (nem deve) perguntar o local.
+    if (semLocal && e.agente === "qualificacao" && decisao !== "servico_recusado" && !perguntas.some((p) => PERGUNTA_LOCAL.test(p))) {
       violacoes.push({
         regra: "nao_perguntou_local",
         paraModelo: "Você ainda não sabe onde vai ser a obra. Pergunte em qual cidade vai ser a obra, numa frase curta no fim da resposta.",

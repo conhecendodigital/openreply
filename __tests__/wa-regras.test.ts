@@ -873,3 +873,12 @@ describe("raio de atendimento e recusa que encerra (07/10)", () => {
     expect(blocoRegras(comRaio(0))).toContain("recuse com educação e encerre a conversa");
   });
 });
+
+describe("teste do agente do Robério (07/10)", () => {
+  it("serviço recusado sem local: recusa e encerra, sem exigir a pergunta do local", () => {
+    const h = [cliente("quero trocar uma torneira")];
+    const v = verificar(h, saida({ bolhas: ["A gente trabalha com reformas completas e não faz pequenos reparos isolados, como troca de torneira. Obrigado pelo contato!"] }));
+    expect(v.decisao).toBe("servico_recusado");
+    expect(v.violacoes.map((x) => x.regra)).not.toContain("nao_perguntou_local");
+  });
+});
