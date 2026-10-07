@@ -19,6 +19,11 @@
  * Seção com `attention` (erro, pendência, algo pra conferir) abre sozinha
  * quando o aviso aparece. Campo inválido dentro de uma seção fechada também
  * abre a seção. Nada aqui muda lógica de tela: só organização.
+ *
+ * 07/10/2026: dentro de uma aba (components/ui/tabs.tsx) o cartão da página
+ * ("panel") vira um cartão fixo, sem abrir e fechar: a aba já mostra uma parte
+ * por vez. Os grupos ("group") continuam recolhíveis. A atenção da seção vira
+ * o selo da aba.
  */
 
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -151,8 +156,9 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-/** Abre a seção e rola até ela. */
+/** Abre a seção (e a aba dela, se tiver) e rola até ela. */
 export function openAndScroll(store: SectionsStore | null, id: string) {
+  revealInTabs(document.getElementById(id));
   // Abre também as seções em volta (um grupo dentro de um cartão fechado).
   const ids = [id];
   let parent = document.getElementById(id)?.parentElement?.closest<HTMLElement>("[data-secao]");
@@ -169,6 +175,28 @@ export function openAndScroll(store: SectionsStore | null, id: string) {
   };
   if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(go);
   else go();
+}
+
+/* ------------------------------------ abas ------------------------------------ */
+
+/** O que uma seção conta pra aba em volta (vira o ponto no selo da aba). */
+export type TabReport = { tone: SectionTone; text?: string };
+export type TabPanelInfo = { tabId: string; report: (sectionId: string, value: TabReport | null) => void };
+/** Dado por <TabPanel>: a seção sabe que está dentro de uma aba. */
+export const TabPanelContext = createContext<TabPanelInfo | null>(null);
+/** Evento que pede pra <Tabs> abrir a aba do painel de onde ele saiu. */
+export const REVEAL_TAB_EVENT = "lead-engine:abrir-aba";
+
+/** Abre a(s) aba(s) em volta de um elemento. Devolve true se alguma estava escondida. */
+export function revealInTabs(el: Element | null | undefined): boolean {
+  let changed = false;
+  let panel = el?.closest<HTMLElement>("[data-aba-painel]") ?? null;
+  while (panel) {
+    if (panel.hidden) changed = true;
+    panel.dispatchEvent(new CustomEvent(REVEAL_TAB_EVENT, { bubbles: true, detail: { id: panel.dataset.abaPainel } }));
+    panel = panel.parentElement?.closest<HTMLElement>("[data-aba-painel]") ?? null;
+  }
+  return changed;
 }
 
 /* ------------------------------------ cores do selo ------------------------------------ */
@@ -257,11 +285,14 @@ export function CollapsibleSection({
   children,
 }: CollapsibleSectionProps) {
   const ctx = useContext(Ctx);
+  const tab = useContext(TabPanelContext);
+  // Dentro de uma aba o cartão da página fica sempre aberto (a aba já recorta a página).
+  const fixed = Boolean(tab) && variant === "panel";
   // Sem provider: estado só desta seção, na memória.
   const [local] = useState(() => ctx ?? new SectionsStore(null));
   const store = ctx ?? local;
   const snap = useStoreSnapshot(store);
-  const open = snap.open[id] ?? defaultOpen;
+  const open = fixed ? true : (snap.open[id] ?? defaultOpen);
   const rootRef = useRef<HTMLElement>(null);
   const contentId = `${id}-conteudo`;
   const buttonId = `${id}-botao`;
@@ -280,10 +311,19 @@ export function CollapsibleSection({
     if (typeof window !== "undefined" && window.location.hash === `#${id}`) store.set(id, true);
   }, [id, store]);
 
+  // Atenção da seção vira o ponto no selo da aba em volta.
+  const report = tab?.report;
+  const badgeText = badge?.text;
   useEffect(() => {
-    if (hideFromIndex) return;
+    if (!report) return;
+    report(id, attention ? { tone: tone ?? "warning", text: badgeText } : null);
+    return () => report(id, null);
+  }, [report, id, attention, tone, badgeText]);
+
+  useEffect(() => {
+    if (hideFromIndex || fixed) return;
     return store.register({ id, title: label, tone, el: () => rootRef.current, defaultOpen });
-  }, [store, id, label, tone, hideFromIndex, defaultOpen]);
+  }, [store, id, label, tone, hideFromIndex, defaultOpen, fixed]);
 
   const toggle = useCallback(() => store.set(id, !open), [store, id, open]);
 
@@ -303,6 +343,25 @@ export function CollapsibleSection({
       ? `panel rounded-xl ${attention ? "border-warning/50" : ""}`
       : `rounded-lg border ${attention ? "border-warning/40 bg-warning/5" : "border-border"}`;
   const pad = variant === "panel" ? "px-4 sm:px-5" : "px-3";
+
+  if (fixed) {
+    const titleId = `${id}-titulo`;
+    return (
+      <section ref={rootRef} id={id} data-secao={id} data-aberta="sim" data-fixa="" aria-labelledby={titleId} className={`scroll-mt-20 ${shell} ${className}`}>
+        <div className={`flex items-start gap-2 ${pad} py-3.5 sm:py-4`}>
+          <H id={titleId} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold">
+            <span className="min-w-0">{title}</span>
+            {badge && <StatusBadgeChip badge={{ ...badge, tone }} />}
+          </H>
+          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        </div>
+        <div id={contentId} className={`space-y-3 ${pad} pb-4 sm:pb-5`}>
+          {description && <div className="text-sm text-muted">{description}</div>}
+          {children}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
