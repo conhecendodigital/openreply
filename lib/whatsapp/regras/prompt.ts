@@ -44,6 +44,12 @@ export function blocoRegras(r: RegrasNegocio | null | undefined, baseCommand = "
     );
   }
   partes.push(linha("EXCEÇÕES DE LOCAL (vão pra análise da equipe)", r.excecoesLocal.map((e) => e.descricao)));
+  if (r.regioesCuidado.length || r.excecoesLocal.length) {
+    const quem = r.responsavel.nome.trim() || "o responsável";
+    partes.push(
+      `QUANDO PASSAR PRA ANÁLISE: termine dizendo que vai passar pro ${quem} analisar a possibilidade e que, se for possível, vocês entram em contato. Nunca prometa que vai dar certo nem dê prazo.`
+    );
+  }
   if (r.cidadesAtendidas.length) {
     partes.push("SE AINDA NÃO SABE ONDE É A OBRA: pergunte em qual cidade vai ser a obra. Nunca confirme atendimento antes de saber.");
     partes.push(

@@ -121,6 +121,21 @@ function quebrarLonga(texto: string): string[] {
   return partes;
 }
 
+/** Bolha com várias frases vira 2 ou 3 (quem escreve no WhatsApp manda picado). */
+export const DIVIDIR_A_PARTIR_DE = 110;
+
+function dividirPorFrase(texto: string): string[] {
+  const fs = frases(texto);
+  if (fs.length < 2 || (fs.length === 2 && texto.length < DIVIDIR_A_PARTIR_DE)) return [texto];
+  if (fs.length === 2) return fs;
+  if (fs.length === 3) return fs;
+  // 4 ou mais: em 3 grupos parecidos, sem cortar frase.
+  const alvo = Math.ceil(fs.length / 3);
+  const out: string[] = [];
+  for (let i = 0; i < fs.length; i += alvo) out.push(fs.slice(i, i + alvo).join(" "));
+  return out;
+}
+
 const tem_pergunta = (b: string) => b.includes("?");
 
 /** A pergunta vai pro fim: bolhas sem pergunta primeiro, na ordem; as com pergunta depois. */
@@ -133,7 +148,9 @@ export function perguntaNoFim(bolhas: string[]): string[] {
 
 export function quebrarEmBolhas(entrada: string | string[]): string[] {
   const brutas = (Array.isArray(entrada) ? entrada : [entrada]).flatMap((b) => String(b ?? "").split(/\n{2,}/));
-  const limpas = perguntaNoFim(semCaraDeIa(brutas.map(limparBolha).filter(Boolean)).flatMap(quebrarLonga));
+  const limpas0 = semCaraDeIa(brutas.map(limparBolha).filter(Boolean)).flatMap(quebrarLonga);
+  // O modelo mandou tudo numa bolha só: divide por frase.
+  const limpas = perguntaNoFim(limpas0.length === 1 ? dividirPorFrase(limpas0[0]) : limpas0);
   if (limpas.length <= MAX_BOLHAS) return limpas;
   // Junta o excedente na última bolha em vez de mandar 5 mensagens seguidas
   // (a pergunta, que já está no fim, continua na última).

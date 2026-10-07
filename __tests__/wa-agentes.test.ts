@@ -780,3 +780,16 @@ describe("sem cara de IA (Ghost Mode)", () => {
     expect(qb(["Fechado 👍", "Oi 😊 tudo bem? 🙌"])).toEqual(["Fechado 👍", "Oi tudo bem?"]);
   });
 });
+
+describe("resposta num bloco só vira bolhas (07/10)", () => {
+  it("divide por frase e deixa a pergunta na última", () => {
+    const b = qb(["Oi, tudo bem? Que bom que você chamou. O Campo Grande a gente analisa caso a caso, então vou passar pro Robério ver a possibilidade."]);
+    expect(b.length).toBeGreaterThanOrEqual(2);
+    expect(b.length).toBeLessThanOrEqual(3);
+    expect(b[b.length - 1]).toContain("?");
+  });
+  it("frase curta continua numa bolha", () => {
+    expect(qb(["Como é seu nome?"])).toEqual(["Como é seu nome?"]);
+    expect(qb(["Oi! Como é seu nome?"])).toEqual(["Oi! Como é seu nome?"]);
+  });
+});
