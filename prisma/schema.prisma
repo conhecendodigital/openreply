@@ -96,6 +96,11 @@ model Workspace {
   usagePeriodStart  DateTime @default(now())
   dmsSentThisPeriod Int      @default(0)
 
+  /// Domínio dos links rastreados (07/10/2026), ex.: comando.cloudmatheus.com.br.
+  /// Só o host, sem https:// e sem caminho. null = links em NEXTAUTH_URL.
+  /// Nesse host o app só responde /r/* (proxy.ts).
+  linkDomain        String?  @unique
+
   members            WorkspaceMember[]
   invitations        WorkspaceInvitation[]
   instagramAccounts  InstagramAccount[]
@@ -139,6 +144,7 @@ model Workspace {
   waContactMemories  WaContactMemory[]
   integrationCredentials WorkspaceIntegrationCredential[]
   integrationAudits      WorkspaceIntegrationAudit[]
+  linkRecipients         TrackedLinkRecipient[]
 
   @@index([ownerId])
   @@schema("public")
@@ -529,6 +535,12 @@ model TrackedLink {
   slug           String   @unique
   label          String?
   destinationUrl String
+  /// Prévia do link (07/10/2026): o que o Instagram, o WhatsApp e cia. mostram
+  /// no cartão do link. null = vem da capa do quiz ou da página de destino.
+  previewTitle       String?
+  previewDescription String?
+  /// https absoluta (mídia própria ou link).
+  previewImageUrl    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -568,6 +580,30 @@ model LinkClick {
   @@index([createdAt])
   @@index([workspaceId, createdAt])
   @@index([contactIgUserId])
+  @@schema("public")
+}
+
+/// Link curto por pessoa (07/10/2026): /r/<slug>/<code> no lugar de
+/// /r/<slug>?c=<igsid>.<assinatura>. O código (6 a 8 letras e números) é
+/// sorteado e só vale junto com o slug. Um por pessoa e link (vale o mesmo
+/// código se a pessoa recebe o link de novo; dmLogId fica com a última DM).
+/// slug é de qualquer link rastreado (campanha, fluxo ou disparo).
+/// RLS forçada: só o sistema (le_system) grava; membro do workspace lê.
+model TrackedLinkRecipient {
+  id          String   @id @default(cuid())
+  workspaceId String
+  slug        String
+  code        String
+  igUserId    String
+  dmLogId     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([slug, code])
+  @@unique([slug, igUserId])
+  @@index([workspaceId])
   @@schema("public")
 }
 
