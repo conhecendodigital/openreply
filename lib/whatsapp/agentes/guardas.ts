@@ -1,12 +1,12 @@
 /**
- * Travas de conteúdo: o agente nunca cita preço, prazo, porcentagem ou link que
+ * Travas de conteúdo: o agente nunca cita preço, prazo, porcentagem, link ou endereço que
  * não esteja nos trechos do cérebro (PDFs), no Comando base ou nos fatos que o
  * usuário cadastrou. Se citar, a resposta não sai sozinha: vira rascunho com o
  * aviso do que foi inventado.
  */
 
 export interface Afirmacao {
-  tipo: "preco" | "prazo" | "porcentagem" | "link";
+  tipo: "preco" | "prazo" | "porcentagem" | "link" | "endereco";
   texto: string;
   chave: string;
 }
@@ -15,6 +15,22 @@ const RE_PRECO = /R\$\s?\d[\d.]*(?:,\d{1,2})?|\b\d[\d.]*(?:,\d{1,2})?\s?(?:reais
 const RE_PRAZO = /\b\d+\s?(?:dias?(?:\s[uú]teis)?|horas?|h\b|semanas?|meses|m[eê]s|minutos?|min\b|anos?)/gi;
 const RE_PORCENTAGEM = /\b\d+(?:[.,]\d+)?\s?%/g;
 const RE_LINK = /\b(?:https?:\/\/\S+|www\.\S+|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|br|net|org|io|app|me|ly|link|site|store|shop|online)(?:\/\S*)?)/gi;
+
+// "Av. Presidente Costa e Silva, 186", "Rua Bom Jesus nº 212". O nome começa com
+// maiúscula ou número pra não pegar "na rua tem 2 vagas".
+const RE_ENDERECO =
+  /(?<![\p{L}\d])(?:[Rr]ua|R\.|[Aa]venida|[Aa]v\.?|AV\.?|[Aa]lameda|[Tt]ravessa|[Ee]strada|[Rr]odovia|[Pp]ra[çc]a)\s+((?:d[aeo]s? )?[A-ZÀ-Ý0-9][\p{L}\d.' ]{1,60}?)[,\s]+(?:n[º°o.]?\s*)?(\d{1,5})(?!\d)/gu;
+const RE_CEP = /\b\d{5}-\d{3}\b/g;
+
+function semAcento(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/** Última palavra do nome da rua + número: "Pres. Costa e Silva, 186" e "Presidente Costa e Silva 186" batem. */
+function chaveEndereco(nome: string, numero: string): string {
+  const palavras = semAcento(nome).replace(/[.']/g, " ").split(/\s+/).filter(Boolean);
+  return `${palavras[palavras.length - 1] ?? ""}:${Number(numero)}`;
+}
 
 function valorDinheiro(s: string): string {
   const num = s.replace(/[^\d,.]/g, "");
@@ -55,6 +71,8 @@ export function extrairAfirmacoes(texto: string): Afirmacao[] {
   for (const m of texto.match(RE_PRECO) ?? []) out.push({ tipo: "preco", texto: m.trim(), chave: valorDinheiro(m) });
   for (const m of texto.match(RE_PRAZO) ?? []) out.push({ tipo: "prazo", texto: m.trim(), chave: normalPrazo(m) });
   for (const m of texto.match(RE_PORCENTAGEM) ?? []) out.push({ tipo: "porcentagem", texto: m.trim(), chave: m.replace(/\s/g, "").replace(",", ".") });
+  for (const m of texto.matchAll(RE_ENDERECO)) out.push({ tipo: "endereco", texto: m[0].trim(), chave: chaveEndereco(m[1], m[2]) });
+  for (const m of texto.match(RE_CEP) ?? []) out.push({ tipo: "endereco", texto: m, chave: `cep:${m.replace(/\D/g, "")}` });
   for (const m of texto.match(RE_LINK) ?? []) {
     // "R$ 1.997" não é link; números com ponto também não.
     if (/^\d[\d.]*$/.test(m)) continue;
@@ -77,6 +95,6 @@ export function afirmacoesInventadas(resposta: string, fontes: string): Afirmaca
 }
 
 export function descreverInventadas(lista: Afirmacao[]): string {
-  const nomes = { preco: "preço", prazo: "prazo", porcentagem: "porcentagem", link: "link" } as const;
+  const nomes = { preco: "preço", prazo: "prazo", porcentagem: "porcentagem", link: "link", endereco: "endereço" } as const;
   return `A resposta cita ${lista.map((a) => `${nomes[a.tipo]} "${a.texto}"`).join(", ")}, que não está nos seus PDFs nem nas configurações. Confira antes de enviar.`;
 }
