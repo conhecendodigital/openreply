@@ -1723,6 +1723,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
     messageText,
     receivedAt,
     attemptsMade: job.attemptsMade,
+    fromStory: storyKind === "reply",
   }).catch((error: unknown) => {
     console.warn("[DM Worker] resend check failed:", formatError(error));
     return false;
@@ -1848,10 +1849,35 @@ export function saysNotReceived(text: string): boolean {
   return NOT_RECEIVED.test(plainText(text));
 }
 
+const ASKS_AGAIN = /\b(link|manda|mandar|envia|enviar|quero|qro)\b/;
+
+/**
+ * 07/10/2026: someone who got the button card and did not click only gets the
+ * link again when the message is about it: they say it did not arrive, repeat
+ * the campaign word ("Chat") or ask for the link. A story reply or reaction
+ * and any other chat ("Ansiosa para acompanhar", an emoji) never resend.
+ */
+export function shouldResend(input: { text: string; keywords: string[]; fromStory: boolean; buttonCard: boolean }): {
+  resend: boolean;
+  said: boolean;
+} {
+  const said = saysNotReceived(input.text);
+  if (said) return { resend: true, said };
+  if (input.fromStory || !input.buttonCard) return { resend: false, said };
+  const t = plainText(input.text);
+  if (GOT_IT.test(t)) return { resend: false, said };
+  const palavras = (x: string) => ` ${x.replace(/[^a-z0-9]+/g, " ").trim()} `;
+  const repeated = input.keywords.some((k) => {
+    const w = palavras(plainText(k));
+    return w.trim().length >= 2 && palavras(t).includes(w);
+  });
+  return { resend: repeated || ASKS_AGAIN.test(t), said };
+}
+
 /**
  * Resend a campaign's link as text to someone who got its DM (last 7 days)
  * and wrote back. Sends when they say it did not arrive, or when the DM was
- * a button card, they never clicked and the message is not a "got it".
+ * a button card, they never clicked and they ask for it again (shouldResend).
  * Once per person per campaign (DmLog `resend:<sender>`), never after a click,
  * never with the campaign off; deliverCampaignToDm keeps the 24h window and
  * human takeover rules. True when the resend went out (this message is done).
@@ -1862,6 +1888,8 @@ async function resendIfNotReceived(input: {
   messageText: string;
   receivedAt: Date;
   attemptsMade: number;
+  /** A reply or reaction to one of our stories. */
+  fromStory?: boolean;
 }): Promise<boolean> {
   const since = new Date(input.receivedAt.getTime() - 7 * 24 * 60 * 60 * 1000);
   const last = await prisma.dmLog.findFirst({
@@ -1890,8 +1918,13 @@ async function resendIfNotReceived(input: {
   });
   if (done?.status === "SENT" || done?.status === "SKIPPED_TAKEOVER") return false;
 
-  const said = saysNotReceived(input.messageText);
-  if (!said && (automation.dmFormat === "TEXT" || GOT_IT.test(plainText(input.messageText)))) return false;
+  const { resend, said } = shouldResend({
+    text: input.messageText,
+    keywords: automation.keywords,
+    fromStory: Boolean(input.fromStory),
+    buttonCard: automation.dmFormat !== "TEXT",
+  });
+  if (!resend) return false;
 
   const clicked = await prisma.linkClick.findFirst({
     where: { automationId: automation.id, contactIgUserId: input.senderId },
