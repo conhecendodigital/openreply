@@ -4,6 +4,7 @@ import { StoreMemoria } from "./helpers/wa-agentes-store";
 import { encryptToken } from "@/lib/meta/oauth";
 import { perguntarJev } from "@/lib/whatsapp/agentes/jev";
 import { triar, triagemLocal } from "@/lib/whatsapp/agentes/triagem";
+import { quebrarEmBolhas as qb } from "@/lib/whatsapp/agentes/bolhas";
 import { custoUsdMicro, escolherModelo, MODELO_GPT_MINI, MODELO_HAIKU, MODELO_SONNET } from "@/lib/whatsapp/agentes/modelos";
 import { conferirTeto, emSilencio, inicioDoDia } from "@/lib/whatsapp/agentes/teto";
 import { assumirConversa, aoMensagemDoContato, aoMensagemDoUsuario, resolverModo } from "@/lib/whatsapp/agentes/modo";
@@ -759,5 +760,23 @@ describe("tom e Comando", () => {
       resumoEquipe: "Apto em Paulínia",
     });
     expect(lerSaida("sem json")).toBeNull();
+  });
+});
+
+describe("sem cara de IA (Ghost Mode)", () => {
+  it("tira frase pronta de chatbot e não mexe no conteúdo", () => {
+    expect(qb(["Ótima pergunta! A avaliação custa R$ 80.", "Espero ter ajudado! Quer marcar pra quinta?"])).toEqual([
+      "A avaliação custa R$ 80.",
+      "Quer marcar pra quinta?",
+    ]);
+    expect(qb(["Qualquer dúvida, estou à disposição."])).toEqual([]);
+    expect(qb(["Com certeza! 😊"])).toEqual(["😊"]);
+  });
+  it("frase com conteúdo fica, mesmo começando parecido", () => {
+    expect(qb(["Com certeza dá pra fazer no sábado."])).toEqual(["Com certeza dá pra fazer no sábado."]);
+    expect(qb(["Fico feliz que gostou do resultado!"])).toEqual(["Fico feliz que gostou do resultado!"]);
+  });
+  it("deixa só o primeiro emoji da resposta", () => {
+    expect(qb(["Fechado 👍", "Oi 😊 tudo bem? 🙌"])).toEqual(["Fechado 👍", "Oi tudo bem?"]);
   });
 });

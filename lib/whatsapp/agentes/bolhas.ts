@@ -4,7 +4,9 @@
  * - 1 a 3 bolhas, cada uma com até ~220 caracteres (quebra por frase, nunca
  *   no meio de uma frase nem num número como "R$ 1.500" ou num link).
  * - A pergunta vai sempre na última bolha (quem lê responde a última coisa).
- * - Tira marcas de texto de robô: travessão, negrito em markdown, marcador de lista.
+ * - Tira marcas de texto de robô: travessão, negrito em markdown, marcador de lista,
+ *   frase pronta de chatbot ("Ótima pergunta!", "Espero ter ajudado") e emoji além
+ *   do primeiro. Só tira, nunca acrescenta palavra (regra de não inventar).
  * - Atraso inicial de 20 a 90 s, "digitando..." de 4 a 7 caracteres por
  *   segundo, pausa de 1 a 4 s entre bolhas.
  */
@@ -23,6 +25,58 @@ export function limparBolha(texto: string): string {
     .replace(/[ \t]+/g, " ")
     .replace(/\s+([,.!?])/g, "$1")
     .trim();
+}
+
+/**
+ * Frase inteira que é só enchimento de chatbot (Ghost Mode). Comparada sem
+ * acento e sem pontuação; frase com conteúdo junto ("Claro, custa R$ 80") fica.
+ */
+const FRASES_DE_CHATBOT = [
+  /^(otima|excelente|boa|que otima) pergunta$/,
+  /^com certeza$/,
+  /^(fico|ficamos) (muito )?(feliz|felizes|contente|contentes) em (te |lhe )?ajudar$/,
+  /^espero ter (te |lhe )?ajudado$/,
+  /^(estou|estamos|fico|ficamos|sigo|seguimos) (a )?(sua |a sua |inteira )?disposicao( pra| para)?( qualquer duvida| o que precisar)?$/,
+  /^qualquer (outra )?duvida(,)? (estou|estamos|fico|ficamos) (a )?(sua )?disposicao$/,
+  /^nao hesite em (nos )?(chamar|perguntar|entrar em contato)$/,
+  /^(agradeco|agradecemos) (o|pelo|seu|pelo seu) contato$/,
+  /^entendo (perfeitamente )?(a |sua |a sua )?preocupacao$/,
+  /^sinceramente$/,
+];
+
+function normal(f: string): string {
+  return f
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, "")
+    .replace(/[!?.,;:…"'()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function ehFraseDeChatbot(frase: string): boolean {
+  const n = normal(frase);
+  return n.length > 0 && FRASES_DE_CHATBOT.some((re) => re.test(n));
+}
+
+const RE_EMOJI = /\p{Extended_Pictographic}\uFE0F?(?:\u200D\p{Extended_Pictographic}\uFE0F?)*/gu;
+
+/** Tira frase de chatbot de cada bolha e deixa só o primeiro emoji da resposta. */
+export function semCaraDeIa(bolhas: string[]): string[] {
+  let emojis = 0;
+  return bolhas
+    .map((b) => {
+      const fs = frases(b);
+      const ficam = fs.filter((f) => !ehFraseDeChatbot(f));
+      const texto = ficam.length === fs.length ? b : ficam.join(" ");
+      return texto
+        .replace(RE_EMOJI, (e) => (emojis++ === 0 ? e : ""))
+        .replace(/[ \t]+/g, " ")
+        .replace(/\s+([,.!?])/g, "$1")
+        .trim();
+    })
+    .filter(Boolean);
 }
 
 /** Frases: fim em . ! ? ou … seguido de espaço (não quebra "R$ 1.500", "www.site.com.br" nem "3.5"). */
@@ -79,7 +133,7 @@ export function perguntaNoFim(bolhas: string[]): string[] {
 
 export function quebrarEmBolhas(entrada: string | string[]): string[] {
   const brutas = (Array.isArray(entrada) ? entrada : [entrada]).flatMap((b) => String(b ?? "").split(/\n{2,}/));
-  const limpas = perguntaNoFim(brutas.map(limparBolha).filter(Boolean).flatMap(quebrarLonga));
+  const limpas = perguntaNoFim(semCaraDeIa(brutas.map(limparBolha).filter(Boolean)).flatMap(quebrarLonga));
   if (limpas.length <= MAX_BOLHAS) return limpas;
   // Junta o excedente na última bolha em vez de mandar 5 mensagens seguidas
   // (a pergunta, que já está no fim, continua na última).
