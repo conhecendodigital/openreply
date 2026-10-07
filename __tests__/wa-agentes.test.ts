@@ -499,6 +499,14 @@ describe("travas de conteúdo", () => {
     const inv = afirmacoesInventadas("sai R$ 15,00, chega em 1 dia, 20% off em www.outro-site.com", fontes);
     expect(inv.map((a) => a.tipo).sort()).toEqual(["link", "porcentagem", "prazo", "preco"]);
   });
+  it("pega endereço inventado e aceita o cadastrado escrito de outro jeito", () => {
+    const f = "Atendemos na Av Presidente Costa e Silva 186 Vila Costa e Silva Campinas, sempre com horário marcado. CEP 13081-000.";
+    expect(afirmacoesInventadas("fica na Av. Pres. Costa e Silva, nº 186, em Campinas", f)).toEqual([]);
+    expect(afirmacoesInventadas("o CEP é 13081-000", f)).toEqual([]);
+    const inv = afirmacoesInventadas("a loja fica na Rua das Flores, 123, no centro de Paulínia. CEP 13140-000", f);
+    expect(inv.map((a) => a.tipo)).toEqual(["endereco", "endereco"]);
+    expect(afirmacoesInventadas("na rua tem 2 vagas e o telefone é 99469-1611", f).filter((a) => a.tipo === "endereco")).toEqual([]);
+  });
 });
 
 describe("chave nunca aparece", () => {
