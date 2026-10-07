@@ -11,6 +11,7 @@
 import { useState } from "react";
 import KeywordInput from "@/components/keyword-input";
 import PostPicker from "@/components/post-picker";
+import { CollapsibleSection, SectionsProvider } from "@/components/ui/collapsible-section";
 import { useT } from "@/components/lang-provider";
 import type { TFunction } from "@/lib/i18n";
 import {
@@ -288,10 +289,14 @@ function TriggerEditor({ def, setDef, ctx, onCreated }: { def: FlowDefinition; s
       )}
 
       {needsWords && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted">
-            {isCommentLike ? t("And the comment has") : t("And the message has")}
-          </p>
+        <CollapsibleSection
+          id="fluxo-palavras"
+          variant="group"
+          hideFromIndex
+          title={isCommentLike ? t("And the comment has") : t("And the message has")}
+          summary={trig.matchAnyWord ? t("Any word") : trig.keywords.join(", ") || t("No word yet")}
+          badge={trig.matchAnyWord ? null : { text: String(trig.keywords.length) }}
+        >
           <Check checked={trig.matchAnyWord} onChange={(v) => patch({ matchAnyWord: v })} label={t("Any word")} />
           {!trig.matchAnyWord && (
             <>
@@ -299,7 +304,7 @@ function TriggerEditor({ def, setDef, ctx, onCreated }: { def: FlowDefinition; s
               <Check checked={trig.wholeWordMatch} onChange={(v) => patch({ wholeWordMatch: v })} label={t("Whole word only")} />
             </>
           )}
-        </div>
+        </CollapsibleSection>
       )}
 
       {triggerIsComment(trig.type) && (
@@ -351,18 +356,33 @@ function MessageEditor({ def, node, setDef, onCreated }: { def: FlowDefinition; 
         </span>
       </div>
 
-      <Field label={t("Image (optional)")} hint={t("An https:// link to a JPG or PNG. It goes before the text.")}>
-        <input
-          value={node.imageUrl ?? ""}
-          onChange={(e) => patch((n) => ({ ...n, imageUrl: e.target.value.trim() || null }))}
-          placeholder="https://"
-          inputMode="url"
-          className={inputClass}
-        />
-      </Field>
+      <CollapsibleSection
+        id="fluxo-imagem"
+        variant="group"
+        hideFromIndex
+        defaultOpen={Boolean(node.imageUrl)}
+        title={t("Image (optional)")}
+        summary={node.imageUrl ? node.imageUrl : t("No image")}
+      >
+        <Field label={t("Image (optional)")} hint={t("An https:// link to a JPG or PNG. It goes before the text.")}>
+          <input
+            value={node.imageUrl ?? ""}
+            onChange={(e) => patch((n) => ({ ...n, imageUrl: e.target.value.trim() || null }))}
+            placeholder="https://"
+            inputMode="url"
+            className={inputClass}
+          />
+        </Field>
+      </CollapsibleSection>
 
-      <div className="space-y-2">
-        <p className="text-xs font-semibold text-muted">{t("Buttons (up to 3)")}</p>
+      <CollapsibleSection
+        id="fluxo-botoes"
+        variant="group"
+        hideFromIndex
+        title={t("Buttons (up to 3)")}
+        badge={{ text: String(node.buttons.length) }}
+        summary={node.buttons.map((b) => b.label || t("No text")).join(" · ") || t("No button")}
+      >
         {node.buttons.map((b, i) => (
           <div key={b.id} className="space-y-2 rounded-xl border border-border p-3">
             <div className="flex items-center gap-2">
@@ -432,7 +452,7 @@ function MessageEditor({ def, node, setDef, onCreated }: { def: FlowDefinition; 
             + {t("Add button")}
           </button>
         )}
-      </div>
+      </CollapsibleSection>
 
       {hasTapButton ? (
         <p className="rounded-lg bg-surface-hover px-3 py-2 text-xs text-muted">
@@ -717,6 +737,7 @@ export default function NodePanel({
 
   const kind = isTrigger ? "trigger" : node!.type;
   return (
+    <SectionsProvider page="fluxo-painel">
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <span className={`h-3 w-3 rounded-full ${NODE_TONE[kind]}`} />
@@ -745,5 +766,6 @@ export default function NodePanel({
         </button>
       )}
     </div>
+    </SectionsProvider>
   );
 }

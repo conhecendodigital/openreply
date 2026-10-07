@@ -13,6 +13,7 @@
  * - Whoever wrote PARAR / SAIR / STOP is out of every future broadcast.
  */
 
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -400,7 +401,7 @@ export function BroadcastEditor({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="min-w-0 space-y-6">
+      <div className="min-w-0 space-y-4">
         {error && <p className="rounded-xl bg-error/10 px-4 py-2.5 text-sm text-error">{error}</p>}
 
         <section className="space-y-3">
@@ -421,8 +422,13 @@ export function BroadcastEditor({
           </div>
         </section>
 
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold">{t("1. Who")}</h3>
+        <CollapsibleSection
+          id="disparo-quem"
+          variant="group"
+          hideFromIndex
+          title={t("1. Who")}
+          summary={draft.audience === "segment" ? segment?.name ?? t("Pick a segment") : t("Filters just for this one")}
+        >
           <div role="radiogroup" aria-label={t("Who")} className="inline-flex gap-1 rounded-xl bg-surface-hover p-1">
             {(["segment", "filters"] as const).map((k) => (
               <button
@@ -467,16 +473,21 @@ export function BroadcastEditor({
           ) : (
             <AudienceCount count={live.count} loading={live.loading} error={live.error} />
           )}
-        </section>
+        </CollapsibleSection>
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">{t("2. Message")}</h3>
+        <CollapsibleSection
+          id="disparo-mensagem"
+          variant="group"
+          hideFromIndex
+          title={t("2. Message")}
+          summary={previewText.trim().slice(0, 80)}
+          actions={
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={draft.abOn} onChange={(e) => toggleAb(e.target.checked)} />
               {t("A/B test")}
             </label>
-          </div>
+          }
+        >
           {!draft.abOn ? (
             <div className="space-y-2">
               <textarea
@@ -633,10 +644,16 @@ export function BroadcastEditor({
               </button>
             )}
           </div>
-        </section>
+        </CollapsibleSection>
 
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold">{t("3. Pace")}</h3>
+        <CollapsibleSection
+          id="disparo-ritmo"
+          variant="group"
+          hideFromIndex
+          defaultOpen={false}
+          title={t("3. Pace")}
+          summary={t("Up to about {n} per hour at this pace.", { n: perHour })}
+        >
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span>{t("Send")}</span>
             <input
@@ -663,7 +680,7 @@ export function BroadcastEditor({
           <p className="text-xs text-muted">
             {t("Up to about {n} per hour at this pace. The account's hourly limit and monthly quota always win: if the limit is reached the queue waits, nobody is skipped.", { n: perHour })}
           </p>
-        </section>
+        </CollapsibleSection>
 
         <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
           <button

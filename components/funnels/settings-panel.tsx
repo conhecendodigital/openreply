@@ -7,6 +7,7 @@
  * checkout link) are optional: empty simply means "off".
  */
 
+import { CollapsibleSection, SectionsProvider } from "@/components/ui/collapsible-section";
 import { useEffect, useId, useRef } from "react";
 import { useT } from "@/components/lang-provider";
 import { DEFAULT_CONSENT_TEXT, DEFAULT_THEME } from "@/lib/funnels/schema";
@@ -69,6 +70,7 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
   const pixelBad = Boolean(s.pixelId) && !/^\d{5,20}$/.test(s.pixelId ?? "");
 
   return (
+    <SectionsProvider page="quiz-configuracoes">
     <div className="fixed inset-0 z-[60] flex justify-end bg-black/40" role="dialog" aria-modal="true" aria-labelledby="funnel-settings-title" onClick={onClose}>
       <div className="flex h-full w-full max-w-lg flex-col bg-background shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3" style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}>
@@ -79,11 +81,18 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
             {t("Done")}
           </button>
         </div>
-        <div className="flex-1 space-y-8 overflow-y-auto px-4 py-5" style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}>
+        <div className="flex-1 space-y-2 overflow-y-auto px-4 py-5" style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}>
           <p className="text-xs text-muted">{t("Settings go live together with the screens when you publish.")}</p>
 
-          <section className="space-y-4">
-            <h3 className="text-sm font-semibold">{t("Look")}</h3>
+          <CollapsibleSection
+            id="quiz-visual"
+            variant="group"
+            hideFromIndex
+            defaultOpen={true}
+            attention={lowContrast || Boolean(urlError(s.logoUrl, isAllowedImageUrl))}
+            title={t("Look")}
+            summary={[theme.mode === "dark" ? t("Dark") : t("Light"), theme.primary, s.logoUrl ? t("Logo link (optional)") : ""].filter(Boolean).join(" · ")}
+          >
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setTheme({ ...DEFAULT_THEME })} className="min-h-11 rounded-lg border border-border px-3 text-sm font-semibold hover:bg-surface-hover">
                 {t("Light (like Instagram)")}
@@ -133,10 +142,17 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
               error={urlError(s.logoUrl, isAllowedImageUrl)}
               hint={t("Shows on screens with \"Logo\" turned on.")}
             />
-          </section>
+          </CollapsibleSection>
 
-          <section className="space-y-4">
-            <h3 className="text-sm font-semibold">{t("Checkout")}</h3>
+          <CollapsibleSection
+            id="quiz-checkout"
+            variant="group"
+            hideFromIndex
+            defaultOpen={false}
+            attention={Boolean(urlError(s.checkoutUrl, isHttpsUrl))}
+            title={t("Checkout")}
+            summary={s.checkoutUrl || t("No checkout link")}
+          >
             <TextField
               label={t("Default checkout link")}
               value={s.checkoutUrl ?? ""}
@@ -146,10 +162,17 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
               error={urlError(s.checkoutUrl, isHttpsUrl)}
               hint={t("Used by checkout buttons without their own link. The entry UTMs, fbclid, src and sck go along, plus the visit id for Hotmart.")}
             />
-          </section>
+          </CollapsibleSection>
 
-          <section className="space-y-4">
-            <h3 className="text-sm font-semibold">{t("Meta Pixel")}</h3>
+          <CollapsibleSection
+            id="quiz-pixel"
+            variant="group"
+            hideFromIndex
+            defaultOpen={false}
+            attention={pixelBad}
+            title={t("Meta Pixel")}
+            summary={s.pixelId ? t("Pixel {id}", { id: s.pixelId }) : t("Uses the account Pixel")}
+          >
             <TextField
               label={t("Pixel ID (optional)")}
               value={s.pixelId ?? ""}
@@ -177,10 +200,17 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
               checked={Boolean(s.pixelStepEvents)}
               onChange={(v) => set({ pixelStepEvents: v || undefined })}
             />
-          </section>
+          </CollapsibleSection>
 
-          <section className="space-y-4">
-            <h3 className="text-sm font-semibold">{t("Search and sharing")}</h3>
+          <CollapsibleSection
+            id="quiz-busca"
+            variant="group"
+            hideFromIndex
+            defaultOpen={false}
+            attention={Boolean(urlError(s.seo?.imageUrl, isAllowedImageUrl))}
+            title={t("Search and sharing")}
+            summary={[s.seo?.title || t("No page title"), s.seo?.indexable ? t("Show on Google") : ""].filter(Boolean).join(" · ")}
+          >
             <TextField label={t("Page title")} value={s.seo?.title ?? ""} maxLength={120} onChange={(v) => set({ seo: { ...s.seo, title: opt(v) } })} />
             <TextField
               label={t("Description")}
@@ -204,10 +234,17 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
               checked={Boolean(s.seo?.indexable)}
               onChange={(v) => set({ seo: { ...s.seo, indexable: v || undefined } })}
             />
-          </section>
+          </CollapsibleSection>
 
-          <section className="space-y-4">
-            <h3 className="text-sm font-semibold">{t("Privacy")}</h3>
+          <CollapsibleSection
+            id="quiz-privacidade"
+            variant="group"
+            hideFromIndex
+            defaultOpen={false}
+            attention={Boolean(s.privacyUrl && !privacyOk(s.privacyUrl.trim()))}
+            title={t("Privacy")}
+            summary={s.privacyUrl || "/privacy"}
+          >
             <TextField
               label={t("Privacy policy link")}
               value={s.privacyUrl ?? ""}
@@ -234,9 +271,10 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
               placeholder={t("ex.: Payment processed by Hotmart.")}
               onChange={(v) => set({ footerText: opt(v) })}
             />
-          </section>
+          </CollapsibleSection>
         </div>
       </div>
     </div>
+    </SectionsProvider>
   );
 }

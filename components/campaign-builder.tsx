@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CampaignAbPanel } from "@/components/ab-test";
+import { CollapsibleSection, SectionIndex, SectionsProvider } from "@/components/ui/collapsible-section";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import PostPicker from "@/components/post-picker";
 import CampaignPreview, { previewTabsFor, type PreviewTab, type PreviewTrigger } from "@/components/campaign-preview";
@@ -99,18 +100,24 @@ interface CampaignBuilderProps {
   campaignId?: string;
 }
 
+/** Bloco do editor: recolhível, com resumo de uma linha quando fechado. */
 function Section({
+  id,
   title,
+  summary,
+  defaultOpen = true,
   children,
 }: {
+  id: string;
   title: string;
+  summary?: string;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+    <CollapsibleSection id={id} title={title} summary={summary} defaultOpen={defaultOpen} variant="group" headingLevel={2}>
       {children}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -659,7 +666,14 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
     );
   }
 
+  const cut = (s: string, n = 60) => (s.trim().length > n ? `${s.trim().slice(0, n)}…` : s.trim());
+  const beforeLink = [
+    allowsOpeningDm(trigger) && openingDmEnabled ? t("an opening DM") : "",
+    requireFollow ? t("a follow requirement first") : "",
+  ].filter(Boolean);
+
   return (
+    <SectionsProvider page="campanha">
     <div className="space-y-6">
       {importQueue && (
         <div className="rounded border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
@@ -736,9 +750,11 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
 
       {/* min-w-0 on the cells: a grid item defaults to min-width:auto, so a
           long string widens the whole page instead of wrapping. */}
+      <SectionIndex />
+
       <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:gap-8">
       {/* Left: controls */}
-      <div className="space-y-8 min-w-0">
+      <div className="space-y-4 min-w-0">
         {error && (
           <div className="rounded border border-error/20 bg-error/10 p-3 text-sm text-error">
             {t(error)}
@@ -775,7 +791,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
           )}
         </div>
 
-        <Section title={t("What starts the campaign")}>
+        <Section id="campanha-gatilho" title={t("What starts the campaign")} summary={t(TRIGGERS.find((x) => x.value === trigger)?.label ?? "Comment on a post")}>
           <div className="grid gap-2" role="radiogroup" aria-label={t("What starts the campaign")}>
             {TRIGGERS.map((opt) => (
               <Radio key={opt.value} checked={trigger === opt.value} onSelect={() => chooseTrigger(opt.value)}>
@@ -787,7 +803,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         </Section>
 
         {trigger === "STORY_REPLY" && (
-          <Section title={t("When someone replies to")}>
+          <Section id="campanha-story" title={t("When someone replies to")} summary={storyId === null ? t("any of your stories") : t("a specific story")}>
             <Radio
               checked={storyId === null}
               onSelect={() => {
@@ -866,7 +882,11 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         )}
 
         {trigger === "COMMENT" && (
-        <Section title={t("When someone comments on")}>
+        <Section
+          id="campanha-post"
+          title={t("When someone comments on")}
+          summary={triggerScope === "specific" ? t("a specific post or reel") : triggerScope === "any" ? t("any post or reel") : t("next post or reel")}
+        >
           <Radio
             checked={triggerScope === "specific"}
             onSelect={() => setTriggerScope("specific")}
@@ -900,6 +920,8 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
 
         {usesKeywords(trigger) && (
         <Section
+          id="campanha-palavras"
+          summary={matchMode === "specific" ? cut(keywordText) || t("a specific word or words") : t("any word")}
           title={
             trigger === "DM"
               ? t("And the message has")
@@ -1014,7 +1036,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         </Section>
         )}
 
-        <Section title={t("They will get")}>
+        <Section id="campanha-antes" title={t("They will get")} summary={beforeLink.join(" · ") || t("a DM with a link")}>
           {allowsOpeningDm(trigger) && (
           <div className="mb-3 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between">
@@ -1080,7 +1102,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
           </div>
         </Section>
 
-        <Section title={t("And then, they will get")}>
+        <Section id="campanha-depois" title={t("And then, they will get")} summary={cut(dmMessage) || t("a DM with a link")}>
           <div className="rounded-lg border border-border p-3 space-y-2">
             <span className="text-sm text-foreground">{t("a DM with a link")}</span>
             <textarea
@@ -1217,7 +1239,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         {/* 2026-10-08 (Etapa 5): optional A/B test, saved by its own route.
             "Save changes" above never touches it, and with it off the
             campaign sends exactly its own texts. */}
-        <Section title={t("A/B test (optional)")}>
+        <Section id="campanha-ab" title={t("A/B test (optional)")} defaultOpen={false} summary={mode === "edit" && campaignId ? undefined : t("Save the campaign first, then test variants of its messages here.")}>
           {mode === "edit" && campaignId ? (
             <CampaignAbPanel campaignId={campaignId} />
           ) : (
@@ -1270,5 +1292,6 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       </div>
       </div>
     </div>
+    </SectionsProvider>
   );
 }

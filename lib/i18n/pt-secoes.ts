@@ -123,4 +123,13 @@ export const ptSecoes: Record<string, string> = {
   "Per workspace: US$ {n}": "Por workspace: US$ {n}",
   "1 model": "1 modelo",
   "{n} models": "{n} modelos",
+
+  // Editores (disparo, fluxo e quiz)
+  "Up to about {n} per hour at this pace.": "Até umas {n} por hora nesse ritmo.",
+  "No word yet": "Ainda sem palavra",
+  "No text": "Sem texto",
+  "No button": "Sem botão",
+  "No checkout link": "Sem link de checkout",
+  "Uses the account Pixel": "Usa o Pixel da conta",
+  "No page title": "Sem título da página",
 };
