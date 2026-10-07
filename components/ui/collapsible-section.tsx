@@ -382,10 +382,10 @@ export function SectionIndex({ className = "", sticky = true }: { className?: st
 
   return (
     <div
-      className={`${sticky ? "sticky top-0 z-20 -mx-4 bg-background/95 px-4 backdrop-blur lg:-mx-8 lg:px-8" : ""} flex min-w-0 items-center gap-2 border-b border-border py-2 ${className}`}
+      className={`${sticky ? "sticky top-0 z-20 bg-background/95 backdrop-blur" : ""} flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-border py-2 sm:flex-nowrap ${className}`}
       data-secao-indice=""
     >
-      <nav aria-label={t("On this page")} className="min-w-0 flex-1">
+      <nav aria-label={t("On this page")} className="min-w-0 flex-1 basis-full sm:basis-auto">
         <ul className="flex min-w-0 gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {entries.map((e) => (
             <li key={e.id} className="shrink-0">
@@ -404,7 +404,7 @@ export function SectionIndex({ className = "", sticky = true }: { className?: st
           ))}
         </ul>
       </nav>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="ml-auto flex shrink-0 items-center gap-1">
         <button
           type="button"
           onClick={() => store.setAll(true)}

@@ -223,7 +223,7 @@ export default function WhatsAppAgentsPage() {
   const factsCount = factsText.split("\n").filter((f) => f.trim()).length;
   const aboutSummary = view
     ? [
-        view.profile.baseCommand.trim() ? view.profile.baseCommand.trim().split("\n")[0].slice(0, 90) : t("No Base Comando yet"),
+        view.profile.baseCommand.trim() ? view.profile.baseCommand.replace(/\s+/g, " ").trim().slice(0, 90) : t("No Base Comando yet"),
         factsCount === 1 ? t("1 price or deadline") : t("{n} prices and deadlines", { n: factsCount }),
       ].join(" · ")
     : "";
@@ -471,7 +471,7 @@ function AgentCard({
   const t = useT();
   const info = AGENT_INFO[agent.agente];
   const filled = fromDoc.has(`agent:${agent.agente}`);
-  const firstLine = agent.instrucoes.trim().split("\n")[0]?.slice(0, 90);
+  const firstLine = agent.instrucoes.replace(/\s+/g, " ").trim().slice(0, 90);
   return (
     <CollapsibleSection
       id={`agente-${agent.agente}`}

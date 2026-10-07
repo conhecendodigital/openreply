@@ -239,9 +239,9 @@ export function ReviewPanel({
 
         <div className="space-y-2 rounded-lg border border-border p-3" data-resumo-conferir="">
           <p className="text-sm font-semibold">{t("Summary by group")}</p>
-          <ul className="grid gap-1.5 sm:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {problems.map((p) => (
-              <li key={p.id}>
+              <li key={p.id} className="min-w-0">
                 <a
                   href={`#${p.id}`}
                   onClick={(e) => {
@@ -261,9 +261,9 @@ export function ReviewPanel({
           {links.length > 0 && (
             <>
               <p className="pt-1 text-xs font-semibold text-muted">{t("What the document filled in")}</p>
-              <ul className="grid gap-1.5 sm:grid-cols-2">
+              <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {links.map((l) => (
-                  <li key={l.id}>
+                  <li key={l.id} className="min-w-0">
                     <a
                       href={`#${l.id}`}
                       onClick={(e) => {
