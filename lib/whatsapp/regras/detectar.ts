@@ -12,6 +12,7 @@ import type { WaMessageLite } from "@/lib/whatsapp/agentes/types";
 import { rotuloCidade, type Cidade, type InfoMinima, type RegrasNegocio } from "./esquema";
 import { acharTermo, contemTermo, normalizarTexto, UFS } from "./texto";
 import { dentroDoRaio } from "./raio";
+import { bairrosNoTexto, municipiosNoTexto } from "./lugares";
 
 /** O que o modelo disse que entendeu (campos extras do JSON da resposta). */
 export interface SinaisModelo {
@@ -134,6 +135,20 @@ function mencoesNoTexto(regras: RegrasNegocio, historico: WaMessageLite[]): Menc
     }
     for (const c of regras.cidadesNaoAtendidas) {
       for (const pos of acharTermo(t, c.cidade)) if (!regiaoEm(pos)) add({ tipo: "nao_atendida", cidade: c, regiao: null, pos });
+    }
+    // Bairro de cidade atendida ("Barão Geraldo", "Cambuí") conta como a cidade.
+    const bairros = bairrosNoTexto(regras, t).filter((b) => !regiaoEm(b.pos));
+    for (const b of bairros) add({ tipo: "atendida", cidade: b.cidade, regiao: null, pos: b.pos });
+    // Município de fora das listas, citado sem UF ("a obra é em Sorocaba").
+    const jaAchados = new Set(out.filter((m) => m.msg === msg).map((m) => (m.cidade ? normalizarTexto(m.cidade.cidade) : "")));
+    for (const x of municipiosNoTexto(regras, t)) {
+      const nome = normalizarTexto(x.cidade.cidade);
+      if (jaAchados.has(nome) || regiaoEm(x.pos)) continue;
+      // Cambuí, "Barão" de Barão Geraldo: o bairro da cidade atendida ganha.
+      if (bairros.some((b) => x.pos < b.pos + normalizarTexto(b.bairro ?? "").length && b.pos < x.pos + nome.length)) continue;
+      if (classificarLista(regras, x.cidade.cidade, x.cidade.uf) !== "outra") continue; // já achada pela lista
+      if (regras.regioesCuidado.some((r) => normalizarTexto(r.nome) === nome)) continue;
+      add({ tipo: classificar(regras, x.cidade.cidade, x.cidade.uf), cidade: x.cidade, regiao: null, pos: x.pos });
     }
     for (const x of cidadesComUf(original)) {
       if (classificarLista(regras, x.cidade, x.uf) !== "outra") continue; // já achada pelo nome acima

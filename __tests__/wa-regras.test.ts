@@ -103,9 +103,10 @@ describe("cidade da obra (sem IA)", () => {
   });
 
   it("o que o modelo diz só vale se estiver no texto do cliente", () => {
+    // Desde 07/10 o arquivo de lugares reconhece Sumaré sem UF; o modelo dizer "Paulínia" não muda nada.
     const h = [cliente("a obra é em Sumaré")];
-    expect(local(h).status).toBe("desconhecida");
-    expect(local(h, { ...SINAIS_VAZIOS, localObra: { cidade: "Paulínia", uf: "SP", bairro: "" } }).status).toBe("desconhecida");
+    expect(local(h)).toMatchObject({ status: "fora", cidade: "Sumaré/SP" });
+    expect(local(h, { ...SINAIS_VAZIOS, localObra: { cidade: "Paulínia", uf: "SP", bairro: "" } }).status).toBe("fora");
     expect(local(h, { ...SINAIS_VAZIOS, localObra: { cidade: "Sumaré", uf: "SP", bairro: "" } })).toMatchObject({ status: "fora", cidade: "Sumaré/SP", fonte: "modelo" });
   });
 
@@ -880,5 +881,34 @@ describe("teste do agente do Robério (07/10)", () => {
     const v = verificar(h, saida({ bolhas: ["A gente trabalha com reformas completas e não faz pequenos reparos isolados, como troca de torneira. Obrigado pelo contato!"] }));
     expect(v.decisao).toBe("servico_recusado");
     expect(v.violacoes.map((x) => x.regra)).not.toContain("nao_perguntou_local");
+  });
+});
+
+describe("arquivo de lugares: cidade, estado e bairro (07/10)", () => {
+  const r = lerRegras({ ...obraBoa(), mensagemForaDaArea: "" });
+  const st = (texto: string) => detectarLocal(r, [cliente(texto)]).status;
+  it("cidade de fora sem UF é fora da área", () => {
+    expect(st("a obra é em Sorocaba")).toBe("fora");
+    expect(st("quero reformar uma casa em Ribeirão Preto")).toBe("fora");
+    expect(detectarLocal(r, [cliente("a obra é em Sorocaba")]).cidade).toBe("Sorocaba/SP");
+  });
+  it("bairro e distrito de Campinas/Paulínia contam como atendidos", () => {
+    expect(st("é um apartamento no Cambuí")).toBe("atendida");
+    expect(st("casa em Barão Geraldo")).toBe("atendida");
+    expect(st("a obra é em Sousas")).toBe("atendida");
+    expect(st("moro em Sousas")).toBe("desconhecida"); // onde mora não é onde é a obra
+    expect(st("obra no Betel")).toBe("atendida");
+  });
+  it("Cambuí com UF de outro estado é a cidade de Minas", () => {
+    expect(st("a obra é em Cambuí/MG")).toBe("fora");
+  });
+  it("estado não vira cidade; palavra comum não vira cidade", () => {
+    expect(st("a obra é em Campinas, eu sou de Minas")).toBe("atendida");
+    expect(st("eu sou de Minas")).toBe("desconhecida");
+    expect(st("quero uma casa bonita na serra")).toBe("desconhecida");
+    expect(st("a obra é em Campinas, perto do centro")).toBe("atendida");
+  });
+  it("Campo Grande continua região com cuidado", () => {
+    expect(st("casa de médio porte no Campo Grande")).toBe("cuidado");
   });
 });
