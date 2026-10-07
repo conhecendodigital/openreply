@@ -176,7 +176,7 @@ afterEach(() => {
 });
 
 describe("hash e normalização", () => {
-  it("e-mail minúsculo sem espaço e telefone só dígitos com DDI, em SHA-256", () => {
+  it("e-mail minúsculo sem espaço e telefone só dígitos com DDI, em SHA-256", async () => {
     expect(normalizeCapiEmail("  ANA@Ex.COM ")).toBe("ana@ex.com");
     expect(normalizeCapiEmail("não é e-mail")).toBeNull();
     expect(normalizeCapiPhone("(11) 99999-8888")).toBe("5511999998888");
@@ -191,7 +191,7 @@ describe("hash e normalização", () => {
     expect(JSON.stringify(u)).not.toContain("ana@ex.com");
   });
 
-  it("fbc a partir do fbclid: fb.1.<ms>.<fbclid>; fbp/fbc inválidos ficam de fora", () => {
+  it("fbc a partir do fbclid: fb.1.<ms>.<fbclid>; fbp/fbc inválidos ficam de fora", async () => {
     expect(fbcFromFbclid("IwAR123abc", 1_760_000_000_123)).toBe("fb.1.1760000000123.IwAR123abc");
     expect(fbcFromFbclid("", 1)).toBeNull();
     expect(fbcFromFbclid("<script>", 1)).toBeNull();
@@ -474,7 +474,7 @@ describe("chave de API não alcança", () => {
       ["POST", "/api/workspace/meta-capi/test"],
     ] as const) {
       expect(isApiKeyRouteAllowed(method, path)).toBe(false);
-      const res = proxy(new NextRequest(new URL(path, "http://localhost"), { method, headers: { authorization: "Bearer lek_123" } }));
+      const res = await proxy(new NextRequest(new URL(path, "http://localhost"), { method, headers: { authorization: "Bearer lek_123" } }));
       expect(res.status).toBe(403);
       expect((await res.json()).code).toBe("human_only");
     }

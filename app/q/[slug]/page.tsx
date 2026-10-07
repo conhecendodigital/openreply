@@ -13,6 +13,10 @@
 import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { getBaseUrl } from "@/lib/env";
+import { hostOf, isAppHost } from "@/lib/links/hosts";
+import { funnelShareMeta } from "@/lib/funnels/share";
 import { auth } from "@/lib/auth";
 import { getPrimaryWorkspace } from "@/lib/workspace";
 import { getDraftPreview, getPublishedFunnelBySlug } from "@/lib/funnels/public";
@@ -41,24 +45,33 @@ const loadFunnel = cache(async (slug: string, preview: boolean): Promise<PublicF
   return getDraftPreview(slug, workspace.id).catch(() => null);
 });
 
+/** Address of the quiz as it was opened: <quiz domain>/<slug> or <app>/q/<slug>. */
+async function shareUrl(slug: string): Promise<string> {
+  const h = await headers().catch(() => null);
+  const host = hostOf(h?.get("host") ?? h?.get("x-forwarded-host"));
+  return isAppHost(host) ? `${getBaseUrl().replace(/\/+$/, "")}/q/${slug}` : `https://${host}/${slug}`;
+}
+
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug } = await params;
   const preview = first((await searchParams).preview) === "1";
   const funnel = await loadFunnel(slug, preview);
   if (!funnel) return { title: "Página não encontrada", robots: { index: false, follow: false } };
   const seo = funnel.settings.seo ?? {};
-  const title = seo.title?.trim() || funnel.name;
-  const description = seo.description?.trim() || undefined;
-  // No share image of its own: the Lead Engine card, so WhatsApp and Instagram show the brand.
-  const image = seo.imageUrl?.trim() && !seo.imageUrl.includes(".invalid") ? seo.imageUrl.trim() : "/og-lead-engine.png";
+  // 07/10/2026: the card of a shared quiz is the quiz's cover (sharing image,
+  // else the first image of the cover), never the Lead Engine card. Same tags
+  // as the preview of a tracked link to it (lib/links/preview.ts).
+  const share = funnelShareMeta(funnel, getBaseUrl());
+  const { title, description, imageUrl } = share;
   const indexable = !preview && seo.indexable === true;
+  const url = await shareUrl(slug);
   return {
     // The browser tab always shows the app name too.
     title: `${title} · Lead Engine`,
     description,
     robots: { index: indexable, follow: indexable },
-    openGraph: { title, description, type: "website", siteName: "Lead Engine", images: [{ url: image }] },
-    twitter: { card: "summary_large_image", title, description, images: [image] },
+    openGraph: { title, description, type: "website", url, ...(imageUrl ? { images: [{ url: imageUrl }] } : {}) },
+    twitter: { card: imageUrl ? "summary_large_image" : "summary", title, description, ...(imageUrl ? { images: [imageUrl] } : {}) },
   };
 }
 

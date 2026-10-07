@@ -103,7 +103,7 @@ describe("proxy: chave de API só nas rotas do MCP", () => {
     ["DELETE", "/api/channels/c1"],
     ["GET", "/api/admin/diagnostics"],
   ])("%s %s com Bearer = 403", async (method, path) => {
-    const res = proxy(req(path, method, BEARER));
+    const res = await proxy(req(path, method, BEARER));
     expect(res.status).toBe(403);
     expect((await res.json()).code).toBe("human_only");
   });
@@ -116,21 +116,21 @@ describe("proxy: chave de API só nas rotas do MCP", () => {
     ["PATCH", "/api/automations"],
     ["POST", "/api/drafts/d1/approve"],
     ["POST", "/api/broadcasts"],
-  ])("%s %s com Bearer passa (a rota decide)", (method, path) => {
-    expect(proxy(req(path, method, BEARER)).headers.get("x-middleware-next")).toBe("1");
+  ])("%s %s com Bearer passa (a rota decide)", async (method, path) => {
+    expect((await proxy(req(path, method, BEARER))).headers.get("x-middleware-next")).toBe("1");
   });
 
-  it("sem Authorization nada muda (tela, webhook da Meta, login)", () => {
+  it("sem Authorization nada muda (tela, webhook da Meta, login)", async () => {
     for (const [method, path] of [["POST", "/api/webhook"], ["DELETE", "/api/automations"], ["POST", "/api/workspace/members"]]) {
-      expect(proxy(req(path, method)).headers.get("x-middleware-next")).toBe("1");
+      expect((await proxy(req(path, method))).headers.get("x-middleware-next")).toBe("1");
     }
   });
 
-  it("o proxy roda em todas as rotas (inclusive /api), menos os arquivos estáticos do build", () => {
+  it("o proxy roda em todas as rotas (inclusive /api), menos os arquivos estáticos do build", async () => {
     expect(proxyConfig.matcher).toEqual(["/((?!_next/static|_next/image).*)"]);
   });
 
-  it("toda rota do lib/mcp/routes.ts está liberada pra chave (MCP não quebra)", () => {
+  it("toda rota do lib/mcp/routes.ts está liberada pra chave (MCP não quebra)", async () => {
     const source = readFileSync(join(__dirname, "../lib/mcp/routes.ts"), "utf8");
     const patterns = [...source.matchAll(/\[\/(\^\\\/api[^\s]*?\$)\/,/g)].map((m) => m[1]);
     expect(patterns.length).toBeGreaterThan(30);
@@ -158,7 +158,7 @@ describe("headers de segurança", () => {
     expect(map["Content-Security-Policy"]).toContain("frame-ancestors 'none'");
   });
 
-  it("a CSP não bloqueia imagem da Meta nem script do Next (sem default-src/img-src/script-src)", () => {
+  it("a CSP não bloqueia imagem da Meta nem script do Next (sem default-src/img-src/script-src)", async () => {
     const csp = SECURITY_HEADERS.find((x) => x.key === "Content-Security-Policy")!.value;
     expect(csp).not.toMatch(/default-src|img-src|script-src|connect-src/);
   });
@@ -229,7 +229,7 @@ describe("webhook da Meta", () => {
     expect(h.prisma.webhookEvent.create).not.toHaveBeenCalled();
   });
 
-  it("o teto é folgado pra payload real da Meta (5 MB)", () => {
+  it("o teto é folgado pra payload real da Meta (5 MB)", async () => {
     expect(MAX_WEBHOOK_BODY_BYTES).toBeGreaterThanOrEqual(5 * 1024 * 1024);
   });
 
@@ -258,7 +258,7 @@ describe("webhook da Meta", () => {
 });
 
 describe("cron", () => {
-  it("sem CRON_SECRET e sem NEXTAUTH_SECRET nunca passa (nem 'Bearer undefined')", () => {
+  it("sem CRON_SECRET e sem NEXTAUTH_SECRET nunca passa (nem 'Bearer undefined')", async () => {
     vi.stubEnv("CRON_SECRET", "");
     vi.stubEnv("NEXTAUTH_SECRET", "");
     expect(isCronAuthorized("Bearer undefined")).toBe(false);
@@ -266,7 +266,7 @@ describe("cron", () => {
     expect(isCronAuthorized(null)).toBe(false);
   });
 
-  it("CRON_SECRET certo passa; o fallback NEXTAUTH_SECRET continua valendo por enquanto", () => {
+  it("CRON_SECRET certo passa; o fallback NEXTAUTH_SECRET continua valendo por enquanto", async () => {
     vi.stubEnv("CRON_SECRET", "segredo-do-cron");
     expect(isCronAuthorized("Bearer segredo-do-cron")).toBe(true);
     expect(isCronAuthorized("Bearer segredo-do-cro")).toBe(false);
@@ -277,7 +277,7 @@ describe("cron", () => {
 });
 
 describe("mídia do inbox", () => {
-  it("foto/vídeo/áudio abrem inline; html, svg e desconhecido viram download", () => {
+  it("foto/vídeo/áudio abrem inline; html, svg e desconhecido viram download", async () => {
     expect(mediaHeaders("image/jpeg")["Content-Type"]).toBe("image/jpeg");
     expect(mediaHeaders("video/mp4")["Content-Disposition"]).toBeUndefined();
     expect(mediaHeaders("audio/mpeg")["Content-Type"]).toBe("audio/mpeg");
@@ -342,29 +342,29 @@ describe("quiz (funis)", () => {
     ["GET", "/api/funnels/f1/leads/export"],
     ["DELETE", "/api/funnels/f1"],
   ])("%s %s com Bearer = 403 no proxy", async (method, path) => {
-    const res = proxy(req(path, method, BEARER));
+    const res = await proxy(req(path, method, BEARER));
     expect(res.status).toBe(403);
     expect((await res.json()).code).toBe("human_only");
   });
 
-  it("rascunho por chave passa (a rota decide)", () => {
+  it("rascunho por chave passa (a rota decide)", async () => {
     for (const [method, path] of [["POST", "/api/funnels"], ["PATCH", "/api/funnels/f1"], ["GET", "/api/funnels/f1/results"]]) {
-      expect(proxy(req(path, method, BEARER)).headers.get("x-middleware-next"), path).toBe("1");
+      expect((await proxy(req(path, method, BEARER))).headers.get("x-middleware-next"), path).toBe("1");
     }
   });
 
-  it("APIs públicas do quiz e webhook da Hotmart sem Authorization passam", () => {
+  it("APIs públicas do quiz e webhook da Hotmart sem Authorization passam", async () => {
     for (const path of ["/api/q/chat/event", "/api/q/chat/lead", "/api/webhooks/hotmart"]) {
-      expect(proxy(req(path, "POST")).headers.get("x-middleware-next"), path).toBe("1");
+      expect((await proxy(req(path, "POST"))).headers.get("x-middleware-next"), path).toBe("1");
     }
   });
 
-  it("/quizzes deslogado vai pro login; /q é público", () => {
-    const res = proxy(req("/quizzes/f1"));
+  it("/quizzes deslogado vai pro login; /q é público", async () => {
+    const res = await proxy(req("/quizzes/f1"));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/login?callbackUrl=%2Fquizzes%2Ff1");
     // /q passa direto no host do painel (público, sem login).
-    const q = proxy(req("/q/qualquer"));
+    const q = await proxy(req("/q/qualquer"));
     expect(q.headers.get("x-middleware-next")).toBe("1");
     expect(q.headers.get("location")).toBeNull();
   });

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isApiKeyRouteAllowed } from "@/lib/api-key-routes";
+import { hostOf, isAppHost, listedQuizDomains } from "@/lib/links/hosts";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/automations", "/logs", "/settings", "/quizzes", "/admin", "/account", "/whatsapp"];
 
@@ -14,10 +15,6 @@ export function hasSessionCookie(request: NextRequest): boolean {
   );
 }
 
-function hostOf(value: string | null | undefined): string {
-  return (value ?? "").split(",")[0].trim().toLowerCase().replace(/:\d+$/, "");
-}
-
 /**
  * Quiz domain (owner's request 05/10: "camuflar o link do quiz"): a domain of
  * the owner pointed at this app, like quiz.cloudmatheus.com.br, only shows
@@ -27,20 +24,33 @@ function hostOf(value: string | null | undefined): string {
  */
 export function isQuizHost(host: string, env: Record<string, string | undefined> = process.env): boolean {
   if (!host) return false;
-  const listed = (env.QUIZ_DOMAINS ?? "").split(",").map((h) => hostOf(h)).filter(Boolean);
+  const listed = listedQuizDomains(env);
   if (listed.length) return listed.includes(host);
-  let appHost = "";
+  // App host, local development and internal service names (Docker/Dokploy,
+  // e.g. openreply-web-qsbqgu:3000, used by the cron) are the app. Without
+  // NEXTAUTH_URL we cannot tell: behave as the app.
+  return !isAppHost(host, env);
+}
+
+/**
+ * Link domain (07/10/2026): the host a workspace saved for its tracked links
+ * (Workspace.linkDomain, e.g. comando.cloudmatheus.com.br). Looked up in the
+ * database only for a host that is not the app (cached 60 s). Any error = not
+ * a link domain.
+ */
+async function isLinkDomainHost(host: string): Promise<boolean> {
   try {
-    appHost = env.NEXTAUTH_URL ? new URL(env.NEXTAUTH_URL).hostname.toLowerCase() : "";
+    const { workspaceForLinkHost } = await import("@/lib/links/domain");
+    return Boolean(await workspaceForLinkHost(host));
   } catch {
-    appHost = "";
+    return false;
   }
-  if (!appHost) return false; // without the app host we cannot tell: behave as the app
-  if (host === appHost) return false;
-  if (host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.endsWith(".localhost")) return false;
-  // Internal service names (Docker/Dokploy, e.g. openreply-web-qsbqgu:3000, used by the cron) have no dot.
-  if (!host.includes(".")) return false;
-  return true;
+}
+
+/** A link domain shows /r/* (handled before) and the icons. Nothing else of the app. */
+function linkHostResponse(request: NextRequest): NextResponse {
+  if (QUIZ_HOST_FILES.has(request.nextUrl.pathname)) return NextResponse.next();
+  return new NextResponse("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
 }
 
 const QUIZ_HOST_FILES = new Set([
@@ -69,10 +79,17 @@ export function quizHostResponse(request: NextRequest): NextResponse {
   return new NextResponse("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
 
   const host = hostOf(request.headers.get("host") ?? request.headers.get("x-forwarded-host"));
+  if (host && !isAppHost(host)) {
+    // Tracked links on a link domain. The route itself refuses a host that is
+    // not the link domain of the link's workspace (lib/links/redirect.ts).
+    if (pathname.startsWith("/r/")) return NextResponse.next();
+    // A link domain only opens /r/*, unless it is also listed in QUIZ_DOMAINS.
+    if (!listedQuizDomains().includes(host) && (await isLinkDomainHost(host))) return linkHostResponse(request);
+  }
   if (isQuizHost(host)) return quizHostResponse(request);
 
   // API keys reach only the routes in lib/api-key-routes.ts (MCP, cron and

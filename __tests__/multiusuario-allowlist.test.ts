@@ -65,7 +65,7 @@ describe("allowlist do beta", () => {
     expect(await as("qualquer@ex.com")).toBe(false);
   });
 
-  it("e-mail da allowlist é sempre normalizado", () => {
+  it("e-mail da allowlist é sempre normalizado", async () => {
     expect(normalizeAllowlistEmail("  Bia@Ex.COM ")).toBe("bia@ex.com");
     expect(normalizeAllowlistEmail("não é email")).toBeNull();
   });
@@ -75,20 +75,20 @@ describe("proxy com o cookie do login novo", () => {
   const req = (path: string, cookie?: string) =>
     new NextRequest(new URL(path, "http://localhost"), { headers: cookie ? { cookie } : {} });
 
-  it("reconhece o cookie do Better Auth e ignora o do NextAuth", () => {
+  it("reconhece o cookie do Better Auth e ignora o do NextAuth", async () => {
     expect(hasSessionCookie(req("/dashboard", "better-auth.session_token=x"))).toBe(true);
     expect(hasSessionCookie(req("/dashboard", "__Secure-better-auth.session_token=x"))).toBe(true);
     expect(hasSessionCookie(req("/dashboard", "authjs.session-token=velho"))).toBe(false);
   });
 
-  it("cookie velho do NextAuth manda pro login, e /login não volta pro painel sozinho (sem laço)", () => {
-    const r = proxy(req("/settings", "__Secure-authjs.session-token=velho"));
+  it("cookie velho do NextAuth manda pro login, e /login não volta pro painel sozinho (sem laço)", async () => {
+    const r = await proxy(req("/settings", "__Secure-authjs.session-token=velho"));
     expect(r.headers.get("location")).toContain("/login?callbackUrl=%2Fsettings");
-    expect(proxy(req("/login", "better-auth.session_token=vencido")).headers.get("location")).toBeNull();
+    expect((await proxy(req("/login", "better-auth.session_token=vencido"))).headers.get("location")).toBeNull();
   });
 
-  it("/admin e /account também pedem login", () => {
-    expect(proxy(req("/admin")).headers.get("location")).toContain("/login");
-    expect(proxy(req("/account/two-factor")).headers.get("location")).toContain("/login");
+  it("/admin e /account também pedem login", async () => {
+    expect((await proxy(req("/admin"))).headers.get("location")).toContain("/login");
+    expect((await proxy(req("/account/two-factor"))).headers.get("location")).toContain("/login");
   });
 });
