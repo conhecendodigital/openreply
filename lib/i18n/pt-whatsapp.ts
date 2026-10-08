@@ -366,6 +366,8 @@ export const ptWhatsapp: Record<string, string> = {
   "Delete the saved conversations?": "Apagar as conversas guardadas?",
   "Delete conversations": "Apagar conversas",
   "Number deleted": "Número removido",
+  "All numbers": "Todos os números",
+  "Show conversations from": "Mostrar conversas do número",
   "This number was deleted. The conversation stays saved only for reading.":
     "Esse número foi removido. A conversa continua guardada só pra leitura.",
   "This number was deleted, so this media is not available anymore.": "Esse número foi removido, então essa mídia não está mais disponível.",

@@ -62,6 +62,19 @@ type Thread = {
 };
 
 const LIST_POLL_MS = 5_000;
+const NUMBER_KEY = "wa-inbox-number";
+
+type SessionRow = { id: string; phoneE164: string | null; displayName: string | null };
+type RemovedRow = SessionRow & { conversationCount: number };
+type NumberOption = { id: string; label: string; removed: boolean };
+
+/** Nome do número como na tela de Conexões: o nome dado, com o telefone ao lado. */
+function numberLabel(x: SessionRow): string {
+  const phone = formatPhone(x.phoneE164);
+  const name = x.displayName?.trim();
+  if (name && phone) return `${name} · ${phone}`;
+  return name || phone || "WhatsApp";
+}
 const THREAD_POLL_MS = 3_000;
 
 function contactName(c: Contact): string {
@@ -122,6 +135,9 @@ export default function WhatsAppInboxPage() {
   const stageName = useStageName();
   const [filter, setFilter] = useState<"all" | "unread" | "drafts">("all");
   const [stageFilter, setStageFilter] = useState<LeadStage | "">("");
+  // 2026-10-08: escolher de qual número aparecem as conversas (cada número é um cliente).
+  const [numbers, setNumbers] = useState<NumberOption[]>([]);
+  const [numberFilter, setNumberFilter] = useState<string>("");
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [list, setList] = useState<Conversation[] | null>(null);
@@ -142,17 +158,50 @@ export default function WhatsAppInboxPage() {
     return () => window.clearTimeout(id);
   }, [query]);
 
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(NUMBER_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restaura a escolha uma vez
+      if (saved) setNumberFilter(saved);
+    } catch {
+      /* navegador sem armazenamento: começa em todos os números */
+    }
+    void api<{ sessions: SessionRow[]; removed?: RemovedRow[] }>("/api/whatsapp/sessions").then((r) => {
+      if (!r.ok) return;
+      const ativos = r.data.sessions.map((x) => ({ id: x.id, label: numberLabel(x), removed: false }));
+      const removidos = (r.data.removed ?? [])
+        .filter((x) => x.conversationCount > 0)
+        .map((x) => ({ id: x.id, label: numberLabel(x), removed: true }));
+      const todos = [...ativos, ...removidos];
+      setNumbers(todos);
+      setNumberFilter((cur) => (cur && !todos.some((n) => n.id === cur) ? "" : cur));
+    });
+  }, []);
+
+  function chooseNumber(id: string) {
+    setNumberFilter(id);
+    try {
+      if (id) window.localStorage.setItem(NUMBER_KEY, id);
+      else window.localStorage.removeItem(NUMBER_KEY);
+    } catch {
+      /* sem armazenamento: vale só nesta visita */
+    }
+  }
+
+  const numberName = useMemo(() => new Map(numbers.map((n) => [n.id, n.label])), [numbers]);
+
   const loadList = useCallback(async () => {
     const params = new URLSearchParams();
     if (filter !== "all") params.set("filter", filter);
     if (debounced) params.set("q", debounced);
     if (stageFilter) params.set("stage", stageFilter);
+    if (numberFilter) params.set("sessionId", numberFilter);
     const r = await api<{ conversations: Conversation[] }>(`/api/whatsapp/conversations?${params}`);
     if (r.ok) {
       setList(r.data.conversations);
       setListError(null);
     } else setListError(t(r.error));
-  }, [filter, debounced, stageFilter, t]);
+  }, [filter, debounced, stageFilter, numberFilter, t]);
 
   // ?c=<id>: abre a conversa vinda do quadro de Leads.
   useEffect(() => {
@@ -263,6 +312,21 @@ export default function WhatsAppInboxPage() {
         {/* Lista. No celular some quando uma conversa está aberta. */}
         <div className={`min-h-0 flex-col border-border sm:flex sm:border-r ${activeId ? "hidden" : "flex"}`}>
           <div className="shrink-0 space-y-2 border-b border-border p-3">
+            {numbers.length > 0 && (
+              <select
+                value={numberFilter}
+                onChange={(e) => chooseNumber(e.target.value)}
+                aria-label={t("Show conversations from")}
+                className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm font-medium text-foreground focus:border-accent/40 focus:outline-none"
+              >
+                <option value="">{t("All numbers")}</option>
+                {numbers.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.removed ? `${n.label} (${t("Number deleted")})` : n.label}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               type="search"
               value={query}
@@ -311,7 +375,7 @@ export default function WhatsAppInboxPage() {
               <p className="px-4 py-6 text-sm text-error">{listError}</p>
             ) : list && list.length === 0 ? (
               <p className="px-4 py-6 text-sm text-muted">
-                {debounced || filter !== "all" || stageFilter ? t("Nothing found.") : t("No WhatsApp conversations yet. When someone writes to your number, it shows up here.")}
+                {debounced || filter !== "all" || stageFilter || numberFilter ? t("Nothing found.") : t("No WhatsApp conversations yet. When someone writes to your number, it shows up here.")}
               </p>
             ) : (
               (list ?? []).map((c) => (
@@ -329,6 +393,9 @@ export default function WhatsAppInboxPage() {
                       <span className={`truncate text-sm ${c.unreadCount > 0 ? "font-bold" : "font-medium"} text-foreground`}>{contactName(c.contact)}</span>
                       <span className={`shrink-0 text-[11px] ${c.unreadCount > 0 ? "font-semibold text-[#1fa855]" : "text-zinc-500"}`}>{shortTime(c.lastMessageAt)}</span>
                     </span>
+                    {!numberFilter && numbers.length > 1 && numberName.get(c.sessionId) && (
+                      <span className="block truncate text-[11px] font-medium text-[#0a7c3b]">{numberName.get(c.sessionId)}</span>
+                    )}
                     <span className="mt-0.5 flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-xs text-muted">{c.lastMessagePreview || " "}</span>
                       {c.stage && c.stage !== "novo" && <StageBadge stage={c.stage} manual={c.stageManual} />}
