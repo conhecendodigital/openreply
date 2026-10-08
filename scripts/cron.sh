@@ -48,6 +48,7 @@ echo "[cron] scheduler started, target $BASE_URL"
 
 last_slot=""
 last_daily=""
+last_wa=""
 
 while true; do
   now=$(date -u '+%Y-%m-%d %H:%M')
@@ -76,6 +77,13 @@ while true; do
     last_daily="$today"
     call refresh-tokens
     call snapshot-followers
+  fi
+
+  # 6h de Brasília (09 UTC): textos programados do WhatsApp, 10 por conversa
+  # por dia (2026-10-08: os roteiros do dia pro dono copiar no Edits).
+  if [ "$hour" = "09" ] && [ "$last_wa" != "$today" ]; then
+    last_wa="$today"
+    call whatsapp-programados
   fi
 
   # Half a minute: short enough never to skip a slot, long enough to stay idle.

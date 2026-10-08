@@ -48,6 +48,7 @@ import * as funnelsRoute from "@/app/api/funnels/route";
 import * as funnelRoute from "@/app/api/funnels/[id]/route";
 import * as funnelDuplicateRoute from "@/app/api/funnels/[id]/duplicate/route";
 import * as funnelResultsRoute from "@/app/api/funnels/[id]/results/route";
+import * as waProgramadosEnviadosRoute from "@/app/api/whatsapp/programados/enviados/route";
 
 export type Handler = (
   request: NextRequest,
@@ -103,6 +104,7 @@ export function resolveHandler(
     [/^\/api\/funnels\/([^/]+)\/duplicate$/, funnelDuplicateRoute],
     [/^\/api\/funnels\/([^/]+)\/results$/, funnelResultsRoute],
     [/^\/api\/funnels\/([^/]+)$/, funnelRoute],
+    [/^\/api\/whatsapp\/programados\/enviados$/, waProgramadosEnviadosRoute],
   ];
   for (const [pattern, mod, param] of routes) {
     const match = pattern.exec(pathname);

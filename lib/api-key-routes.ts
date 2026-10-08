@@ -53,6 +53,8 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   /^\/api\/funnels\/[^/]+\/duplicate$/,
   /^\/api\/funnels\/[^/]+\/results$/,
   /^\/api\/funnels\/[^/]+$/,
+  // 2026-10-08: só leitura do que os textos programados do WhatsApp já mandaram (sem o texto).
+  /^\/api\/whatsapp\/programados\/enviados$/,
 ];
 
 /** True when a request with an Authorization header may reach this route. */

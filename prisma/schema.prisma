@@ -139,6 +139,7 @@ model Workspace {
   waAgentCases       WaAgentLearningCase[]
   waAgentSuggestions WaAgentSuggestion[]
   waLeadStageEvents  WaLeadStageEvent[]
+  waScheduledTexts   WaScheduledText[]
   waKnowledgeDocs    WaKnowledgeDocument[]
   waKnowledgeChunks  WaKnowledgeChunk[]
   waContactMemories  WaContactMemory[]
@@ -1963,6 +1964,7 @@ model WaConversation {
   labels      WaConversationLabel[]
   agentRuns   WaAgentRun[]
   stageEvents WaLeadStageEvent[]
+  scheduledTexts WaScheduledText[]
 
   @@unique([sessionId, contactId])
   @@index([workspaceId, archivedAt, pinnedAt(sort: Desc), lastMessageAt(sort: Desc)])
@@ -2502,4 +2504,29 @@ model WorkspaceIntegrationAudit {
 
   @@index([workspaceId, createdAt])
   @@schema("public")
+}
+
+/// 2026-10-08: textos programados por conversa (lib/whatsapp/programados.ts).
+/// Saem 10 por dia às 6h de Brasília (cron whatsapp-programados).
+model WaScheduledText {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  workspaceId    String
+  conversationId String
+  /// Ex.: "R507". Único por conversa.
+  label          String
+  text           String
+  position       Int
+  /// PENDING | QUEUED | REMOVED
+  status         String    @default("PENDING")
+  queuedAt       DateTime?
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation WaConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, label])
+  @@index([workspaceId, status, position])
+  @@index([conversationId, status, position])
+  @@schema("whatsapp")
 }
