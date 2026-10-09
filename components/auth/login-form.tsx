@@ -46,14 +46,17 @@ export function LoginForm({
   callbackUrl,
   googleEnabled,
   initialError,
+  initialMode = "password",
 }: {
   callbackUrl: string;
   googleEnabled: boolean;
   initialError: string | null;
+  /** /signup abre no link por e-mail: é ele (ou o Google) que cria a conta. */
+  initialMode?: "password" | "link";
 }) {
   const t = useT();
   const router = useRouter();
-  const [mode, setMode] = useState<"password" | "link">("password");
+  const [mode, setMode] = useState<"password" | "link">(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);

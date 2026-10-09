@@ -26,6 +26,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 import { LangSwitch, useT } from "@/components/lang-provider";
 import type { AdminMenuState } from "@/lib/platform-admin";
 
@@ -222,6 +223,34 @@ export function adminSection(state: AdminMenuState | null | undefined): NavSecti
 }
 
 /** Marca: ícone com o gradiente do Instagram + nome. */
+/** Sair da conta, sempre à mão no rodapé do menu (09/10/2026, pedido do dono). */
+function SignOutButton() {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  async function signOut() {
+    setBusy(true);
+    try {
+      await authClient.signOut();
+    } finally {
+      // Recarrega de verdade: nada da sessão antiga fica na memória da página.
+      window.location.assign("/login");
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={signOut}
+      disabled={busy}
+      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-muted hover:bg-surface-hover hover:text-red-600 disabled:opacity-60"
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" />
+      </svg>
+      {busy ? t("Signing out...") : t("Sign out")}
+    </button>
+  );
+}
+
 export function LeadEngineLogo({ className = "" }: { className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
@@ -377,6 +406,7 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
             </div>
             <LangSwitch />
           </div>
+          <SignOutButton />
         </div>
       </aside>
     </>

@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getCampaignTemplate } from "@/lib/templates/campaign-templates";
-import { DemoNotice } from "@/components/demo-notice";
 import LegalCompanyLine from "@/components/legal-company-line";
 import { getT } from "@/lib/i18n/server";
 import { LeadEngineLogo } from "@/components/sidebar";
@@ -13,33 +11,29 @@ import { isGoogleLoginConfigured } from "@/lib/better-auth";
 import { safeCallbackPath } from "@/lib/auth-config";
 
 /**
- * Login (2026-10-04, visual do instagram.com). Fase 0 (06/10/2026): login
- * novo com três jeitos de entrar: senha, Google e link por e-mail.
+ * Criar conta (09/10/2026, pedido do dono). Não abre cadastro por senha
+ * (disableSignUp continua true): a conta nasce no primeiro link por e-mail ou
+ * no Google, e só pra quem tem acesso (ALLOWED_EMAILS, lista do beta ou convite
+ * de equipe, ver lib/auth-signin.ts). A senha a pessoa cria depois em
+ * Configurações, Segurança. Assim ninguém cria conta com o e-mail de outro.
  */
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
   return {
-    title: t("Sign in - Lead Engine"),
-    description: t("Sign in to manage your Instagram comment and Direct automations."),
+    title: t("Create account - Lead Engine"),
+    description: t("Create your Lead Engine account with an email link or Google."),
   };
 }
 
-export default async function LoginPage({
+export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    callbackUrl?: string;
-    template?: string;
-    error?: string;
-  }>;
+  searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
   const t = await getT();
   const params = await searchParams;
-  const selectedTemplate = getCampaignTemplate(params.template);
-  const templateCallbackUrl = selectedTemplate ? `/campaigns/new?template=${selectedTemplate.slug}` : null;
-  const callbackUrl = safeCallbackPath(params.callbackUrl ?? templateCallbackUrl ?? "/dashboard", "http://local.invalid");
+  const callbackUrl = safeCallbackPath(params.callbackUrl ?? "/dashboard", "http://local.invalid");
 
-  // Já logado de verdade (sessão conferida no banco, não só o cookie)? Vai pro painel.
   const session = await auth().catch(() => null);
   if (session) redirect(callbackUrl);
 
@@ -47,43 +41,36 @@ export default async function LoginPage({
     <div className="flex min-h-screen flex-col bg-[#fafafa] text-foreground">
       <main className="flex flex-1 flex-col items-center justify-center px-4 py-10">
         <div className="w-full max-w-[350px] space-y-3">
-          <DemoNotice variant="panel" />
-
           <div className="rounded-xl border border-border bg-white px-6 pb-8 pt-10 sm:px-10">
             <h1 className="flex justify-center text-foreground">
               <LeadEngineLogo className="scale-125" />
             </h1>
             <p className="mt-6 text-center text-[15px] font-semibold leading-snug text-muted">
-              {selectedTemplate
-                ? t("Sign in to use the {name} template.", { name: t(selectedTemplate.title) })
-                : t("Sign in to manage your comments, Direct and contacts.")}
+              {t("Create your account to manage your comments, Direct and contacts.")}
             </p>
-
-            {selectedTemplate && (
-              <div className="mt-5 rounded-lg border border-border bg-[#fafafa] px-4 py-3">
-                <p className="text-xs font-semibold text-muted">{t("Template selected")}</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{t(selectedTemplate.title)}</p>
-              </div>
-            )}
 
             <LoginForm
               callbackUrl={callbackUrl}
               googleEnabled={isGoogleLoginConfigured()}
               initialError={params.error ?? null}
+              initialMode="link"
             />
+
+            <ol className="mt-6 space-y-1 text-xs leading-relaxed text-muted">
+              <li>{t("1. Type your email and get the link (or use Google).")}</li>
+              <li>{t("2. Open the link: your account is created on the spot.")}</li>
+              <li>{t("3. Create your password in Settings, Security.")}</li>
+            </ol>
           </div>
 
           <div className="rounded-xl border border-border bg-white px-6 py-5 text-center text-sm">
-            <p className="font-semibold text-foreground">{t("First time here?")}</p>
-            <p className="mt-1 text-muted">
-              {t("Ask for the link by email or use Google. If your email has access, your account is created on the spot.")}
+            <p className="text-muted">
+              {t("Only emails with access get the link. No access yet? Ask whoever invited you to add your email.")}
             </p>
-            <p className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
-              <Link href="/signup" className="font-semibold text-accent hover:underline">
-                {t("Create account")}
-              </Link>
-              <Link href="/" className="font-semibold text-accent hover:underline">
-                {t("Get to know Lead Engine")}
+            <p className="mt-3">
+              {t("Already have an account?")}{" "}
+              <Link href="/login" className="font-semibold text-accent hover:underline">
+                {t("Sign in")}
               </Link>
             </p>
           </div>
@@ -95,7 +82,6 @@ export default async function LoginPage({
           <Link href="/" className="hover:underline">{t("Lead Engine")}</Link>
           <Link href="/privacy" className="hover:underline">{t("Privacy")}</Link>
           <Link href="/terms" className="hover:underline">{t("Terms")}</Link>
-          <Link href="/data-deletion" className="hover:underline">{t("Data deletion")}</Link>
         </nav>
         <div className="mt-4 flex items-center justify-center gap-2">
           <span>{t("Language")}</span>
