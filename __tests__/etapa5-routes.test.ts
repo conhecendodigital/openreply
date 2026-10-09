@@ -429,6 +429,8 @@ describe("MCP", () => {
     expect(resolveHandler("POST", "/api/segments/count")?.id).toBe("");
     expect(resolveHandler("GET", "/api/segments/s_1")?.id).toBe("s_1");
     expect(resolveHandler("GET", "/api/reports")).not.toBeNull();
+    // ver_canais answered 404 "No route" before.
+    expect(resolveHandler("GET", "/api/channels")).not.toBeNull();
     expect(resolveHandler("POST", "/api/broadcasts")).not.toBeNull();
     expect(resolveHandler("POST", "/api/broadcasts/b_1/cancel")?.id).toBe("b_1");
     // No way to send or to publish through the MCP router.

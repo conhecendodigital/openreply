@@ -42,6 +42,9 @@ import * as broadcastsRoute from "@/app/api/broadcasts/route";
 import * as broadcastRoute from "@/app/api/broadcasts/[id]/route";
 import * as broadcastCancelRoute from "@/app/api/broadcasts/[id]/cancel/route";
 import * as reportsRoute from "@/app/api/reports/route";
+// ver_canais: the tool existed but the route was missing here, so it answered
+// 404 "No route".
+import * as channelsRoute from "@/app/api/channels/route";
 // Etapa 6 (quiz). No publish / unpublish / leads route: an API key only
 // creates and edits DRAFTS and reads the numbers.
 import * as funnelsRoute from "@/app/api/funnels/route";
@@ -99,6 +102,7 @@ export function resolveHandler(
     [/^\/api\/broadcasts\/([^/]+)\/cancel$/, broadcastCancelRoute],
     [/^\/api\/broadcasts\/([^/]+)$/, broadcastRoute],
     [/^\/api\/reports$/, reportsRoute],
+    [/^\/api\/channels$/, channelsRoute],
     // Etapa 6. Static paths before the [id] patterns.
     [/^\/api\/funnels$/, funnelsRoute],
     [/^\/api\/funnels\/([^/]+)\/duplicate$/, funnelDuplicateRoute],
