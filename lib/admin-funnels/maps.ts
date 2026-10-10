@@ -71,7 +71,7 @@ export const FUNNEL_MAPS: FunnelMap[] = [
   {
     // 10/10/2026: o funil da semana do workshop gratuito (pra mostrar pra equipe como a venda vai rodar).
     id: "workshop",
-    name: t("Workshop Chat Sem Frescura (16/10)", "Chat Sem Frescura workshop (Oct 16)"),
+    name: t("Workshop Chat Sem Frescura (15/10)", "Chat Sem Frescura workshop (Oct 15)"),
     nodes: [
       { id: "ig", kind: "instagram", label: t("Post com QUERO", "Post asking for QUERO"), x: 0, y: 140 },
       { id: "dm", kind: "dm", label: t("DM em conversa", "Conversational DM"), x: 190, y: 140 },
@@ -80,7 +80,7 @@ export const FUNNEL_MAPS: FunnelMap[] = [
       { id: "vip-paid", kind: "paid", label: t("VIP pago", "VIP paid"), x: 860, y: -80 },
       { id: "grupo", kind: "whatsapp", label: t("Grupo de avisos", "Announcements group"), x: 640, y: 140 },
       { id: "lives", kind: "call", label: t("Lives seg, ter e qua", "Lives Mon to Wed"), x: 820, y: 140 },
-      { id: "aula", kind: "call", label: t("Aula ao vivo quinta 20h", "Live class Thursday 8pm"), x: 1000, y: 140 },
+      { id: "aula", kind: "call", label: t("Aula ao vivo quinta 19h", "Live class Thursday 7pm"), x: 1000, y: 140 },
       { id: "oferta", kind: "page-sales", label: t("Oferta do Chat Sem Frescura", "Chat Sem Frescura offer"), x: 1180, y: 90 },
       { id: "paid", kind: "paid", label: t("Compra aprovada", "Purchase approved"), x: 1420, y: 30 },
       { id: "lost", kind: "lost", label: t("Não comprou", "Didn't buy"), x: 1420, y: 250 },
