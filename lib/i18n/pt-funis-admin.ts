@@ -21,4 +21,6 @@ export const ptFunisAdmin: Record<string, string> = {
   "Known strategies, built with the pieces the Lead Engine already has.": "Estratégias conhecidas, montadas com as peças que o Lead Engine já tem.",
   "Fits:": "Serve pra:",
   "Watch:": "Acompanhe:",
+  "Funnel map": "Mapa do funil",
+  "Drag the blocks to look closer. Dashed arrows are the recovery messages.": "Arraste os blocos pra olhar melhor. As setas tracejadas são as mensagens de recuperação.",
 };
