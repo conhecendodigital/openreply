@@ -10,12 +10,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useLang, useT } from "@/components/lang-provider";
 import { flowApi } from "@/components/flows/flow-shared";
 import { funnelApi } from "@/components/funnels/funnel-api";
 import { biggestLeak, buildStages, sumQuizzes, type BoardStage } from "@/lib/admin-funnels/board";
 import { FUNNEL_TEMPLATES, templateText } from "@/lib/admin-funnels/templates";
 import type { FunnelResults, FunnelSummary } from "@/lib/funnels/types";
+import { FUNNEL_MAPS, mapText } from "@/lib/admin-funnels/maps";
+
+// xyflow só no navegador (mesmo jeito do editor de Fluxos).
+const FunnelMapView = dynamic(() => import("@/components/admin-funnels/funnel-map"), { ssr: false });
 
 type ReportFunnel = { funnel: { commented: number; received: number; clicked: number } };
 type QuizRow = { id: string; name: string; results: FunnelResults["totals"] };
@@ -29,6 +34,7 @@ export function FunisBoard() {
   const [report, setReport] = useState<ReportFunnel["funnel"] | null>(null);
   const [quizzes, setQuizzes] = useState<QuizRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mapId, setMapId] = useState(FUNNEL_MAPS[0].id);
 
   useEffect(() => {
     let alive = true;
@@ -67,6 +73,11 @@ export function FunisBoard() {
     return buildStages({ commented: report.commented, received: report.received, clicked: report.clicked, ...q });
   }, [report, quizzes]);
   const leak = stages ? biggestLeak(stages) : null;
+  const map = FUNNEL_MAPS.find((m) => m.id === mapId) ?? FUNNEL_MAPS[0];
+  const metrics = useMemo(
+    () => (stages && mapId === "hoje" ? Object.fromEntries(stages.map((s) => [s.key, s.count])) : undefined),
+    [stages, mapId]
+  );
 
   const label: Record<BoardStage["key"], string> = {
     commented: t("People who commented"),
@@ -141,6 +152,25 @@ export function FunisBoard() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label={t("Funnel map")}>
+          {FUNNEL_MAPS.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              aria-selected={mapId === m.id}
+              onClick={() => setMapId(m.id)}
+              className={`min-h-11 rounded-lg border px-3 text-sm font-semibold ${mapId === m.id ? "border-foreground" : "border-border text-muted hover:text-foreground"}`}
+            >
+              {mapText(m.name, lang)}
+            </button>
+          ))}
+        </div>
+        <FunnelMapView map={map} lang={lang} metrics={metrics} />
+        <p className="text-[11px] text-muted">{t("Drag the blocks to look closer. Dashed arrows are the recovery messages.")}</p>
       </section>
 
       <section className="space-y-3">
