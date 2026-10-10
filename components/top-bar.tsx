@@ -11,6 +11,7 @@ import { useT } from "@/components/lang-provider";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/funis": "Funnels",
   "/campaigns": "Campaigns",
   "/campaigns/new": "New Campaign",
   "/automations": "Campaigns",

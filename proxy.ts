@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isApiKeyRouteAllowed } from "@/lib/api-key-routes";
 import { hostOf, isAppHost, listedQuizDomains } from "@/lib/links/hosts";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/automations", "/logs", "/settings", "/quizzes", "/admin", "/account", "/whatsapp"];
+const PROTECTED_PREFIXES = ["/dashboard", "/automations", "/logs", "/settings", "/quizzes", "/admin", "/funis", "/account", "/whatsapp"];
 
 /**
  * Fase 0 (06/10/2026): cookie do login novo (Better Auth). Os cookies antigos

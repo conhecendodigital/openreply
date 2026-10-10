@@ -101,6 +101,9 @@ const icones: Record<string, Icone> = {
   "/admin": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="8" cy="15" r="4" /><path {...traco(ativo)} d="m11 12 9-9M17 6l3 3M14.5 8.5l2 2" /></svg>
   ),
+  "/funis": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 4h18l-7 8v6l-4 2v-8z" /></svg>
+  ),
   "/diagnostics": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="12" cy="12" r="9" /><path {...traco(ativo)} d="M12 7v5l3 2" /></svg>
   ),
@@ -211,7 +214,10 @@ type NavSection = { title: string; items: { label: string; href: string; icon?: 
 
 /** Grupo do admin da plataforma (no fim do menu). null = não aparece. */
 export function adminSection(state: AdminMenuState | null | undefined): NavSection | null {
-  if (state === "admin") return { title: "Platform admin", items: [{ label: "Admin", href: "/admin" }] };
+  // 10/10/2026: "Funis" também só pro admin (mesma regra do /admin).
+  if (state === "admin") {
+    return { title: "Platform admin", items: [{ label: "Admin", href: "/admin" }, { label: "Funnels", href: "/funis" }] };
+  }
   if (state === "needs_2fa") {
     return {
       title: "Platform admin",

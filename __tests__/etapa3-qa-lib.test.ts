@@ -90,6 +90,8 @@ describe("QA sidebar sections", () => {
               .map((n) => `/whatsapp/${n}`)
           : [href]
       )
+      // 10/10/2026: /funis fica só no grupo do admin da plataforma (adminSection), fora das 6 seções.
+      .filter((href) => href !== "/funis")
       .sort();
     const hrefs = items.map((i) => i.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);

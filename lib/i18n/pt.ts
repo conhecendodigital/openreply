@@ -20,8 +20,11 @@ import { ptWaLeads } from "@/lib/i18n/pt-wa-leads";
 import { ptSecoes } from "@/lib/i18n/pt-secoes";
 import { ptAbas } from "@/lib/i18n/pt-abas";
 import { ptLinks } from "@/lib/i18n/pt-links";
+import { ptFunisAdmin } from "@/lib/i18n/pt-funis-admin";
 
 export const pt: Record<string, string> = {
+  // 2026-10-10: aba Funis do admin, em lib/i18n/pt-funis-admin.ts.
+  ...ptFunisAdmin,
   // 2026-10-07: prévia do link e domínio dos links (campanha, quiz e Canais), em lib/i18n/pt-links.ts.
   ...ptLinks,
   // 2026-10-06: seções recolhíveis, índice e resumos em todo o painel, em lib/i18n/pt-secoes.ts.

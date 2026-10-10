@@ -1,0 +1,24 @@
+/** Aba "Funis" do admin (10/10/2026): textos da tela e do menu. */
+export const ptFunisAdmin: Record<string, string> = {
+  Funnels: "Funis",
+  "Funnels - Lead Engine": "Funis - Lead Engine",
+  "Could not load the numbers. Try again.": "Não deu pra carregar os números. Tente de novo.",
+  "People who commented": "Comentaram",
+  "Got the DM": "Receberam a DM",
+  "Clicked the link": "Clicaram no link",
+  "Opened the quiz": "Abriram o quiz",
+  "Saw the offer": "Viram a oferta",
+  "Clicked checkout": "Clicaram no checkout",
+  Bought: "Compraram",
+  "Your funnel today": "Seu funil hoje",
+  "From the comment to the sale, with the real numbers of the period.": "Do comentário até a venda, com os números reais do período.",
+  "biggest leak": "maior vazamento",
+  "{p}% of the previous": "{p}% da etapa anterior",
+  "Quiz numbers add up the live quizzes. Purchases only count when Hotmart notifies the Lead Engine.":
+    "Os números do quiz somam os quizzes no ar. Compra só conta quando a Hotmart avisa o Lead Engine.",
+  "{v} visits · {c} checkouts · {b} purchases": "{v} visitas · {c} checkouts · {b} compras",
+  "Funnel models": "Modelos de funil",
+  "Known strategies, built with the pieces the Lead Engine already has.": "Estratégias conhecidas, montadas com as peças que o Lead Engine já tem.",
+  "Fits:": "Serve pra:",
+  "Watch:": "Acompanhe:",
+};
