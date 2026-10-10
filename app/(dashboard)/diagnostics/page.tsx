@@ -273,7 +273,7 @@ export default function DiagnosticsPage() {
         {data?.operationalEvents.length ? (
           <div className="space-y-3">
             {data.operationalEvents.map((event) => (
-              <div key={event.id} className="grid gap-2 border-b border-border pb-3 last:border-0 sm:grid-cols-[140px_1fr_auto]">
+              <div key={event.id} className="grid gap-2 border-b border-border pb-3 last:border-0 sm:grid-cols-[140px_minmax(0,1fr)_auto]">
                 <p className="text-xs font-semibold text-muted">{event.source}</p>
                 <p className="text-sm text-foreground">{event.message}</p>
                 <p className="text-xs text-muted">{formatDate(event.createdAt)}</p>

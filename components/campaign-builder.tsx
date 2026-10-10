@@ -791,7 +791,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
           long string widens the whole page instead of wrapping. */}
       <SectionIndex />
 
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:gap-8">
+      <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-8">
       {/* Left: controls */}
       <div className="space-y-4 min-w-0">
         {error && (

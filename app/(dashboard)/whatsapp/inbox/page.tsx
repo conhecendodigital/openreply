@@ -308,7 +308,7 @@ export default function WhatsAppInboxPage() {
       </div>
       <ServerNotice status={server} />
 
-      <div className="grid h-[calc(100dvh-13rem)] min-h-[420px] grid-cols-1 overflow-hidden rounded-xl border border-border sm:grid-cols-[340px_1fr]">
+      <div className="grid h-[calc(100dvh-13rem)] min-h-[420px] grid-cols-1 overflow-hidden rounded-xl border border-border sm:grid-cols-[340px_minmax(0,1fr)]">
         {/* Lista. No celular some quando uma conversa está aberta. */}
         <div className={`min-h-0 flex-col border-border sm:flex sm:border-r ${activeId ? "hidden" : "flex"}`}>
           <div className="shrink-0 space-y-2 border-b border-border p-3">

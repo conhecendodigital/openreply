@@ -198,16 +198,16 @@ export default function CampaignDetailPage() {
     : campaign.keywords.join(", ") || t("No keywords");
 
   const metrics = [
-    { label: "Sends", value: campaign.analytics.sent },
-    { label: "Clicks", value: campaign.analytics.clicks },
-    { label: "CTR", value: `${campaign.analytics.ctr}%` },
-    { label: "Failed", value: campaign.analytics.failed },
+    { label: t("DMs sent"), value: campaign.analytics.sent },
+    { label: t("Link clicks"), value: campaign.analytics.clicks },
+    { label: t("Click rate"), value: `${campaign.analytics.ctr}%` },
+    { label: t("Failed"), value: campaign.analytics.failed },
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,340px)_1fr]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
       {/* Left: config summary */}
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         <div className="flex items-center gap-2">
           <Link
             href="/campaigns"
@@ -351,7 +351,7 @@ export default function CampaignDetailPage() {
       </div>
 
       {/* Right: top bar + tabs */}
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 border-b border-border pb-3">
           <div className="flex gap-4">
             <TabButton active={tab === "insights"} onClick={() => setTab("insights")}>
@@ -398,8 +398,8 @@ export default function CampaignDetailPage() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {metrics.map((m) => (
               <div key={m.label} className="panel rounded p-4">
-                <p className="text-sm text-muted">{m.label}</p>
-                <p className="mt-1 text-2xl font-semibold text-foreground">
+                <p className="truncate text-sm text-muted">{m.label}</p>
+                <p className="mt-1 truncate text-2xl font-semibold tabular-nums text-foreground">
                   {m.value}
                 </p>
               </div>
