@@ -5,7 +5,7 @@
  * (lib/auth.ts), so a new route would be open to keys by default. This list
  * flips that: a key only reaches the MCP endpoint, the cron jobs (their own
  * CRON_SECRET) and the routes the MCP server calls (lib/mcp/routes.ts), and
- * never with DELETE. Everything else (members, API keys, channels, import,
+ * never with DELETE. Everything else (members, API keys, channel changes, import,
  * billing, admin...) answers 403 to a key, checked once in proxy.ts.
  *
  * Kept free of imports so proxy.ts stays light. When a new MCP tool needs a
@@ -48,6 +48,8 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   /^\/api\/broadcasts\/[^/]+$/,
   /^\/api\/broadcasts\/[^/]+\/cancel$/,
   /^\/api\/reports$/,
+  // ver_canais (MCP, 09/10): só leitura do status dos canais (sem token).
+  /^\/api\/channels$/,
   // Etapa 6 (quiz): drafts and numbers only. Never publish, unpublish, leads.
   /^\/api\/funnels$/,
   /^\/api\/funnels\/[^/]+\/duplicate$/,
