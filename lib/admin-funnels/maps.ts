@@ -35,7 +35,10 @@ export type MapNode = {
   metric?: keyof BoardInput;
 };
 
-export type MapEdge = { from: string; to: string; dashed?: boolean; label?: Txt };
+/** Lado do bloco de onde a seta sai / onde chega (padrão: sai pela direita, chega pela esquerda). */
+export type MapSide = "l" | "r" | "t" | "b";
+
+export type MapEdge = { from: string; to: string; dashed?: boolean; label?: Txt; fromSide?: MapSide; toSide?: MapSide };
 
 export type FunnelMap = { id: string; name: Txt; nodes: MapNode[]; edges: MapEdge[] };
 
@@ -102,8 +105,8 @@ export const FUNNEL_MAPS: FunnelMap[] = [
       { id: "paid", kind: "paid", label: t("Compra aprovada", "Purchase approved"), x: 920, y: 20 },
       { id: "pending", kind: "pending", label: t("Pix ou boleto gerado", "Pix or boleto generated"), x: 920, y: 200 },
       { id: "up", kind: "page-upsell", label: t("Oferta seguinte", "Next offer"), x: 1100, y: 0 },
-      { id: "wa1", kind: "whatsapp", label: t("Lembrete 1 h", "Reminder 1 h"), x: 760, y: 340 },
-      { id: "wa2", kind: "whatsapp", label: t("Lembrete 24 h", "Reminder 24 h"), x: 600, y: 340 },
+      { id: "wa1", kind: "whatsapp", label: t("Lembrete 1 h", "Reminder 1 h"), x: 860, y: 360 },
+      { id: "wa2", kind: "whatsapp", label: t("Lembrete 24 h", "Reminder 24 h"), x: 600, y: 360 },
     ],
     edges: [
       { from: "ig", to: "quiz" },
@@ -113,9 +116,9 @@ export const FUNNEL_MAPS: FunnelMap[] = [
       { from: "checkout", to: "paid" },
       { from: "checkout", to: "pending" },
       { from: "paid", to: "up" },
-      { from: "pending", to: "wa1", dashed: true },
-      { from: "wa1", to: "wa2", dashed: true },
-      { from: "wa2", to: "sales", dashed: true },
+      { from: "pending", to: "wa1", dashed: true, fromSide: "b", toSide: "r" },
+      { from: "wa1", to: "wa2", dashed: true, fromSide: "l", toSide: "r" },
+      { from: "wa2", to: "sales", dashed: true, fromSide: "t", toSide: "b" },
     ],
   },
   {

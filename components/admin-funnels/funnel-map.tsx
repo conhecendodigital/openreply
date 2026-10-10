@@ -11,7 +11,8 @@
 import "@xyflow/react/dist/style.css";
 import { memo, useMemo } from "react";
 import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
-import { mapText, type FunnelMap, type MapNodeKind } from "@/lib/admin-funnels/maps";
+import { mapText, type FunnelMap, type MapNodeKind, type MapSide } from "@/lib/admin-funnels/maps";
+import { BRAND_ICONS, type BrandIcon } from "@/lib/admin-funnels/brand-icons";
 
 type Lang = "pt" | "en";
 type BlockData = { kind: MapNodeKind; label: string; metric: string | null };
@@ -31,11 +32,16 @@ const ROUND: Partial<Record<MapNodeKind, { bg: string; icon: string }>> = {
 
 const DIAMOND: Partial<Record<MapNodeKind, { bg: string; icon: string }>> = {
   paid: { bg: "#1fc47a", icon: "dollar" },
-  pending: { bg: "#a77bff", icon: "doc" },
+  pending: { bg: "#a77bff", icon: "pix" },
   lost: { bg: "#2cc4c4", icon: "cart" },
 };
 
 function Icon({ name }: { name: string }) {
+  // Logos e Pix vêm do @edusites/icons (texto fixo do código, nunca de quem usa o painel).
+  if (name in BRAND_ICONS) {
+    const size = name === "pix" ? "h-4 w-4" : "h-6 w-6";
+    return <span className={`block ${size} text-white`} aria-hidden dangerouslySetInnerHTML={{ __html: BRAND_ICONS[name as BrandIcon] }} />;
+  }
   const p = { fill: "none", stroke: "#fff", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   switch (name) {
     case "instagram":
@@ -110,6 +116,8 @@ function PageBody({ kind }: { kind: MapNodeKind }) {
   );
 }
 
+const SIDES: [MapSide, Position][] = [["l", Position.Left], ["r", Position.Right], ["t", Position.Top], ["b", Position.Bottom]];
+
 const hidden = { opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, border: 0 };
 
 const Block = memo(function Block({ data }: NodeProps<BlockNode>) {
@@ -119,7 +127,9 @@ const Block = memo(function Block({ data }: NodeProps<BlockNode>) {
     <div className="flex w-[150px] flex-col items-center gap-1.5 text-center">
       <div className="text-[11px] font-semibold leading-tight text-foreground">{data.label}</div>
       <div className="relative flex items-center justify-center">
-        <Handle type="target" position={Position.Left} style={hidden} />
+        {SIDES.map(([id, pos]) => (
+          <Handle key={`t-${id}`} id={`t-${id}`} type="target" position={pos} style={hidden} />
+        ))}
         {round && (
           <div className="flex h-12 w-12 items-center justify-center rounded-full shadow-md" style={{ background: round.bg }}>
             <Icon name={round.icon} />
@@ -140,7 +150,9 @@ const Block = memo(function Block({ data }: NodeProps<BlockNode>) {
             <div className="p-2"><PageBody kind={data.kind} /></div>
           </div>
         )}
-        <Handle type="source" position={Position.Right} style={hidden} />
+        {SIDES.map(([id, pos]) => (
+          <Handle key={`s-${id}`} id={`s-${id}`} type="source" position={pos} style={hidden} />
+        ))}
       </div>
       {data.metric !== null && (
         <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-semibold tabular-nums">{data.metric}</span>
@@ -180,6 +192,8 @@ export default function FunnelMapView({
         id: `${e.from}-${e.to}-${i}`,
         source: e.from,
         target: e.to,
+        sourceHandle: `s-${e.fromSide ?? "r"}`,
+        targetHandle: `t-${e.toSide ?? "l"}`,
         label: e.label ? mapText(e.label, lang) : undefined,
         animated: false,
         style: { stroke: BLUE, strokeWidth: 1.6, ...(e.dashed ? { strokeDasharray: "6 5" } : {}) },

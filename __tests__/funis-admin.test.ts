@@ -69,3 +69,15 @@ describe("Mapas de funil", () => {
     expect(FUNNEL_MAPS[0].nodes.filter((n) => n.metric).length).toBeGreaterThanOrEqual(4);
   });
 });
+
+import { BRAND_ICONS } from "../lib/admin-funnels/brand-icons";
+
+describe("Ícones de marca do mapa", () => {
+  it("são SVG puros, sem script nem evento, e pintam com a cor do texto", () => {
+    for (const svg of Object.values(BRAND_ICONS)) {
+      expect(svg.startsWith("<svg ")).toBe(true);
+      expect(svg).toContain('fill="currentColor"');
+      expect(svg).not.toMatch(/<script|\son\w+=|javascript:/i);
+    }
+  });
+});
