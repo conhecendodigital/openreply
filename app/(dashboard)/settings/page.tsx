@@ -373,7 +373,7 @@ export default function SettingsPage() {
         {canManageMembers && (
           <form
             onSubmit={inviteMember}
-            className="mt-6 grid gap-3 border-t border-border pt-4 sm:grid-cols-[1fr_140px_auto]"
+            className="mt-6 grid gap-3 border-t border-border pt-4 sm:grid-cols-[minmax(0,1fr)_140px_auto]"
           >
             <input
               type="email"

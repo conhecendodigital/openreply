@@ -340,7 +340,7 @@ export function CampaignAbPanel({ campaignId, compact = false }: { campaignId: s
   const hasVariants = data.variants.length >= 2;
 
   return (
-    <div className="panel space-y-4 rounded-2xl p-4">
+    <div className="panel min-w-0 space-y-4 rounded-2xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <p className="text-sm font-semibold">{t("A/B test")}</p>
@@ -479,7 +479,7 @@ export function CampaignAbPanel({ campaignId, compact = false }: { campaignId: s
                 <VariantBadge k={v.key} />
                 <span className="min-w-0 flex-1">
                   <span className="font-semibold">{v.weight}%</span>
-                  <span className="block truncate text-xs text-muted">{v.dmMessage || t("(campaign's own text)")}</span>
+                  <span className="line-clamp-2 break-words text-xs text-muted">{v.dmMessage || t("(campaign's own text)")}</span>
                 </span>
               </li>
             ))}

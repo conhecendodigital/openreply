@@ -534,7 +534,7 @@ function PairingBox({ pairing, status }: { pairing: Pairing; status: WaStatus })
           {t("The uazapi says this connection is going out without the proxy. Disconnect before reading the code and talk to the uazapi support.")}
         </p>
       )}
-      <div className="grid gap-4 rounded-lg border border-border bg-surface-hover/60 p-4 sm:grid-cols-[220px_1fr] sm:items-center">
+      <div className="grid gap-4 rounded-lg border border-border bg-surface-hover/60 p-4 sm:grid-cols-[220px_minmax(0,1fr)] sm:items-center">
         {pairCode ? (
           <div className="mx-auto grid h-[160px] w-[220px] place-items-center rounded-lg bg-white p-3">
             <p className="whitespace-nowrap font-mono text-2xl font-bold tracking-[0.12em] text-zinc-900" aria-label={t("Pairing code")}>

@@ -176,7 +176,7 @@ export function ApiKeysPanel() {
 
       <form
         onSubmit={createKey}
-        className="mt-6 grid gap-3 border-t border-border pt-4 sm:grid-cols-[1fr_auto]"
+        className="mt-6 grid gap-3 border-t border-border pt-4 sm:grid-cols-[minmax(0,1fr)_auto]"
       >
         <input
           type="text"
