@@ -41,3 +41,31 @@ describe("Aba Funis (só admin)", () => {
     }
   });
 });
+
+import { FUNNEL_MAPS } from "../lib/admin-funnels/maps";
+
+describe("Mapas de funil", () => {
+  it("cada seta liga blocos que existem, ids únicos, texto nos dois idiomas", () => {
+    const keys = ["commented", "received", "clicked", "quizVisits", "offerViews", "checkouts", "purchases"];
+    expect(new Set(FUNNEL_MAPS.map((m) => m.id)).size).toBe(FUNNEL_MAPS.length);
+    for (const m of FUNNEL_MAPS) {
+      const ids = m.nodes.map((n) => n.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      for (const e of m.edges) {
+        expect(ids).toContain(e.from);
+        expect(ids).toContain(e.to);
+      }
+      for (const n of m.nodes) {
+        expect(n.label.pt.length).toBeGreaterThan(0);
+        expect(n.label.en.length).toBeGreaterThan(0);
+        expect(n.label.pt).not.toMatch(/[—–]/);
+        if (n.metric) expect(keys).toContain(n.metric);
+      }
+    }
+  });
+
+  it("o primeiro mapa é o funil real, com número nos blocos principais", () => {
+    expect(FUNNEL_MAPS[0].id).toBe("hoje");
+    expect(FUNNEL_MAPS[0].nodes.filter((n) => n.metric).length).toBeGreaterThanOrEqual(4);
+  });
+});
