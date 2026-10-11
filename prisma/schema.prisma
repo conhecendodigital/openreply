@@ -439,6 +439,8 @@ model Automation {
   // Minutes to wait after the link is delivered before sending the follow-up.
   // 0 sends it right away.
   followUpDelayMinutes    Int               @default(0)
+  /// 11/10/2026: rótulo do botão na mensagem de depois (lib/campaigns/followup-link.ts). NULL = só texto.
+  followUpButtonLabel     String?
   publicReplyEnabled      Boolean           @default(false)
   publicReplyMessage      String?
   publicReplyMessages     String[]          @default([])

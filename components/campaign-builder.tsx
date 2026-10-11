@@ -89,6 +89,7 @@ interface LoadedCampaign {
   followUpEnabled: boolean;
   followUpMessage: string | null;
   followUpDelayMinutes: number | null;
+  followUpButtonLabel?: string | null;
   publicReplyEnabled: boolean;
   publicReplyMessage: string | null;
   publicReplyMessages: string[];
@@ -249,6 +250,8 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [followUpEnabled, setFollowUpEnabled] = useState(false);
   const [followUpMessage, setFollowUpMessage] = useState("");
   const [followUpDelayMinutes, setFollowUpDelayMinutes] = useState(0);
+  // 11/10/2026: botão na mensagem de depois (lib/campaigns/followup-link.ts).
+  const [followUpButtonLabel, setFollowUpButtonLabel] = useState("");
 
   const [previewTab, setPreviewTab] = useState<PreviewTab>("dm");
 
@@ -385,6 +388,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setFollowUpEnabled(c.followUpEnabled ?? false);
         setFollowUpMessage(c.followUpMessage ?? "");
         setFollowUpDelayMinutes(c.followUpDelayMinutes ?? 0);
+        setFollowUpButtonLabel(c.followUpButtonLabel ?? "");
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
@@ -582,6 +586,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       followUpEnabled,
       followUpMessage: followUpEnabled ? followUpMessage.trim() : "",
       followUpDelayMinutes: followUpEnabled ? followUpDelayMinutes : 0,
+      followUpButtonLabel: followUpEnabled ? followUpButtonLabel.trim() || null : null,
       isActive: activeValue,
     };
 
@@ -1315,6 +1320,22 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                     : t("Sent right after they tap through.")}
                   {t("{username}")} {t("personalizes it. Max 24 hours, to stay inside Instagram's messaging window.")}
                 </p>
+                <div className="space-y-1 pt-1">
+                  <label className="text-xs font-medium text-foreground" htmlFor="followup-button-label">
+                    {t("Button in this message (optional)")}
+                  </label>
+                  <input
+                    id="followup-button-label"
+                    value={followUpButtonLabel}
+                    onChange={(e) => setFollowUpButtonLabel(e.target.value)}
+                    placeholder={t("e.g. I want my spot")}
+                    maxLength={20}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
+                  />
+                  <p className="text-xs text-muted">
+                    {t("With a button, the second link leaves the first message and goes here (with one link, it repeats as a reminder). Whoever already clicked it does not get this message.")}
+                  </p>
+                </div>
               </div>
             )}
           </div>

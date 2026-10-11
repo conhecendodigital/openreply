@@ -14,6 +14,7 @@
  *
  * What a flow cannot copy comes back as warnings for the screen.
  */
+import { hasFollowUpButton, splitFollowUpLinks } from "@/lib/campaigns/followup-link";
 import {
   FLOW_SCHEMA_VERSION,
   MAX_BUTTON_LABEL,
@@ -48,6 +49,7 @@ export type ConvertibleCampaign = {
   followUpEnabled: boolean;
   followUpMessage: string | null;
   followUpDelayMinutes: number;
+  followUpButtonLabel?: string | null;
   publicReplyEnabled: boolean;
   trackedLinks: { label: string | null; destinationUrl: string }[];
   sequenceSteps?: { order: number; message: string; delayMinutes: number }[];
@@ -144,7 +146,9 @@ export function campaignToFlowDefinition(campaign: ConvertibleCampaign): {
     });
   }
 
-  const links = campaign.trackedLinks.slice(0, 3);
+  // 11/10/2026: com botão na mensagem de depois, o 2º link vai nela (lib/campaigns/followup-link.ts).
+  const split = splitFollowUpLinks(campaign.trackedLinks.slice(0, 3), hasFollowUpButton(campaign));
+  const links = split.main;
   if (links.length > 0) warnings.push("link_history_stays");
   const linkNode: FlowNode = {
     id: "link",
@@ -186,7 +190,10 @@ export function campaignToFlowDefinition(campaign: ConvertibleCampaign): {
     if ((campaign.followUpDelayMinutes ?? 0) > 0) {
       chain({ id: "espera_followup", type: "wait", mode: "delay", position: pos(), minutes: clampWait(campaign.followUpDelayMinutes), next: null });
     }
-    chain({ id: "followup", type: "message", position: pos(), text: campaign.followUpMessage.trim(), imageUrl: null, buttons: [], next: null });
+    const followUpButtons = split.followUp
+      ? [{ id: "f1", kind: "link" as const, label: label(campaign.followUpButtonLabel, DEFAULT_LINK_LABEL), url: split.followUp.destinationUrl }]
+      : [];
+    chain({ id: "followup", type: "message", position: pos(), text: campaign.followUpMessage.trim(), imageUrl: null, buttons: followUpButtons, next: null });
   }
 
   const steps = [...(campaign.sequenceSteps ?? [])].sort((a, b) => a.order - b.order);
