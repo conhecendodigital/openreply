@@ -89,6 +89,7 @@ const campaignFields: Record<string, unknown> = {
   followUpEnabled: { ...bool, description: "Manda uma mensagem depois do link" },
   followUpMessage: { ...str, description: "Texto da mensagem depois do link" },
   followUpDelayMinutes: { type: "integer", description: "Minutos até a mensagem depois do link (0 a 1440)" },
+  followUpButtonLabel: { ...str, description: "Botão na mensagem depois do link (até 20 caracteres). Com 2 links, o segundo sai do primeiro cartão e vai nesse botão; com 1 link, repete o link como lembrete. Quem já clicou não recebe. Vazio = só texto" },
   publicReplyEnabled: { ...bool, description: "Responde em público no comentário" },
   publicReplyMessages: { ...strList, description: "Respostas públicas (sorteia uma por vez)" },
 };

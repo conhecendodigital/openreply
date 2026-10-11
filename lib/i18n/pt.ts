@@ -290,6 +290,11 @@ export const pt: Record<string, string> = {
   "a follow-up thank-you message": "uma mensagem de acompanhamento",
   "Sent right after the link.": "Sai logo depois do link.",
   "Sent right after they tap through.": "Sai logo depois que a pessoa toca.",
+  // 11/10/2026: botão na mensagem de depois
+  "Button in this message (optional)": "Botão nesta mensagem (opcional)",
+  "e.g. I want my spot": "ex.: Quero minha vaga",
+  "With a button, the second link leaves the first message and goes here (with one link, it repeats as a reminder). Whoever already clicked it does not get this message.":
+    "Com botão, o segundo link sai da primeira mensagem e vem aqui (com um link só, ele se repete como lembrete). Quem já clicou nele não recebe esta mensagem.",
   "min later": "min depois",
   "minutes after the link": "minutos depois do link",
   "personalizes it. Max 24 hours, to stay inside Instagram's messaging window.":

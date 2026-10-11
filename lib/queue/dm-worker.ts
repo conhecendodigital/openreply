@@ -58,6 +58,7 @@ import {
   renderMessageWithoutLink,
   type DmFormatValue,
 } from "@/lib/tracking/message";
+import { hasFollowUpButton, splitFollowUpLinks } from "@/lib/campaigns/followup-link";
 import { linkUrlResolver } from "@/lib/links/urls";
 import { getWorkspaceLinkDomain, linkBaseUrl } from "@/lib/links/domain";
 import {
@@ -235,6 +236,10 @@ function buildTrackedLinkText(
 type RevealAutomation = {
   /** For the link domain and the short code of each link. */
   workspaceId?: string | null;
+  /** Botão na mensagem de depois: o 2º link sai do cartão (lib/campaigns/followup-link.ts). */
+  followUpEnabled?: boolean | null;
+  followUpMessage?: string | null;
+  followUpButtonLabel?: string | null;
   dmMessage: string;
   /** BUTTON (card) or TEXT (link inside the text). Missing = BUTTON. */
   dmFormat?: DmFormatValue | null;
@@ -256,11 +261,12 @@ async function sendRevealDirectMessage(
   context: string,
   ledger: Ledger
 ): Promise<void> {
-  if (automation.trackedLinks.length === 0) {
+  const links = splitFollowUpLinks(automation.trackedLinks, hasFollowUpButton(automation)).main;
+  if (links.length === 0) {
     const text = renderMessageWithTracking({
       message: automation.dmMessage,
       commenterName,
-      trackedLinks: automation.trackedLinks,
+      trackedLinks: links,
     });
     await ledger(text, (o) =>
       sendDirectMessage(accessToken, automation.instagramAccount.instagramId, userId, text, o)
@@ -275,7 +281,7 @@ async function sendRevealDirectMessage(
     const text = buildTrackedLinkText(
       automation.dmMessage,
       commenterName,
-      automation.trackedLinks,
+      links,
       linkUrl
     );
     await ledger(text, (o) =>
@@ -291,7 +297,7 @@ async function sendRevealDirectMessage(
       commenterName,
     }) || "Here's your link:";
   const buttons = buildLinkButtons(
-    automation.trackedLinks,
+    links,
     automation.linkButtonLabel,
     linkUrl
   );
@@ -319,7 +325,7 @@ async function sendRevealDirectMessage(
     const fallbackText = buildTrackedLinkText(
       automation.dmMessage,
       commenterName,
-      automation.trackedLinks,
+      links,
       linkUrl
     );
     try {
@@ -815,6 +821,8 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           })
         : null;
     const dmFormat = alreadyGotIt ? "TEXT" : copy.dmFormat;
+    // 11/10/2026: com botão na mensagem de depois, o 2º link vai nela (lib/campaigns/followup-link.ts).
+    const mainLinks = splitFollowUpLinks(automation.trackedLinks, hasFollowUpButton(automation)).main;
 
     try {
       if (useOpeningDm) {
@@ -854,13 +862,13 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             o
           )
         );
-      } else if (automation.trackedLinks.length > 0 && dmFormat === "TEXT") {
+      } else if (mainLinks.length > 0 && dmFormat === "TEXT") {
         // TEXT format: ONE private reply in text with the tracked link inside
         // (Meta allows one private reply per comment, so it is all in one).
         const linkText = buildTrackedLinkText(
           copy.dmMessage,
           commenterName,
-          automation.trackedLinks,
+          mainLinks,
           await linkUrlsFor(automation, commenterId, dmLogId)
         );
         await ledger(linkText, (o) =>
@@ -872,7 +880,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             o
           )
         );
-      } else if (automation.trackedLinks.length > 0) {
+      } else if (mainLinks.length > 0) {
         // Try button template first; if Meta rejects it, fall back to inline links.
         const bodyText =
           renderMessageWithoutLink({
@@ -881,7 +889,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           }) || "Here's your link:";
         const linkUrl = await linkUrlsFor(automation, commenterId, dmLogId);
         const buttons = buildLinkButtons(
-          automation.trackedLinks,
+          mainLinks,
           automation.linkButtonLabel,
           linkUrl
         );
@@ -910,7 +918,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           const fallbackMessage = buildTrackedLinkText(
             copy.dmMessage,
             commenterName,
-            automation.trackedLinks,
+            mainLinks,
             linkUrl
           );
           try {
@@ -1330,7 +1338,10 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
 
   const automation = await prisma.automation.findFirst({
     where: { id: automationId, isActive: true, instagramAccount: { status: "ACTIVE" } },
-    include: { instagramAccount: true },
+    include: {
+      instagramAccount: true,
+      trackedLinks: { select: { slug: true, label: true, destinationUrl: true }, orderBy: { createdAt: "asc" } },
+    },
   });
 
   if (
@@ -1356,6 +1367,26 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
     return;
   }
 
+  // 11/10/2026: mensagem de depois com botão (lib/campaigns/followup-link.ts).
+  const followUpLink = splitFollowUpLinks(automation.trackedLinks, hasFollowUpButton(automation)).followUp;
+  if (followUpLink) {
+    // Quem já clicou nesse link (ex.: já pegou a vaga) não recebe de novo.
+    const clicked = await prisma.linkClick.findFirst({
+      where: { automationId: automation.id, contactIgUserId: userId, trackedLink: { slug: followUpLink.slug } },
+      select: { id: true },
+    });
+    if (clicked) {
+      console.log("[DM Worker] Follow-up skipped: already clicked its link");
+      return;
+    }
+    try {
+      await sendFollowUpWithButton(accessToken, automation, followUpLink, userId, commenterName ?? null);
+    } catch (error) {
+      console.log("[DM Worker] Failed to send follow-up message:", formatError(error));
+    }
+    return;
+  }
+
   const text = renderMessageWithoutLink({
     message: automation.followUpMessage,
     commenterName: commenterName ?? null,
@@ -1369,6 +1400,51 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
       "[DM Worker] Failed to send follow-up message:",
       formatError(error)
     );
+  }
+}
+
+/**
+ * Mensagem de depois com o link como botão (11/10/2026). Formato TEXT da
+ * campanha = link dentro do texto. Cartão recusado pela Meta = cai pro texto
+ * com o link, igual ao cartão principal.
+ */
+async function sendFollowUpWithButton(
+  accessToken: string,
+  automation: {
+    id: string;
+    workspaceId: string;
+    instagramAccountId: string;
+    dmFormat?: DmFormatValue | null;
+    followUpMessage: string | null;
+    followUpButtonLabel: string | null;
+    instagramAccount: { instagramId: string };
+  },
+  link: WorkerTrackedLink,
+  userId: string,
+  commenterName: string | null
+): Promise<void> {
+  const igId = automation.instagramAccount.instagramId;
+  const message = automation.followUpMessage ?? "";
+  const ledger = ledgerFor(automation, userId, "followup", automation.id);
+  const url = await linkUrlsFor({ workspaceId: automation.workspaceId, trackedLinks: [link] }, userId);
+  const asText = () => buildTrackedLinkText(message, commenterName, [link], url);
+  if (automation.dmFormat === "TEXT") {
+    const text = asText();
+    await ledger(text, (o) => sendDirectMessage(accessToken, igId, userId, text, o));
+    return;
+  }
+  const body = renderMessageWithoutLink({ message, commenterName }) || "👇";
+  const buttons = [{ title: (automation.followUpButtonLabel ?? "").trim() || link.label || "Open link", url: url(link) }];
+  try {
+    await ledger(body, (o) => sendDirectMessageWithLinkButton(accessToken, igId, userId, body, buttons, o));
+  } catch (buttonError) {
+    if (!isTemplateRejection(buttonError)) throw buttonError;
+    const text = asText();
+    try {
+      await ledger(text, (o) => sendDirectMessage(accessToken, igId, userId, text, o));
+    } catch {
+      throw buttonError;
+    }
   }
 }
 
