@@ -120,7 +120,8 @@ function mapUazapiAck(state: unknown): WaAck | null {
 
 const MEDIA: ReadonlySet<WaMessageType> = new Set(["image", "video", "audio", "document", "sticker"]);
 
-function uazapiMessage(m: Obj, instanceId: string): NormalizedMessage | null {
+/** chatName: nome do chat que a uazapi manda junto (em grupo, o nome do grupo). */
+function uazapiMessage(m: Obj, instanceId: string, chatName: string | null = null): NormalizedMessage | null {
   // O que o Lead Engine envia já está gravado; o eco (se vier mesmo com o filtro) não entra.
   if (m.wasSentByApi === true) return null;
   const id = str(m.messageid) ?? str(m.id)?.split(":").pop() ?? null;
@@ -147,7 +148,8 @@ function uazapiMessage(m: Obj, instanceId: string): NormalizedMessage | null {
     providerMessageId: id,
     chatJid: chat,
     phoneE164: digits ? digitsToE164(digits) : null,
-    pushName: fromMe ? null : str(m.senderName)?.slice(0, 80) ?? null,
+    // 11/10/2026: em grupo o contato é o grupo; o nome de quem mandou deixava o grupo com o nome da pessoa.
+    pushName: isGroup ? (str(m.groupName) ?? chatName)?.slice(0, 80) ?? null : fromMe ? null : str(m.senderName)?.slice(0, 80) ?? null,
     fromMe,
     // fromMe sem wasSentByApi = o dono mandou pelo celular.
     sentBy: fromMe ? "USER_PHONE" : "CONTACT",
@@ -176,7 +178,8 @@ export function normalizeUazapi(payload: unknown, instanceId: string, now = Date
   const type = str(p.EventType);
   if (type === "messages") {
     const m = obj(p.message);
-    const n = m ? uazapiMessage(m, instanceId) : null;
+    const chat = obj(p.chat);
+    const n = m ? uazapiMessage(m, instanceId, str(chat?.name) ?? str(chat?.wa_name)) : null;
     return n ? [n] : [];
   }
   if (type === "messages_update") {

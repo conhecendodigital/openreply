@@ -59,7 +59,8 @@ export async function processIngestJob(job: WaIngestJob, deps: IngestDeps): Prom
     sessionId: session.id,
     jid: event.chatJid,
     phoneE164: event.phoneE164,
-    pushName: event.fromMe ? null : event.pushName,
+    // Em grupo o nome é o do grupo, então vale até quando a mensagem é do próprio número.
+    pushName: event.fromMe && !event.isGroup ? null : event.pushName,
   });
   const conversation = await deps.repo.upsertConversation({
     ownerUserId: session.ownerUserId,

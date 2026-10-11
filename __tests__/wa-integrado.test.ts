@@ -276,6 +276,11 @@ describe("telas com RLS", () => {
     await expect(getThread(bia, list[0].id, deps)).rejects.toBeInstanceOf(PainelError);
   });
 
+  it("aba Conversas mostra só conversa de pessoa; aba Grupos só grupo (11/10/2026)", async () => {
+    expect(await listConversations(matheus, { kind: "chats" }, deps)).toHaveLength(1);
+    expect(await listConversations(matheus, { kind: "groups" }, deps)).toEqual([]);
+  });
+
   it("conversa aberta mostra a janela de 24h aberta e zera as não lidas", async () => {
     const [c] = await listConversations(matheus, { filter: "unread" }, deps);
     const thread = await getThread(matheus, c.id, deps);

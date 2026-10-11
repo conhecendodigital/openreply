@@ -410,7 +410,7 @@ export type ConversationItem = {
 
 export async function listConversations(
   ctx: RlsContext,
-  query: { q?: string | null; filter?: string | null; sessionId?: string | null; limit?: number; stage?: string | null },
+  query: { q?: string | null; filter?: string | null; sessionId?: string | null; limit?: number; stage?: string | null; kind?: string | null },
   deps: PainelDeps
 ): Promise<ConversationItem[]> {
   const ws = ctx.workspaceId ?? "";
@@ -422,6 +422,8 @@ export async function listConversations(
         workspaceId: ws,
         archivedAt: null,
         ...(query.sessionId ? { sessionId: query.sessionId } : {}),
+        // 11/10/2026: aba Conversas (chats) e aba Grupos (groups) separadas.
+        ...(query.kind === "groups" ? { contact: { isGroup: true } } : query.kind === "chats" ? { contact: { isGroup: false } } : {}),
         ...(query.filter === "unread" ? { unreadCount: { gt: 0 } } : {}),
         ...(q
           ? {
