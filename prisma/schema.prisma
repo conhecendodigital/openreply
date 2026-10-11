@@ -1547,6 +1547,8 @@ model FunnelVisit {
   device          String?
   ipHash          String?
   maxStepIndex    Int       @default(0)
+  /// Teste A/B do quiz: "A" ou "B" (lib/funnels/ab.ts). NULL = o quiz não tinha tela B.
+  abVariant       String?
   startedAt       DateTime?
   completedAt     DateTime?
   checkoutAt      DateTime?

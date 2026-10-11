@@ -224,6 +224,48 @@ export default function ResultsView({ funnelId }: { funnelId: string }) {
             </section>
           )}
 
+          {results.ab && (
+            <section className="panel space-y-3 rounded-2xl p-4">
+              <h3 className="text-sm font-semibold">{t("A/B test")}</h3>
+              <p className="text-xs text-muted">
+                {t("Screen tested: {names}. {pct}% of the visits see version B.", {
+                  names: results.ab.screens.map((s) => s.title).join(", "),
+                  pct: results.ab.percentB,
+                })}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[26rem] text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-muted">
+                      <th className="py-1.5 pr-3 font-semibold">{t("Version")}</th>
+                      <th className="py-1.5 pr-3 text-right font-semibold">{t("Visitors")}</th>
+                      <th className="py-1.5 pr-3 text-right font-semibold">{t("Started")}</th>
+                      <th className="py-1.5 pr-3 text-right font-semibold">{t("Leads")}</th>
+                      <th className="py-1.5 pr-3 text-right font-semibold">{t("Checkout clicks")}</th>
+                      <th className="py-1.5 text-right font-semibold">{t("Purchases")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.ab.variants.map((v) => (
+                      <tr key={v.key} className="border-t border-border">
+                        <td className="py-2 pr-3 font-semibold">{v.key}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{v.visits}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {v.started} <span className="text-xs text-muted">({v.visits > 0 ? Math.round((v.started / v.visits) * 100) : 0}%)</span>
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {v.leads} <span className="text-xs text-muted">({v.visits > 0 ? Math.round((v.leads / v.visits) * 100) : 0}%)</span>
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{v.checkouts}</td>
+                        <td className="py-2 text-right tabular-nums">{v.purchases}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
           {results.sources.length > 0 && (
             <section className="panel space-y-3 rounded-2xl p-4">
               <h3 className="text-sm font-semibold">{t("Sources")}</h3>

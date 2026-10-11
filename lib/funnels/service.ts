@@ -15,6 +15,7 @@ import type {
 } from "@/lib/funnels/types";
 import { definitionOrNull, emptyFunnelDefinition, funnelDefinitionSchema } from "@/lib/funnels/schema";
 import { validateFunnel } from "@/lib/funnels/validate";
+import { hasAbTest, percentB } from "@/lib/funnels/ab";
 import { getFunnelTemplate } from "@/lib/funnels/templates";
 import { isValidSlug, slugCandidate, slugify } from "@/lib/funnels/slug";
 import { EMPTY_STATS, FUNNEL_SELECT, type FunnelRow, type FunnelStats } from "@/lib/funnels/api";
@@ -263,7 +264,8 @@ export async function funnelResults(input: {
   const steps: FunnelResults["steps"] = [];
   let first = 0;
   let prev = 0;
-  (def?.steps ?? []).forEach((step, index) => {
+  // A tela B do teste A/B não entra no funil por tela: quem viu a B conta na tela A (mesmo id).
+  (def?.steps ?? []).filter((s) => !s.abOf).forEach((step, index) => {
     const v = views.get(step.id) ?? 0;
     if (index === 0) first = v;
     steps.push({
@@ -291,9 +293,12 @@ export async function funnelResults(input: {
     }
   }
 
+  const ab = def && hasAbTest(def.steps) ? await abResults(fid, since, sourceSql, def) : null;
+
   return {
     days: input.days,
     source,
+    ab,
     totals: {
       visits: n(t.visits),
       started: n(t.started),
@@ -312,6 +317,39 @@ export async function funnelResults(input: {
       purchases: n(r.purchases),
     })),
   };
+}
+
+/** Teste A/B: os mesmos totais, separados pela versão que cada visita viu. */
+async function abResults(
+  fid: string,
+  since: Date,
+  sourceSql: Prisma.Sql,
+  def: NonNullable<ReturnType<typeof definitionOrNull>>
+): Promise<NonNullable<FunnelResults["ab"]>> {
+  const rows = await prisma.$queryRaw<Record<string, unknown>[]>(Prisma.sql`
+    SELECT v."abVariant" AS "key", count(*)::int AS "visits", count(v."startedAt")::int AS "started",
+      count(v."completedAt")::int AS "completed", count(v."checkoutAt")::int AS "checkouts",
+      count(v."leadAt")::int AS "leads", count(v."purchasedAt")::int AS "purchases"
+    FROM "FunnelVisit" v
+    WHERE v."funnelId" = ${fid} AND v."createdAt" >= ${since} AND v."abVariant" IN ('A', 'B') ${sourceSql}
+    GROUP BY v."abVariant"`);
+  const byKey = new Map((Array.isArray(rows) ? rows : []).map((r) => [String(r.key), r]));
+  const variants = (["A", "B"] as const).map((key) => {
+    const r = byKey.get(key) ?? {};
+    return {
+      key,
+      visits: n(r.visits as number),
+      started: n(r.started as number),
+      completed: n(r.completed as number),
+      checkouts: n(r.checkouts as number),
+      leads: n(r.leads as number),
+      purchases: n(r.purchases as number),
+    };
+  });
+  const screens = def.steps
+    .filter((s) => s.abOf)
+    .map((b) => ({ stepId: b.abOf as string, title: def.steps.find((a) => a.id === b.abOf)?.title ?? b.title }));
+  return { percentB: percentB(def.settings.abPercentB), screens, variants };
 }
 
 // ─── Leads (personal data: human-only routes) ───────────────────────────────

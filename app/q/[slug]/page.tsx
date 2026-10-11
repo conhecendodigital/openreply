@@ -8,6 +8,8 @@
  *    nothing and the checkout does not open.
  *  - The entry UTMs/fbclid/gclid/src/sck and the contact token ?c= go to the
  *    player, which passes them to the checkout link and to the first event.
+ *  - Teste A/B (11/10/2026): QuizEntry escolhe a versão; na prévia, &ab=b
+ *    mostra a versão B.
  */
 
 import { cache } from "react";
@@ -22,7 +24,7 @@ import { getPrimaryWorkspace } from "@/lib/workspace";
 import { getDraftPreview, getPublishedFunnelBySlug } from "@/lib/funnels/public";
 import { pickTrackingParams } from "@/lib/funnels/checkout";
 import type { PublicFunnel } from "@/lib/funnels/types";
-import FunnelPlayer from "@/components/funnels/funnel-player";
+import QuizEntry from "@/components/funnels/quiz-entry";
 
 export const dynamic = "force-dynamic";
 
@@ -86,10 +88,11 @@ export default async function FunnelPage({ params, searchParams }: Props) {
   const contactToken = first(query.c)?.slice(0, 500) || null;
 
   return (
-    <FunnelPlayer
+    <QuizEntry
       key={`${funnel.id}:${funnel.version}`}
       funnel={funnel}
       mode={preview ? "preview" : "live"}
+      abPreview={preview && first(query.ab)?.toLowerCase() === "b" ? "B" : null}
       entryParams={entryParams}
       contactToken={preview ? null : contactToken}
     />

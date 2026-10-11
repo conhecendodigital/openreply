@@ -170,6 +170,8 @@ export type FunnelStep = {
   title: string;
   header?: StepHeader;
   blocks: FunnelBlock[];
+  /** Teste A/B (11/10/2026): esta tela é a versão B da tela com esse id (lib/funnels/ab.ts). */
+  abOf?: string;
 };
 
 export type FunnelTheme = {
@@ -198,6 +200,8 @@ export type FunnelSettings = {
   /** Texto do checkbox de consentimento quando há campo de dados. */
   consentText?: string;
   footerText?: string;
+  /** Teste A/B: % das visitas que veem a versão B (10 a 90). Padrão 50. */
+  abPercentB?: number;
 };
 
 export type FunnelDefinition = {
@@ -263,6 +267,12 @@ export type FunnelResults = {
   steps: { stepId: string; title: string; index: number; views: number; pctOfFirst: number; dropFromPrev: number }[];
   answers: { name: string; question: string; options: { id: string; label: string; count: number }[] }[];
   sources: { source: string; visits: number; checkouts: number; purchases: number }[];
+  /** Teste A/B: números de cada versão. null = o quiz não tem tela B. */
+  ab: {
+    percentB: number;
+    screens: { stepId: string; title: string }[];
+    variants: { key: "A" | "B"; visits: number; started: number; completed: number; checkouts: number; leads: number; purchases: number }[];
+  } | null;
 };
 
 export type FunnelLeadRow = {

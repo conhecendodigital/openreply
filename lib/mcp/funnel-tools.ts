@@ -75,7 +75,8 @@ function whatIsMissing(detail: Pick<FunnelDetail, "validation"> | null | undefin
 const PUBLISH_NOTE = "Publicar só pela tela, com o dono da conta.";
 
 export const FUNNEL_DRAFT_HELP =
-  "Rascunho = { schemaVersion: 1, settings: { theme: { mode: \"light\"|\"dark\", primary, background, text (#RRGGBB), radius? }, checkoutUrl? (https), pixelId? (só dígitos), pixelConsent? (\"banner\"|\"notice\"), seo?, privacyUrl?, consentText?, footerText? }, steps: [{ id, title, header?: { showBack?, showProgress?, showLogo? }, blocks: [...] }] }. " +
+  "Rascunho = { schemaVersion: 1, settings: { theme: { mode: \"light\"|\"dark\", primary, background, text (#RRGGBB), radius? }, checkoutUrl? (https), pixelId? (só dígitos), pixelConsent? (\"banner\"|\"notice\"), seo?, privacyUrl?, consentText?, footerText?, abPercentB? (10 a 90, padrão 50) }, steps: [{ id, title, header?: { showBack?, showProgress?, showLogo? }, blocks: [...], abOf? }] }. " +
+  "Teste A/B: uma tela com abOf:\"<id da tela A>\" é a versão B dela (uma B por tela, B sem B); cada visitante vê sempre a mesma versão e a B entra no lugar da A com o id da A, então botões e destinos continuam apontando pra A. Pra terminar o teste, apague a tela B. " +
   "ids: letras, números, - ou _ (até 40), únicos no funil. Blocos (todos com id e delaySec? em segundos): " +
   '{type:"heading", text, level?:1|2, align?}; {type:"text", text (**negrito**, *itálico*, "- " vira item, {resposta.<name>})}; ' +
   '{type:"image", url (https, GIF ok), alt}; {type:"video", url (YouTube, inclusive não listado, Vimeo, Panda Video ou link de um vídeo já enviado pelo editor), title, vertical?, autoplay? e posterUrl? (só vídeo enviado)};' +
@@ -262,7 +263,7 @@ export const FUNNEL_TOOLS: FunnelTool[] = [
   {
     name: "ver_resultados_funil",
     description:
-      "Números de um quiz no período (7, 30 ou 90 dias), sem dados pessoais: visitantes, começaram, chegaram ao fim, cliques no checkout, leads, compras e reembolsos; funil por tela com desistência; respostas por pergunta; origens.",
+      "Números de um quiz no período (7, 30 ou 90 dias), sem dados pessoais: visitantes, começaram, chegaram ao fim, cliques no checkout, leads, compras e reembolsos; funil por tela com desistência; respostas por pergunta; origens; e, se o quiz tem teste A/B, os números da versão A e da B.",
     inputSchema: {
       type: "object",
       properties: {
@@ -304,6 +305,21 @@ export const FUNNEL_TOOLS: FunnelTool[] = [
         })),
         respostas: r.answers.map((a) => ({ pergunta: a.question, opcoes: a.options.map((o) => ({ opcao: o.label, vezes: o.count })) })),
         origens: r.sources.map((s) => ({ origem: s.source, visitas: s.visits, checkouts: s.checkouts, compras: s.purchases })),
+        testeAB: r.ab
+          ? {
+              telaTestada: r.ab.screens.map((s) => s.title),
+              pctVersaoB: r.ab.percentB,
+              versoes: r.ab.variants.map((v) => ({
+                versao: v.key,
+                visitantes: v.visits,
+                comecaram: v.started,
+                chegaramAoFim: v.completed,
+                leads: v.leads,
+                cliquesNoCheckout: v.checkouts,
+                compras: v.purchases,
+              })),
+            }
+          : null,
       });
     },
   },

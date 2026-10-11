@@ -11,7 +11,7 @@ import { useState } from "react";
 import { useT } from "@/components/lang-provider";
 import { MAX_STEPS } from "@/lib/funnels/schema";
 import type { FunnelDefinition } from "@/lib/funnels/types";
-import { addStep, duplicateStep, moveStep, removeStep, updateStep } from "@/components/funnels/editor-model";
+import { addStep, addVariantB, duplicateStep, moveStep, removeStep, updateStep } from "@/components/funnels/editor-model";
 import { IconButton, Icons } from "@/components/funnels/form-controls";
 
 type SetDef = (update: (d: FunnelDefinition) => FunnelDefinition) => void;
@@ -43,6 +43,13 @@ export default function StepList({
   };
   const duplicate = () => {
     const out = duplicateStep(def, selectedStepId);
+    if (!out.stepId) return;
+    setDef(() => out.def);
+    onSelect(out.stepId);
+  };
+  // Teste A/B: a versão B entra logo abaixo da tela escolhida.
+  const variantB = () => {
+    const out = addVariantB(def, selectedStepId);
     if (!out.stepId) return;
     setDef(() => out.def);
     onSelect(out.stepId);
@@ -107,6 +114,15 @@ export default function StepList({
                 >
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-hover text-xs font-semibold">{i + 1}</span>
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">{step.title || t("Untitled screen")}</span>
+                  {step.abOf ? (
+                    <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-white" title={t("Version B of the A/B test")}>
+                      B
+                    </span>
+                  ) : def.steps.some((s) => s.abOf === step.id) ? (
+                    <span className="shrink-0 rounded-full bg-surface-hover px-1.5 py-px text-[10px] font-semibold text-muted" title={t("Version A of the A/B test")}>
+                      A
+                    </span>
+                  ) : null}
                   {c?.errors ? (
                     <span className="flex items-center gap-0.5 rounded-full bg-error px-1.5 text-[11px] font-semibold text-white" aria-label={t("{n} to fix", { n: c.errors })}>
                       {c.errors}
@@ -144,7 +160,25 @@ export default function StepList({
                     <IconButton label={t("Delete screen")} tone="danger" onClick={() => remove(step.id, step.title)} disabled={def.steps.length <= 1}>
                       {Icons.remove}
                     </IconButton>
+                    {!step.abOf && !def.steps.some((s) => s.abOf === step.id) && (
+                      <button
+                        type="button"
+                        onClick={variantB}
+                        disabled={full}
+                        title={t("Half of the visits see this screen, half see version B. Each person always sees the same one.")}
+                        className="ml-auto min-h-9 rounded-lg px-2 text-xs font-semibold text-accent hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        {t("Create version B")}
+                      </button>
+                    )}
                   </div>
+                  {step.abOf && (
+                    <p className="text-xs text-muted">
+                      {t("Version B of “{name}”. Half of the visits see this one instead. Delete it to end the test.", {
+                        name: def.steps.find((s) => s.id === step.abOf)?.title || t("Untitled screen"),
+                      })}
+                    </p>
+                  )}
                 </div>
               )}
             </li>

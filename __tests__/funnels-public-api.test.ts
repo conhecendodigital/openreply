@@ -175,6 +175,17 @@ describe("eventos", () => {
     expect(h.prisma.funnelEvent.createMany.mock.calls[0][0]).toMatchObject({ skipDuplicates: true, data: [{ type: "view", stepId: "s1", blockId: "" }] });
   });
 
+  it("teste A/B: a visita guarda a versão sorteada; quiz sem tela B guarda null (11/10/2026)", async () => {
+    await event({ type: "view", stepId: "s1" });
+    expect(h.prisma.funnelVisit.upsert.mock.calls[0][0].create.abVariant).toBeNull();
+    const comB = { ...def, steps: [...def.steps, { id: "s1b", title: "P1 B", abOf: "s1", blocks: [{ id: "b1b", type: "text", text: "Outra capa" }] }] };
+    h.prisma.funnel.findUnique.mockResolvedValue(funnelRow({ published: comB, draft: comB }));
+    await event({ type: "view", stepId: "s1" });
+    expect(h.prisma.funnelVisit.upsert.mock.calls[1][0].create.abVariant).toBe("A"); // ...89abcdef -> 67
+    await event({ type: "view", stepId: "s1", visitorId: "00000000000000000000000000000001" });
+    expect(h.prisma.funnelVisit.upsert.mock.calls[2][0].create.abVariant).toBe("B");
+  });
+
   it("última tela marca completedAt; tela >= 1 marca startedAt", async () => {
     await event({ type: "view", stepId: "s3" });
     const fields = h.prisma.funnelVisit.updateMany.mock.calls.map((c) => Object.keys(c[0].data)[0]);
