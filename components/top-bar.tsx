@@ -28,6 +28,7 @@ const pageTitles: Record<string, string> = {
   "/conversation-links": "Conversation links",
   "/channels": "Channels",
   "/whatsapp/inbox": "WhatsApp",
+  "/whatsapp/grupos": "WhatsApp",
   "/whatsapp/connections": "WhatsApp",
   "/whatsapp/agents": "WhatsApp",
   "/flows": "Flows",

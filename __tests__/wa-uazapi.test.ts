@@ -259,6 +259,22 @@ describe("eventos da uazapi normalizados", () => {
     });
   });
 
+  it("mensagem de grupo leva o nome do grupo, não o de quem mandou (11/10/2026)", () => {
+    const msg = (extra: Record<string, unknown>) =>
+      normalizeUazapi(
+        {
+          ...base,
+          EventType: "messages",
+          chat: { name: "Workshop Chat Sem Frescura" },
+          message: { messageid: "G1", chatid: "120363000000000000@g.us", senderName: "Joana", isGroup: true, messageType: "Conversation", text: "Oi", messageTimestamp: NOW, ...extra },
+        },
+        "r1abc"
+      )[0];
+    expect(msg({ fromMe: false })).toMatchObject({ isGroup: true, pushName: "Workshop Chat Sem Frescura", phoneE164: null });
+    expect(msg({ fromMe: true })).toMatchObject({ pushName: "Workshop Chat Sem Frescura" });
+    expect(msg({ fromMe: false, groupName: "Turma VIP" })).toMatchObject({ pushName: "Turma VIP" });
+  });
+
   it("mídia, mensagem do dono pelo celular e eco da API", () => {
     const img = normalizeUazapi(
       { ...base, EventType: "messages", message: { messageid: "I1", chatid: "5511988887777@s.whatsapp.net", messageType: "ImageMessage", text: "foto", content: { mimetype: "image/jpeg" }, messageTimestamp: NOW } },

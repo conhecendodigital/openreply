@@ -388,4 +388,14 @@ export const ptWhatsapp: Record<string, string> = {
   "this format is not supported": "esse formato não é aceito",
   "The agent did not read this file: {reason}.": "O agente não leu esse arquivo: {reason}.",
   "Customer audio, photos and PDFs": "Áudios, fotos e PDFs dos clientes",
+  // 11/10/2026: aba Grupos
+  Groups: "Grupos",
+  Group: "Grupo",
+  "Show groups from": "Mostrar grupos do número",
+  "Search group or message": "Buscar grupo ou mensagem",
+  "Search groups": "Buscar grupos",
+  "Back to groups": "Voltar aos grupos",
+  "Select a group to read and reply.": "Escolha um grupo pra ler e responder.",
+  "No WhatsApp groups yet. When a group your number is in gets a message, it shows up here.":
+    "Nenhum grupo ainda. Quando chegar mensagem num grupo em que o seu número está, ele aparece aqui.",
 };

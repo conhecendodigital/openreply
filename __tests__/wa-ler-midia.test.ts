@@ -395,7 +395,7 @@ describe("Conversas (inbox)", () => {
     expect(pdf).toContain("<details");
     const longo = renderToStaticMarkup(createElement(MediaReadView, { read: { kind: "audio", status: "too_large", text: null } }));
     expect(longo).toContain("O agente não leu esse arquivo: o arquivo é grande demais.");
-    const page = readFileSync(join(__dirname, "..", "app", "(dashboard)", "whatsapp", "inbox", "page.tsx"), "utf8");
+    const page = readFileSync(join(__dirname, "..", "components", "whatsapp", "inbox-view.tsx"), "utf8");
     expect(page).toContain("<MediaReadView read={m.mediaRead} />");
   });
 });

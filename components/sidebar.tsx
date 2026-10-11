@@ -86,6 +86,9 @@ const icones: Record<string, Icone> = {
   "/whatsapp/inbox": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.4z" /><path {...traco(ativo)} d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.4-1.8-1.2-2.2-2.2l1-1-1-2z" /></svg>
   ),
+  "/whatsapp/grupos": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="9" cy="8" r="3" /><path {...traco(ativo)} d="M3 19a6 6 0 0 1 12 0M16 5.5a3 3 0 0 1 0 5.5M18 14a5 5 0 0 1 3 5" /></svg>
+  ),
   "/whatsapp/leads": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="3" y="4" width="5" height="16" rx="1" /><rect {...traco(ativo)} x="10" y="4" width="5" height="11" rx="1" /><rect {...traco(ativo)} x="17" y="4" width="4" height="7" rx="1" /></svg>
   ),
@@ -135,6 +138,7 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
     title: "WhatsApp",
     items: [
       { label: "Conversations", href: "/whatsapp/inbox" },
+      { label: "Groups", href: "/whatsapp/grupos" },
       { label: "Leads", href: "/whatsapp/leads" },
       { label: "Connections", href: "/whatsapp/connections" },
       { label: "Agents", href: "/whatsapp/agents" },
