@@ -445,4 +445,14 @@ export const ptFunnels: Record<string, string> = {
   "Cover image (optional)": "Imagem de capa (opcional)",
   "Your video already started": "Seu vídeo já começou",
   "Tap to turn on the sound": "Toque para ativar o som",
+  // 11/10/2026: teste A/B do quiz
+  Version: "Versão",
+  "Screen tested: {names}. {pct}% of the visits see version B.": "Tela testada: {names}. {pct}% das visitas veem a versão B.",
+  "Create version B": "Criar versão B",
+  "Version A of the A/B test": "Versão A do teste A/B",
+  "Version B of the A/B test": "Versão B do teste A/B",
+  "Half of the visits see this screen, half see version B. Each person always sees the same one.":
+    "Metade das visitas vê esta tela e metade vê a versão B. Cada pessoa vê sempre a mesma.",
+  "Version B of “{name}”. Half of the visits see this one instead. Delete it to end the test.":
+    "Versão B de “{name}”. Metade das visitas vê esta no lugar da outra. Apague esta tela pra encerrar o teste.",
 };

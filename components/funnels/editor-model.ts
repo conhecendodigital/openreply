@@ -154,11 +154,33 @@ export function duplicateStep(def: FunnelDefinition, stepId: string): { def: Fun
   return { def: { ...def, steps }, stepId: step.id };
 }
 
-/** Removes a screen; buttons, options and loading routes that pointed to it go to "next". */
+/**
+ * Teste A/B (11/10/2026): cria a versão B de uma tela, logo abaixo dela, com
+ * os mesmos blocos (ids novos). A pergunta mantém o nome da resposta, pra a
+ * resposta da A e da B cair no mesmo lugar. Uma B por tela; B não tem B.
+ */
+export function addVariantB(def: FunnelDefinition, stepId: string): { def: FunnelDefinition; stepId: string | null } {
+  const i = def.steps.findIndex((s) => s.id === stepId);
+  if (i < 0 || def.steps.length >= MAX_STEPS) return { def, stepId: null };
+  const src = def.steps[i];
+  if (src.abOf || def.steps.some((s) => s.abOf === src.id)) return { def, stepId: null };
+  const step: FunnelStep = {
+    ...clone(src),
+    id: newId("s"),
+    title: `${src.title} (versão B)`.slice(0, 120),
+    blocks: src.blocks.map((b) => ({ ...clone(b), id: newId("b") }) as FunnelBlock),
+    abOf: src.id,
+  };
+  const steps = def.steps.slice();
+  steps.splice(i + 1, 0, step);
+  return { def: { ...def, steps }, stepId: step.id };
+}
+
+/** Removes a screen; buttons, options and loading routes that pointed to it go to "next". A tela A leva junto a versão B dela. */
 export function removeStep(def: FunnelDefinition, stepId: string): FunnelDefinition {
   if (!def.steps.some((s) => s.id === stepId)) return def;
   const steps = def.steps
-    .filter((s) => s.id !== stepId)
+    .filter((s) => s.id !== stepId && s.abOf !== stepId)
     .map((s) => ({ ...s, blocks: s.blocks.map((b) => clearLinksTo(b, stepId)) }));
   return { ...def, steps };
 }

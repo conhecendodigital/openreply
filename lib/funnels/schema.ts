@@ -251,6 +251,7 @@ const stepSchema = z.object({
     })
     .optional(),
   blocks: z.array(funnelBlockSchema).max(MAX_BLOCKS_PER_STEP),
+  abOf: id.optional(),
 });
 
 const themeSchema = z.object({
@@ -283,6 +284,7 @@ const settingsSchema = z.object({
   privacyUrl,
   consentText: z.string().trim().max(500).optional(),
   footerText: z.string().trim().max(500).optional(),
+  abPercentB: z.number().int().min(10).max(90).optional(),
 });
 
 export const funnelDefinitionSchema = z
@@ -295,7 +297,25 @@ export const funnelDefinitionSchema = z
     const stepIds = new Set<string>();
     const blockIds = new Set<string>();
     const names = new Set<string>();
+    // Teste A/B: a tela B aponta pra uma tela A que existe e não é B; uma B por A.
+    const plainIds = new Set(def.steps.filter((s) => !s.abOf).map((s) => s.id));
+    const withB = new Set<string>();
     def.steps.forEach((step, si) => {
+      if (!step.abOf) return;
+      if (!plainIds.has(step.abOf)) {
+        ctx.addIssue({ code: "custom", message: `Version B of a screen that does not exist: ${step.abOf}`, path: ["steps", si, "abOf"] });
+      } else if (withB.has(step.abOf)) {
+        ctx.addIssue({ code: "custom", message: `Screen ${step.abOf} already has a version B`, path: ["steps", si, "abOf"] });
+      }
+      withB.add(step.abOf);
+    });
+    // A pergunta da tela B pode guardar a resposta com o mesmo nome da A
+    // (cada visitante só vê uma das duas).
+    const namesOf = (stepId: string | undefined) =>
+      new Set(def.steps.find((s) => s.id === stepId)?.blocks.flatMap((b) => (b.type === "options" ? [b.name] : [])) ?? []);
+    def.steps.forEach((step, si) => {
+      const partner = step.abOf ?? def.steps.find((s) => s.abOf === step.id)?.id;
+      const pairNames = namesOf(partner);
       if (stepIds.has(step.id)) {
         ctx.addIssue({ code: "custom", message: `Duplicate step id ${step.id}`, path: ["steps", si, "id"] });
       }
@@ -306,7 +326,7 @@ export const funnelDefinitionSchema = z
         }
         blockIds.add(block.id);
         if (block.type === "options") {
-          if (names.has(block.name)) {
+          if (names.has(block.name) && !pairNames.has(block.name)) {
             ctx.addIssue({ code: "custom", message: `Duplicate answer name ${block.name}`, path: ["steps", si, "blocks", bi, "name"] });
           }
           names.add(block.name);

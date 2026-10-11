@@ -8,6 +8,7 @@
  * contact only through the signed ?c= token of a link sent by Direct; then
  * the option tags land on the contact.
  */
+import { abVariantFor, hasAbTest } from "@/lib/funnels/ab";
 import { z } from "zod";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
@@ -177,6 +178,8 @@ async function ensureVisit(
       referrerHost: referrerHostOf(body.referrer),
       device: deviceOf(request.headers.get("user-agent")),
       ipHash: hashClickIp(getRequestIp(request)),
+      // Teste A/B: o mesmo sorteio do navegador (lib/funnels/ab.ts).
+      abVariant: hasAbTest(funnel.steps) ? abVariantFor(body.visitorId, funnel.settings.abPercentB) : null,
       ...ad,
     },
     // A valid token later in the visit (rare) links the person. The consent

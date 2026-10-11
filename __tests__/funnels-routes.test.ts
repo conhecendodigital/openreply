@@ -336,6 +336,29 @@ describe("resultados e leads", () => {
     expect(body.sources[0]).toEqual({ source: "instagram", visits: 8, checkouts: 2, purchases: 1 });
   });
 
+  it("resultados com teste A/B: tela B fora do funil por tela e números por versão (11/10/2026)", async () => {
+    const comB: FunnelDefinition = {
+      ...readyDraft,
+      settings: { ...readyDraft.settings, abPercentB: 30 },
+      steps: [readyDraft.steps[0], { id: "s1b", title: "Capa nova", abOf: "s1", blocks: [{ id: "b9", type: "heading", text: "Outra" }, { id: "b10", type: "button", label: "Ir", action: { kind: "next" } }] }, readyDraft.steps[1]],
+    };
+    h.prisma.funnel.findFirst.mockResolvedValue(row({ published: comB }));
+    h.queryRaw
+      .mockResolvedValueOnce([{ visits: 10, started: 6, completed: 4, checkouts: 2, leads: 3, purchases: 1, refunds: 0 }])
+      .mockResolvedValueOnce([{ stepId: "s1", views: 10 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ key: "B", visits: 3, started: 3, completed: 2, checkouts: 1, leads: 2, purchases: 1 }]);
+    const body = (await (await resultsRoute.GET(req("/api/funnels/f_1/results?days=7"), params())).json()).data;
+    expect(body.steps.map((s: { stepId: string }) => s.stepId)).toEqual(["s1", "s2"]);
+    expect(body.ab.percentB).toBe(30);
+    expect(body.ab.screens).toEqual([{ stepId: "s1", title: "Capa" }]);
+    expect(body.ab.variants).toEqual([
+      { key: "A", visits: 0, started: 0, completed: 0, checkouts: 0, leads: 0, purchases: 0 },
+      { key: "B", visits: 3, started: 3, completed: 2, checkouts: 1, leads: 2, purchases: 1 },
+    ]);
+  });
+
   it("leads paginados e CSV com proteção de fórmula", async () => {
     h.prisma.funnel.findFirst.mockResolvedValue(row({ published: readyDraft }));
     const lead = {
