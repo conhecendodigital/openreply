@@ -24,8 +24,9 @@ import type {
   LeadField,
   ScoreRoute,
 } from "@/lib/funnels/types";
+import { MAX_POPUPS } from "@/lib/funnels/schema";
 import { BLOCK_TYPE_LABEL, issueText } from "@/components/funnels/funnel-labels";
-import { MAX_OPTIONS_PER_BLOCK, PLACEHOLDER_IMAGE, PLACEHOLDER_VIDEO, newOption, updateBlock, updateStep } from "@/components/funnels/editor-model";
+import { MAX_OPTIONS_PER_BLOCK, PLACEHOLDER_IMAGE, PLACEHOLDER_VIDEO, newOption, newPopup, updateBlock, updateSettings, updateStep } from "@/components/funnels/editor-model";
 import {
   CheckField,
   IconButton,
@@ -76,6 +77,14 @@ export default function BlockPanel({
   if (!step) return <p className="text-sm text-muted">{t("Pick a screen on the left.")}</p>;
 
   const stepOptions = def.steps.map((s, i) => ({ value: s.id, label: `${i + 1}. ${s.title || t("Untitled screen")}` }));
+  const popupOptions = (def.settings.popups ?? []).map((p) => ({ value: p.id, label: p.title || p.id }));
+  // "Abrir pop-up" with no pop-up yet: creates the default one (story text in [brackets]).
+  const createPopup = () => {
+    if ((def.settings.popups ?? []).length >= MAX_POPUPS) return null;
+    const popup = newPopup();
+    setDef((d) => updateSettings(d, { popups: [...(d.settings.popups ?? []), popup] }));
+    return popup.id;
+  };
   const myIssues = issues.filter((i) => i.stepId === stepId && (block ? i.blockId === block.id : !i.blockId));
 
   const IssueList = myIssues.length > 0 && (
@@ -137,7 +146,7 @@ export default function BlockPanel({
         </button>
       </div>
       {IssueList}
-      <BlockFields key={block.id} block={block} set={set} stepOptions={stepOptions} />
+      <BlockFields key={block.id} block={block} set={set} stepOptions={stepOptions} popupOptions={popupOptions} createPopup={createPopup} />
       <NumberField
         label={t("Appears after (seconds)")}
         value={block.delaySec}
@@ -155,10 +164,14 @@ function BlockFields({
   block,
   set,
   stepOptions,
+  popupOptions,
+  createPopup,
 }: {
   block: FunnelBlock;
   set: (patch: Record<string, unknown>) => void;
   stepOptions: { value: string; label: string }[];
+  popupOptions: { value: string; label: string }[];
+  createPopup: () => string | null;
 }) {
   const t = useT();
   const alignOptions = [
@@ -259,7 +272,7 @@ function BlockFields({
     }
 
     case "button":
-      return <ButtonFields block={block} set={set} stepOptions={stepOptions} />;
+      return <ButtonFields block={block} set={set} stepOptions={stepOptions} popupOptions={popupOptions} createPopup={createPopup} />;
 
     case "options":
       return <OptionsFields block={block} set={set} stepOptions={stepOptions} />;
@@ -625,14 +638,22 @@ function ButtonFields({
   block,
   set,
   stepOptions,
+  popupOptions,
+  createPopup,
 }: {
   block: Extract<FunnelBlock, { type: "button" }>;
   set: (patch: Record<string, unknown>) => void;
   stepOptions: { value: string; label: string }[];
+  popupOptions: { value: string; label: string }[];
+  createPopup: () => string | null;
 }) {
   const t = useT();
   const action = block.action;
   const setAction = (a: ButtonAction) => set({ action: a });
+  const choosePopup = () => {
+    const id = popupOptions[0]?.value ?? createPopup();
+    if (id) setAction({ kind: "popup", popupId: id });
+  };
   return (
     <>
       <TextField label={t("Button text")} value={block.label} maxLength={120} onChange={(v) => set({ label: v })} hint={t("Say exactly what happens, like \"Quero o Chat Sem Frescura\".")} />
@@ -640,14 +661,28 @@ function ButtonFields({
         label={t("When tapped")}
         value={action.kind}
         onChange={(kind) =>
-          setAction(kind === "goto" ? { kind, stepId: stepOptions[0]?.value ?? "" } : kind === "checkout" ? { kind } : { kind: "next" })
+          kind === "popup"
+            ? choosePopup()
+            : setAction(kind === "goto" ? { kind, stepId: stepOptions[0]?.value ?? "" } : kind === "checkout" ? { kind } : { kind: "next" })
         }
         options={[
           { value: "next", label: t("Go to the next screen") },
           { value: "goto", label: t("Go to a specific screen") },
           { value: "checkout", label: t("Open the checkout") },
+          { value: "popup", label: t("Open a pop-up") },
         ]}
       />
+      {action.kind === "popup" && (
+        <>
+          <SelectField
+            label={t("Pop-up")}
+            value={action.popupId}
+            onChange={(v) => setAction({ kind: "popup", popupId: v })}
+            options={popupOptions.some((o) => o.value === action.popupId) ? popupOptions : [{ value: action.popupId, label: t("(removed pop-up)") }, ...popupOptions]}
+          />
+          <p className="text-xs text-muted">{t("Edit the pop-up text and buttons in Settings, Pop-ups. Good for a \"Quero sair\" button: the pop-up tells the story before the person leaves.")}</p>
+        </>
+      )}
       {action.kind === "goto" && (
         <SelectField label={t("Screen")} value={action.stepId} onChange={(v) => setAction({ kind: "goto", stepId: v })} options={stepOptions} />
       )}

@@ -43,6 +43,7 @@ export const ptFunnelsApi: Record<string, string> = {
   "The loading on screen {step} should be the last block": "O carregamento da tela {step} deve ser o último bloco",
   "The checkout on screen {step} is not Hotmart, Kiwify or Eduzz; check the link":
     "O checkout da tela {step} não é Hotmart, Kiwify nem Eduzz; confira o link",
+  "A button on screen {step} opens a popup that does not exist": "Um botão da tela {step} abre um pop-up que não existe",
 
   // Modelos prontos
   "Yes ladder + video offer": "Escada de sim + VSL",

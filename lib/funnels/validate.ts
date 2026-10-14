@@ -46,6 +46,7 @@ export const ISSUE_MESSAGES: Record<FunnelIssueCode, string> = {
   options_empty: "The question on screen {step} needs at least 2 options",
   loading_not_last_block: "The loading on screen {step} should be the last block",
   checkout_unknown_host: "The checkout on screen {step} is not Hotmart, Kiwify or Eduzz; check the link",
+  popup_missing: "A button on screen {step} opens a popup that does not exist",
 };
 
 /** Names of the block types (English = i18n key). */
@@ -155,6 +156,8 @@ export function validateFunnel(def: FunnelDefinition, now: Date = new Date()): F
   if (steps.length === 0) add("no_steps", "error");
 
   const stepIds = new Set(steps.map((s) => s.id));
+  const popups = Array.isArray(settings.popups) ? settings.popups : [];
+  const popupIds = new Set(popups.map((p) => p.id));
   const seenSteps = new Set<string>();
   const seenBlocks = new Set<string>();
   const seenNames = new Set<string>();
@@ -206,6 +209,7 @@ export function validateFunnel(def: FunnelDefinition, now: Date = new Date()): F
         case "button": {
           const action = block.action;
           if (action.kind === "goto" && !stepIds.has(action.stepId)) add("goto_missing", "error", where, label);
+          if (action.kind === "popup" && !popupIds.has(action.popupId)) add("popup_missing", "error", where, label);
           if (action.kind === "checkout") {
             anyCheckout = true;
             const url = action.url?.trim() || settings.checkoutUrl?.trim() || "";
@@ -269,6 +273,37 @@ export function validateFunnel(def: FunnelDefinition, now: Date = new Date()): F
       }
     });
   });
+
+  // Pop-ups: same checks as a screen ({step} = "Pop-up <title>").
+  for (const popup of popups) {
+    const label = { step: `Pop-up ${popup.title?.trim() || popup.id}` };
+    let placeholder: string | null = null;
+    for (const t of [popup.title, popup.text, popup.primary?.label, popup.secondary?.label]) {
+      placeholder = firstPlaceholder(t);
+      if (placeholder) break;
+    }
+    if (!placeholder && popup.imageUrl && isPlaceholderUrl(popup.imageUrl)) placeholder = popup.imageUrl;
+    if (placeholder) add("placeholder_left", "error", {}, { ...label, text: placeholder });
+    if (popup.imageUrl && !isHttpsUrl(popup.imageUrl)) add("url_not_https", "error", {}, label);
+    for (const action of [popup.primary?.action, popup.secondary?.action]) {
+      if (!action) continue;
+      if (action.kind === "goto" && !stepIds.has(action.stepId)) add("goto_missing", "error", {}, label);
+      if (action.kind === "checkout") {
+        anyCheckout = true;
+        const url = action.url?.trim() || settings.checkoutUrl?.trim() || "";
+        if (!url) add("checkout_no_url", "error", {}, label);
+        else if (!isHttpsUrl(url)) add("url_not_https", "error", {}, label);
+        else if (isPlaceholderUrl(url)) add("placeholder_left", "error", {}, { ...label, text: url });
+        else if (!isKnownCheckoutHost(new URL(url).hostname)) add("checkout_unknown_host", "warning", {}, label);
+      }
+    }
+    for (const stepId of popup.trigger?.stepIds ?? []) {
+      if (!stepIds.has(stepId)) {
+        add("goto_missing", "error", {}, label);
+        break;
+      }
+    }
+  }
 
   // Settings.
   const settingsUrls = [settings.logoUrl, settings.seo?.imageUrl].filter((u): u is string => Boolean(u));

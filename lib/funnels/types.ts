@@ -55,7 +55,9 @@ export type ButtonAction =
   | { kind: "next" }
   | { kind: "goto"; stepId: string }
   /** url vazia = usa settings.checkoutUrl. */
-  | { kind: "checkout"; url?: string; newTab?: boolean };
+  | { kind: "checkout"; url?: string; newTab?: boolean }
+  /** Abre o pop-up settings.popups[id === popupId] (ex.: "Quero sair" → pop-up de retenção). */
+  | { kind: "popup"; popupId: string };
 export type ButtonBlock = BlockBase & {
   type: "button";
   label: string;
@@ -202,6 +204,29 @@ export type FunnelSettings = {
   footerText?: string;
   /** Teste A/B: % das visitas que veem a versão B (10 a 90). Padrão 50. */
   abPercentB?: number;
+  /** Pop-ups do quiz (retenção, saída, tempo). Sem a chave, o player fica igual. */
+  popups?: FunnelPopup[];
+};
+
+// ─── Pop-up ──────────────────────────────────────────────────────────────────
+/** close = fecha e a pessoa continua na tela; o resto age igual ao botão. */
+export type PopupAction =
+  | { kind: "close" }
+  | { kind: "next" }
+  | { kind: "goto"; stepId: string }
+  | { kind: "checkout"; url?: string; newTab?: boolean };
+export type PopupButton = { label: string; action: PopupAction };
+export type FunnelPopup = {
+  id: string;
+  title: string;
+  text?: string;
+  imageUrl?: string;
+  primary: PopupButton;
+  /** Botão menor ("Quero sair mesmo"). delaySec = aparece depois de N s (0 a 15). */
+  secondary?: PopupButton & { delaySec?: number };
+  /** Abre sozinho: exit = mouse saindo pelo topo (computador) ou "voltar" (celular);
+   *  afterSec = N s na tela. stepIds vazio = em todas as telas. Botão kind:"popup" abre sempre. */
+  trigger?: { exit?: boolean; afterSec?: number; stepIds?: string[] };
 };
 
 export type FunnelDefinition = {
@@ -217,7 +242,7 @@ export const FUNNEL_ISSUE_CODES = [
   "testimonial_not_authorized", "compare_not_authorized", "offer_no_price", "offer_compare_not_higher",
   "guarantee_no_days", "countdown_invalid", "countdown_past", "placeholder_left",
   "fields_without_privacy", "last_step_no_checkout", "low_contrast", "pixel_invalid",
-  "options_empty", "loading_not_last_block", "checkout_unknown_host",
+  "options_empty", "loading_not_last_block", "checkout_unknown_host", "popup_missing",
 ] as const;
 export type FunnelIssueCode = (typeof FUNNEL_ISSUE_CODES)[number];
 export type FunnelIssue = {
