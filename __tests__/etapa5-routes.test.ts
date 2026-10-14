@@ -432,7 +432,10 @@ describe("MCP", () => {
     // ver_canais answered 404 "No route" before.
     expect(resolveHandler("GET", "/api/channels")).not.toBeNull();
     expect(resolveHandler("POST", "/api/broadcasts")).not.toBeNull();
+    expect(resolveHandler("GET", "/api/broadcasts")).not.toBeNull();
+    expect(resolveHandler("GET", "/api/broadcasts/b_1")?.id).toBe("b_1");
     expect(resolveHandler("POST", "/api/broadcasts/b_1/cancel")?.id).toBe("b_1");
+    expect(resolveHandler("GET", "/api/whatsapp/programados/enviados")).not.toBeNull();
     // No way to send or to publish through the MCP router.
     expect(resolveHandler("POST", "/api/broadcasts/b_1/send")).toBeNull();
     expect(resolveHandler("POST", "/api/broadcasts/b_1/winner")).toBeNull();
@@ -487,6 +490,45 @@ describe("MCP", () => {
   it("instructions say broadcasts are draft-only through the key", async () => {
     const res = await handleMcpMessage({ jsonrpc: "2.0", id: 3, method: "initialize", params: {} }, vi.fn());
     expect((res?.result as { instructions: string }).instructions).toMatch(/Disparos: pela chave você só cria RASCUNHO/);
+    expect((res?.result as { instructions: string }).instructions).toMatch(/pela chave você só lê o que os textos programados já mandaram/);
+  });
+
+  it("listar_disparos and ver_disparo are read-only GETs", async () => {
+    const names = TOOLS.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["listar_disparos", "ver_disparo"]));
+    const calls: [string, string][] = [];
+    const call: InternalCall = async (method, path) => {
+      calls.push([method, path]);
+      return { status: 200, json: { success: true, data: method === "GET" && path.includes("/api/broadcasts/") ? { id: "b_1", stats: {} } : [{ id: "b_1", status: "DONE" }] } };
+    };
+    await handleMcpMessage(
+      { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "listar_disparos", arguments: { status: "DONE" } } },
+      call
+    );
+    await handleMcpMessage(
+      { jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "ver_disparo", arguments: { broadcastId: "b_1" } } },
+      call
+    );
+    expect(calls).toEqual([
+      ["GET", "/api/broadcasts?status=DONE"],
+      ["GET", "/api/broadcasts/b_1"],
+    ]);
+  });
+
+  it("ver_whatsapp_programados only reads the one WhatsApp route the API key may call", async () => {
+    const names = TOOLS.map((t) => t.name);
+    expect(names).toContain("ver_whatsapp_programados");
+    const call = vi.fn<InternalCall>(async () => ({
+      status: 200,
+      json: { success: true, data: { desde: "2026-10-07T00:00:00.000Z", enviados: [{ label: "R507", conversationId: "c_1" }], pendentes: 3 } },
+    }));
+    const res = await handleMcpMessage(
+      { jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "ver_whatsapp_programados", arguments: { desde: "2026-10-07" } } },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("GET", "/api/whatsapp/programados/enviados?desde=2026-10-07", undefined);
+    const out = JSON.parse((res?.result as { content: { text: string }[] }).content[0].text);
+    expect(out).toMatchObject({ pendentes: 3, enviados: [{ label: "R507" }] });
   });
 
   it("has the etapa 7 read tools (dashboard, instagram, segment count, report export, A/B, sequence)", () => {
