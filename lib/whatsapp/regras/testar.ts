@@ -21,17 +21,19 @@ import type { ChamarModelo, MensagemChat } from "@/lib/whatsapp/agentes/provedor
 import type { AgenteConfig, AgentProfile, IaProvider, Uso, WaMessageLite } from "@/lib/whatsapp/agentes/types";
 import { DECISOES, type CasoTeste, type Decisao, type RegrasNegocio } from "./esquema";
 import { detectarServico } from "./detectar";
+import { exemplosParecidos, textoExemplos, type ExemploAprendido } from "./exemplos";
 import { camposDaFicha, fichaVazia, juntarFicha, preencherPorRegra } from "./ficha";
 import { blocoFicha, blocoRegras, formatoExtra } from "./prompt";
 import { localDaConversa, mensagemDeCorrecaoRegras, verificarResposta, type Verificacao } from "./verificar";
 
 export const MAX_TURNOS = 5;
-export const MAX_TURNOS_TETO = 9;
+/** Igual ao teto da conversa de verdade (MAX_RESPOSTAS_AGENTE no motor): 12 respostas do agente. */
+export const MAX_TURNOS_TETO = 12;
 
 /** Trocas do teste: uma por informação mínima, mais o oi, a abertura e a transferência. */
 export function turnosDoTeste(regras: RegrasNegocio | null | undefined): number {
   const n = regras?.infoMinima?.length ?? 0;
-  return Math.min(MAX_TURNOS_TETO, Math.max(MAX_TURNOS, n + 3));
+  return Math.min(MAX_TURNOS_TETO, Math.max(MAX_TURNOS, n + 4));
 }
 export const MAX_TOKENS_AGENTE = 600;
 export const MAX_TOKENS_CLIENTE = 200;
@@ -108,7 +110,7 @@ function obtidoDa(v: Verificacao): Obtido | null {
   return v.decisao;
 }
 
-async function rodarCaso(caso: CasoTeste, e: { regras: RegrasNegocio; profile: AgentProfile; config: AgenteConfig }, deps: DepsTeste, gasto: { micro: number; teto: boolean }): Promise<ResultadoCaso> {
+async function rodarCaso(caso: CasoTeste, e: { regras: RegrasNegocio; profile: AgentProfile; config: AgenteConfig; aprendidos?: ExemploAprendido[] }, deps: DepsTeste, gasto: { micro: number; teto: boolean }): Promise<ResultadoCaso> {
   const conversa: ResultadoCaso["conversa"] = [];
   const historico: WaMessageLite[] = [];
   const regrasQuebradas: RegraNoTeste[] = [];
@@ -165,6 +167,13 @@ async function rodarCaso(caso: CasoTeste, e: { regras: RegrasNegocio; profile: A
         new Date(base)
       ).ficha;
       const fb = blocoFicha(ficha, defs);
+      // Igual ao motor: os exemplos que a equipe ensinou entram no Comando do teste também.
+      const consulta = historico
+        .filter((m) => !m.fromMe)
+        .slice(-3)
+        .map((m) => m.body ?? "")
+        .join("\n");
+      const exemplos = exemplosParecidos(e.aprendidos ?? [], consulta, e.config.agente);
       const comando = montarComando({
         agente: e.config.agente,
         config: e.config,
@@ -173,7 +182,7 @@ async function rodarCaso(caso: CasoTeste, e: { regras: RegrasNegocio; profile: A
         memoria: null,
         historico,
         nomesDoContato: [],
-        extras: { regras: blocoRegras(e.regras, e.profile.baseCommand), formato: formatoExtra(e.regras), sabe: fb.sabe, falta: fb.falta },
+        extras: { regras: blocoRegras(e.regras, e.profile.baseCommand), formato: formatoExtra(e.regras), sabe: fb.sabe, falta: fb.falta, exemplos: exemplos.length ? textoExemplos(exemplos) : "" },
       });
       const t1 = await chamar(comando.sistemaFixo, comando.sistemaVariavel, comando.mensagens, MAX_TOKENS_AGENTE);
       if (t1 === null) return fim("teto", "o teto de gasto do dia parou o teste");
@@ -213,7 +222,7 @@ async function rodarCaso(caso: CasoTeste, e: { regras: RegrasNegocio; profile: A
 
 /** Roda os casos de teste (até 6 ao mesmo tempo) e devolve passou/falhou por caso. */
 export async function testarAgente(
-  e: { regras: RegrasNegocio; profile: AgentProfile; config: AgenteConfig; casos?: CasoTeste[] },
+  e: { regras: RegrasNegocio; profile: AgentProfile; config: AgenteConfig; casos?: CasoTeste[]; aprendidos?: ExemploAprendido[] },
   deps: DepsTeste
 ): Promise<ResultadoTeste> {
   const casos = (e.casos ?? e.regras.casosTeste).slice(0, 12);

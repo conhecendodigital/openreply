@@ -30,6 +30,7 @@ import {
   sugestoesDosCasos,
 } from "./sugestoes";
 import { testarAgente, type ResultadoTeste } from "./testar";
+import { MAX_EXEMPLOS, type ExemploAprendido } from "./exemplos";
 import type { DepsIa } from "./servidor";
 
 type Ctx = { userId: string; workspaceId: string };
@@ -471,11 +472,12 @@ export async function generateSuggestionsAi(ctx: Ctx, sessionId: string | null, 
 export async function runAgentTest(ctx: Ctx, sessionId: string | null, deps: PainelDeps, ia: DepsIa): Promise<ResultadoTeste> {
   const session = await loadSession(ctx, deps, sessionId ?? "");
   const dados = await rls(ctx, deps, async (tx) => {
-    const [profile, config] = await Promise.all([
+    const [profile, config, exemplos] = await Promise.all([
       tx.waAgentProfile.findUnique({ where: { sessionId: session.id } }),
       tx.waAgentConfig.findUnique({ where: { sessionId_agente: { sessionId: session.id, agente: "qualificacao" } } }),
+      tx.waAgentExample.findMany({ where: { sessionId: session.id, workspaceId: ctx.workspaceId }, orderBy: { createdAt: "desc" }, take: MAX_EXEMPLOS }),
     ]);
-    return { profile, config };
+    return { profile, config, exemplos };
   });
   const regras = lerRegras(dados.profile?.regrasNegocio ?? null);
   if (!regrasPreenchidas(regras) || !regras.casosTeste.length) {
@@ -487,14 +489,30 @@ export async function runAgentTest(ctx: Ctx, sessionId: string | null, deps: Pai
   const profile: AgentProfile = {
     baseCommand: dados.profile?.baseCommand ?? "",
     styleSummary: dados.profile?.styleSummary ?? null,
-    styleExamples: null,
+    // 14/10 (Matheus): o teste tem que ser igual à conversa de verdade, com o mesmo tom aprendido.
+    styleExamples: Array.isArray(dados.profile?.styleExamples)
+      ? (dados.profile!.styleExamples as Array<{ pergunta?: unknown; resposta?: unknown }>)
+          .filter((x) => typeof x?.pergunta === "string" && typeof x?.resposta === "string")
+          .map((x) => ({ pergunta: x.pergunta as string, resposta: x.resposta as string }))
+      : null,
     quietHours: null,
     maxAutoPerDay: 0,
     fatosPermitidos: Array.isArray(dados.profile?.fatosPermitidos) ? (dados.profile!.fatosPermitidos as unknown[]).filter((f): f is string => typeof f === "string") : [],
     regras,
   };
+  const aprendidos: ExemploAprendido[] = dados.exemplos.map((r) => ({
+    id: r.id,
+    sessionId: r.sessionId,
+    agente: r.agente === "qualificacao" || r.agente === "atendimento" || r.agente === "suporte" ? r.agente : null,
+    origem: r.origem === "assumir" ? "assumir" : "edicao",
+    origemId: r.origemId,
+    pergunta: r.pergunta,
+    resposta: r.resposta,
+    rascunho: r.rascunho,
+    createdAt: r.createdAt,
+  }));
   return testarAgente(
-    { regras, profile, config: { agente: "qualificacao", ativo: true, provider, modelo: model, instrucoes: dados.config?.instrucoes ?? null } },
+    { regras, profile, aprendidos, config: { agente: "qualificacao", ativo: true, provider, modelo: model, instrucoes: dados.config?.instrucoes ?? null } },
     {
       chamar: ia.chamar,
       provider,

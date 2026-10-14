@@ -207,7 +207,8 @@ export function montarRascunho(resp: RespostaIa, arquivo: ArquivoTreino): Rascun
   for (const agente of AGENTES_TREINO) {
     let texto = resp.instrucoes[agente].trim();
     if (agente === "qualificacao" && boasVindas.length) {
-      const bloco = `MENSAGEM DE BOAS-VINDAS (primeira resposta a uma pessoa nova, use o texto exato):\n${boasVindas.map((m) => aspas(m.texto)).join("\n")}`;
+      // 14/10 (Matheus): texto exato deixava toda conversa igual. Vira exemplo de tom.
+      const bloco = `JEITO DE CUMPRIMENTAR (primeira resposta a uma pessoa nova): cumprimente do seu jeito, diferente a cada pessoa, no tom deste exemplo, e faça a mesma primeira pergunta. Não copie igual:\n${boasVindas.map((m) => aspas(m.texto)).join("\n")}`;
       texto = texto ? `${bloco}\n\n${texto}` : bloco;
     }
     const c = cortar(texto, LIMITE_INSTRUCOES);

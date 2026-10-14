@@ -150,7 +150,7 @@ describe("rascunho a partir do JSON", () => {
 
   it("mensagens aprovadas e exemplos de fala entram literais (boas-vindas na qualificação)", () => {
     const r = montarRascunho(respostaIa(), arquivo());
-    expect(r.agents.qualificacao.startsWith("MENSAGEM DE BOAS-VINDAS")).toBe(true);
+    expect(r.agents.qualificacao.startsWith("JEITO DE CUMPRIMENTAR")).toBe(true);
     expect(r.agents.qualificacao).toContain('"Oi! Que bom falar com você 😊 Vou entender rapidinho a sua obra pra te direcionar. Em qual cidade vai ser a obra?"');
     expect(r.profile.baseCommand).toContain('"Tudo bem! Obrigada pelo contato. Quando precisar, é só chamar 😊"');
     expect(r.profile.baseCommand).toContain("Nosso comercial funciona de segunda a sexta, das 8h às 18h, e em sábados alternados.");

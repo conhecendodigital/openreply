@@ -204,12 +204,14 @@ export function montarComando(e: EntradaComando): ComandoMontado {
         )}`
       : "";
   const ditas = frasesJaMandadas(e.historico);
+  const ritmo = e.agente === "qualificacao" ? blocoRitmo(e.historico) : "";
   const variavel = [
     trechos.length ? `TRECHOS DOS DOCUMENTOS DO NEGÓCIO:\n${blocoDeDados("PDF do negócio", trechos.join("\n\n"))}` : "TRECHOS DOS DOCUMENTOS DO NEGÓCIO: nenhum trecho encontrado pra essa mensagem.",
     blocoMemoria,
     blocoNome(e.nomesDoContato.map((n) => primeiroESegundoNome(n)).find((n): n is string => Boolean(n)) ?? null),
     x.sabe ? `O QUE VOCÊ JÁ SABE DESSE CLIENTE (ficha do lead, só o que ele disse; não pergunte de novo):\n${blocoDeDados("ficha do lead", x.sabe)}` : "",
     x.falta ?? "",
+    ritmo,
     ditas.length
       ? `FRASES QUE VOCÊ JÁ MANDOU NESSA CONVERSA (não repita nenhuma igual ou parecida; escreva de outro jeito):\n${blocoDeDados("frases já mandadas", ditas.map((f) => `- ${f}`).join("\n"))}`
       : "",
@@ -226,6 +228,26 @@ export function montarComando(e: EntradaComando): ComandoMontado {
     mensagens: historicoParaChat(e.historico),
     fontesPermitidas: [p?.baseCommand ?? "", ...fatos, ...e.trechos.map((t) => t.texto)].join("\n"),
   };
+}
+
+/** Teto de respostas do agente numa conversa (igual a MAX_RESPOSTAS_AGENTE do motor). */
+export const LIMITE_RESPOSTAS_QUALIFICACAO = 12;
+
+/**
+ * 14/10 (Matheus): qualificar em no máximo 12 respostas, sem jogar conversa fora.
+ * Diz ao modelo em que resposta ele está, pra juntar perguntas quando o tempo aperta.
+ */
+export function blocoRitmo(historico: WaMessageLite[]): string {
+  let feitas = 0;
+  for (let i = 0; i < historico.length; i++) {
+    const m = historico[i];
+    if (m.sentBy === "AGENT" && historico[i + 1]?.sentBy !== "AGENT") feitas++;
+  }
+  const agora = feitas + 1;
+  const restam = LIMITE_RESPOSTAS_QUALIFICACAO - agora;
+  const base = `RITMO: essa é a sua resposta ${agora} de no máximo ${LIMITE_RESPOSTAS_QUALIFICACAO} nessa conversa. Toda resposta tem que levar pra qualificação: nada de papo que não ajuda a decidir, nada de pergunta que o cliente já respondeu.`;
+  if (restam <= 3) return `${base} Restam poucas respostas: junte o que falta numa pergunta só e, com o mínimo pedido, qualifique ou encerre com a frase de análise.`;
+  return base;
 }
 
 export interface SaidaAgente {
