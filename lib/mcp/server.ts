@@ -1112,18 +1112,24 @@ export const TOOLS: Tool[] = [
   {
     name: "ver_relatorio",
     description:
-      "Relatório do período (7, 30 ou 90 dias), só leitura: DMs enviadas por origem (campanha, fluxo, disparo, inbox, rascunho aprovado), cliques e CTR por campanha/fluxo/disparo, novos contatos por dia, etiquetas que mais cresceram, posts que mais geraram DM, moderação (escondidos) e o funil comentou → recebeu → clicou.",
+      "Relatório do período (hoje = dias 1, ou 7, 30, 90 dias), só leitura: DMs enviadas por origem, com erro e pessoas diferentes (campanha, fluxo, disparo, inbox, rascunho aprovado), cliques e CTR por campanha/fluxo/disparo, novos contatos por dia, etiquetas que mais cresceram, posts que mais geraram DM, moderação (escondidos) e o funil comentou → recebeu → clicou.",
     inputSchema: {
       type: "object",
-      properties: { dias: { type: "integer", enum: [7, 30, 90], description: "Período em dias (padrão 30)" } },
+      properties: {
+        dias: {
+          type: "integer",
+          enum: [1, 7, 30, 90],
+          description: "1 = hoje (desde 0h, horário de São Paulo); 7, 30 ou 90 dias (padrão 30)",
+        },
+      },
     },
     async run(args, call) {
-      const days = [7, 30, 90].includes(Number(args.dias)) ? Number(args.dias) : 30;
+      const days = [1, 7, 30, 90].includes(Number(args.dias)) ? Number(args.dias) : 30;
       const res = await api(call, "GET", `/api/reports?days=${days}`);
       if (!res.ok) return res.result;
       const r = res.data as ReportData;
       return text({
-        periodo: `${r.days} dias`,
+        periodo: r.days === 1 ? "hoje (desde 0h, horário de São Paulo)" : `${r.days} dias`,
         fusoHorario: r.timezone,
         dmsEnviadas: {
           total: r.dms?.total ?? 0,
@@ -1132,6 +1138,8 @@ export const TOOLS: Tool[] = [
           disparo: r.dms?.groups?.broadcast ?? 0,
           inbox: r.dms?.groups?.inbox ?? 0,
           rascunhoAprovado: r.dms?.groups?.draft ?? 0,
+          comErro: r.dms?.failed ?? 0,
+          pessoasDiferentes: r.dms?.people ?? 0,
           aviso: `O registro por origem existe desde ${r.dms?.ledgerSince ?? "2026-10-04"}; antes disso só as campanhas (DmLog: ${r.dms?.campaignsFromDmLog ?? 0} no período).`,
         },
         ctr: {
@@ -1241,6 +1249,8 @@ type ReportData = {
   dms?: {
     total?: number;
     groups?: Record<string, number>;
+    failed?: number;
+    people?: number;
     ledgerSince?: string;
     campaignsFromDmLog?: number;
   };

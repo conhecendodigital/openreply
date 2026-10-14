@@ -230,6 +230,14 @@ describe("period report", () => {
     });
   });
 
+  it("days=1 is today since 00:00 in São Paulo", async () => {
+    const r = await buildPeriodReport("ws_A", 1, AT);
+    expect(r.since).toBe("2026-10-08T03:00:00.000Z");
+    expect(r.days).toBe(1);
+    expect(r.dms.failed).toEqual(expect.any(Number));
+    expect(r.dms.people).toEqual(expect.any(Number));
+  });
+
   it("groups DMs by origin, CTR per campaign/flow/broadcast, days filled, funnel rates", async () => {
     const r = await buildPeriodReport("ws_A", 7, AT);
     expect(r.dms.groups).toEqual({ campaign: 42, flow: 5, broadcast: 7, inbox: 4, draft: 1 });
