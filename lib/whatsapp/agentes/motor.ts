@@ -44,8 +44,8 @@ import { custoMaximoUsdMicro, custoUsdMicro, escolherModelo, type Preco } from "
 import { janelaAberta, resolverModo, takeoverAtivo, TAKEOVER_HORAS_PADRAO } from "./modo";
 import { chamarModelo, ErroModelo, type ChamarModelo, type RespostaModelo } from "./provedores";
 import { autoEnviosHoje, conferirTeto, emSilencio, limitesDoAmbiente, mensagemTeto } from "./teto";
-import { triar, ultimaDoContato, type DecisaoTriagem } from "./triagem";
-import type { AgenteConfig, AgenteTipo, AgentRunRecord, AgentStore, AiCredentialRecord, BrainRetriever, ConversaContexto, IaProvider, Limites, RunStatus, Uso } from "./types";
+import { pediuPraParar, triar, ultimaDoContato, type DecisaoTriagem } from "./triagem";
+import type { AgenteConfig, AgenteTipo, AgentRunRecord, AgentStore, AiCredentialRecord, BrainRetriever, ConversaContexto, IaProvider, Limites, RunStatus, Uso, WaMessageLite } from "./types";
 
 export const MAX_TOKENS_SAIDA = 600;
 
@@ -90,6 +90,22 @@ export type ResultadoMotor =
   | { acao: "erro"; motivo: string; runId?: string };
 
 const LIMIAR_CHECAGEM = 0.65;
+
+/*
+ * 2026-10-14 (Matheus: "o agente cometer o mínimo de erro" sem "estourar a API"):
+ * travas adaptadas do whatsapp-skills da Wassenger (MIT). Tudo por regra, sem
+ * texto a mais no Comando e sem chamada a mais no modelo.
+ */
+/** Erro da IA: o cliente não fica no vácuo. Texto fixo, sem prazo nem promessa. */
+export const AVISO_ERRO = "Recebi sua mensagem! Vou passar seu caso pra equipe e a gente te responde por aqui o mais breve possível.";
+/** Conversa longa sem a ficha andar: fecha e passa pro responsável (frase do Matheus, 14/10). */
+export const AVISO_CONVERSA_LONGA = "Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível.";
+/** Respostas seguidas do agente (desde a última pessoa da equipe) com a ficha parada. */
+export const MAX_RESPOSTAS_SEM_AVANCO = 6;
+/** Teto de respostas do agente numa conversa, mesmo com a ficha andando. */
+export const MAX_RESPOSTAS_AGENTE = 12;
+/** Quem pediu pra parar fica fora do agente até alguém da equipe devolver. */
+const PAUSA_PEDIU_PARAR_DIAS = 365;
 
 export async function processarMensagem(
   deps: DepsMotor,
@@ -143,6 +159,29 @@ export async function processarMensagem(
     return store.registrarRun({ ...base, ...extra, status });
   };
 
+  // 0. Pediu pra parar: o agente sai da conversa e não responde nada (sem modelo).
+  if (ultima.type === "text" || ultima.mediaTextKind === "audio") {
+    if (pediuPraParar(textoPlano(ultima))) {
+      const motivo = "o contato pediu pra não receber mais mensagens";
+      const runId = await registrar("skipped", { blockedReason: motivo });
+      await store.definirTakeover(ctx.conversation.id, new Date(now.getTime() + PAUSA_PEDIU_PARAR_DIAS * 24 * 3600 * 1000));
+      await store.cancelarEnvios(ctx.conversation.id);
+      await deps.notificar?.({ ownerUserId: ctx.ownerUserId, conversationId: ctx.conversation.id, tipo: "handoff", mensagem: `O agente parou nessa conversa: ${motivo}.` });
+      return { acao: "ignorado", motivo, runId };
+    }
+  }
+
+  // Conversa longa demais: fecha com a frase fixa e passa pro responsável (sem modelo).
+  const voltas = respostasDoAgente(ctx.historico);
+  const encerrarConversa = async (motivo: string): Promise<ResultadoMotor> => {
+    const r = await passarPraHumano(deps, ctx.ownerUserId, ctx.conversation.id, now, registrar, motivo);
+    if (modo.modo === "AUTO" && !emSilencio(now, ctx.profile?.quietHours, ctx.profile?.timeZone)) {
+      await agendarAvisoFixo(deps, ctx, base, ultima.sentAt, now, [AVISO_CONVERSA_LONGA], "sistema:conversa-longa", motivo);
+    }
+    return r;
+  };
+  if (voltas >= MAX_RESPOSTAS_AGENTE) return encerrarConversa(`conversa longa: ${voltas} respostas do agente`);
+
   // 1. Triagem
   const tri: DecisaoTriagem = await triar(ctx.historico, configs, deps.jev);
   base.triagem = tri;
@@ -193,6 +232,9 @@ export async function processarMensagem(
     const r = await atualizarFicha(deps, ctx, { regras: regrasPerfil, defs, ficha: leadAtual.ficha, config, cred, limites, now });
     ficha = r.ficha;
     fichaMudou = r.mudou;
+    if (!fichaMudou && voltas >= MAX_RESPOSTAS_SEM_AVANCO) {
+      return encerrarConversa(`conversa sem avançar: ${voltas} respostas do agente e a ficha parada`);
+    }
   }
 
   // 3. Contexto: cérebro + memória + tom + exemplos aprendidos
@@ -256,6 +298,16 @@ export async function processarMensagem(
   // pg_advisory_xact_lock(hashtext(ownerUserId)) pra fechar a corrida de vez.
   runReservado = await store.registrarRun({ ...base, status: "pending", custoUsdMicro: custoPrevisto });
 
+  // IA falhou: o cliente não fica no vácuo. Passa pra equipe e, no automático, sai um aviso fixo.
+  const falhou = async (motivo: string): Promise<void> => {
+    await store.definirTakeover(ctx.conversation.id, new Date(now.getTime() + TAKEOVER_HORAS_PADRAO * 3600 * 1000));
+    await store.cancelarEnvios(ctx.conversation.id);
+    await deps.notificar?.({ ownerUserId: ctx.ownerUserId, conversationId: ctx.conversation.id, tipo: "handoff", mensagem: `A IA falhou nessa conversa: ${motivo}` });
+    if (modo.modo === "AUTO" && !emSilencio(now, ctx.profile?.quietHours, ctx.profile?.timeZone)) {
+      await agendarAvisoFixo(deps, ctx, base, ultima.sentAt, now, [AVISO_ERRO], "sistema:erro", motivo);
+    }
+  };
+
   // 5. Modelo
   let resposta;
   try {
@@ -275,6 +327,7 @@ export async function processarMensagem(
     if (e instanceof ErroModelo && (e.codigo === "chave_invalida" || e.codigo === "sem_saldo")) {
       await deps.notificar?.({ ownerUserId: ctx.ownerUserId, conversationId: ctx.conversation.id, tipo: "erro_chave", mensagem: motivo });
     }
+    await falhou(motivo);
     return { acao: "erro", motivo, runId };
   }
   Object.assign(base, {
@@ -289,6 +342,7 @@ export async function processarMensagem(
   let saida: SaidaAgente | null = lerSaida(resposta.texto);
   if (!saida) {
     const runId = await registrar("error", { blockedReason: "A IA devolveu uma resposta fora do formato." });
+    await falhou("a IA devolveu uma resposta fora do formato");
     return { acao: "erro", motivo: "resposta fora do formato", runId };
   }
 
@@ -376,17 +430,7 @@ export async function processarMensagem(
     // No automático, a mensagem de encaminhamento ainda sai pro cliente (aprovada
     // pelo sistema, então passa pela pausa) e depois o agente fica parado ali.
     if (modo.modo === "AUTO" && bolhas.length > 0) {
-      const atraso = ctx.profile?.atrasoInicialMs;
-      const envios = planejarRitmo(bolhas, deps.rng, atraso ? { esperaInicialMinMs: atraso.min, esperaInicialMaxMs: atraso.max } : {});
-      if (janelaAberta(ultima.sentAt, now, duracaoTotalMs(envios))) {
-        const runId = await store.registrarRun({ ...base, status: "scheduled", output: { bolhas, motivo: saida.motivo || null } });
-        await store.atualizarRun(runId, { approvedBy: "sistema:encaminhamento" });
-        try {
-          await store.agendarEnvio({ runId, conversationId: ctx.conversation.id, sessionId: ctx.session.id, envios });
-        } catch {
-          await store.atualizarRun(runId, { status: "draft", blockedReason: "Não deu pra agendar a mensagem de encaminhamento; ficou como rascunho." });
-        }
-      }
+      await agendarAvisoFixo(deps, ctx, base, ultima.sentAt, now, bolhas, "sistema:encaminhamento", saida.motivo || null);
     }
     return resultado;
   }
@@ -625,6 +669,58 @@ async function avisarResponsavel(store: AgentStore, ctx: ConversaContexto, resum
     return r.ok ? " (resumo enviado pro WhatsApp do responsável)" : ` (não deu pra mandar o resumo pro WhatsApp do responsável: ${r.motivo})`;
   } catch {
     return " (não deu pra mandar o resumo pro WhatsApp do responsável)";
+  }
+}
+
+/**
+ * Quantas vezes o agente respondeu desde a última mensagem da equipe (ou do último
+ * aviso de conversa longa). Bolhas seguidas contam como uma resposta.
+ */
+export function respostasDoAgente(historico: WaMessageLite[]): number {
+  let voltas = 0;
+  for (let i = historico.length - 1; i >= 0; i--) {
+    const m = historico[i];
+    if (m.sentBy === "USER_APP" || m.sentBy === "USER_PHONE") break;
+    if (m.sentBy === "AGENT" && (m.body ?? "").trim() === AVISO_CONVERSA_LONGA) break;
+    if (m.sentBy === "AGENT" && historico[i + 1]?.sentBy !== "AGENT") voltas++;
+  }
+  return voltas;
+}
+
+/**
+ * Mensagem que o sistema manda sozinho (encaminhamento, erro da IA, conversa longa):
+ * run próprio, aprovado pelo sistema (passa pela pausa do agente) e sem custo de IA,
+ * pra não contar duas vezes no teto do dia.
+ */
+async function agendarAvisoFixo(
+  deps: DepsMotor,
+  ctx: ConversaContexto,
+  base: Omit<AgentRunRecord, "status">,
+  ultimaEm: Date,
+  now: Date,
+  bolhas: string[],
+  aprovadoPor: string,
+  motivo: string | null
+): Promise<void> {
+  const { store } = deps;
+  const atraso = ctx.profile?.atrasoInicialMs;
+  const envios = planejarRitmo(bolhas, deps.rng, atraso ? { esperaInicialMinMs: atraso.min, esperaInicialMaxMs: atraso.max } : {});
+  if (!janelaAberta(ultimaEm, now, duracaoTotalMs(envios))) return;
+  const runId = await store.registrarRun({
+    ...base,
+    status: "scheduled",
+    output: { bolhas, motivo },
+    tokensIn: 0,
+    tokensOut: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    custoUsdMicro: 0,
+  });
+  await store.atualizarRun(runId, { approvedBy: aprovadoPor });
+  try {
+    await store.agendarEnvio({ runId, conversationId: ctx.conversation.id, sessionId: ctx.session.id, envios });
+  } catch {
+    await store.atualizarRun(runId, { status: "draft", blockedReason: "Não deu pra agendar a mensagem automática; ficou como rascunho." });
   }
 }
 

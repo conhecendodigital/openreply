@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StoreMemoria } from "./helpers/wa-agentes-store";
 import { encryptToken } from "@/lib/meta/oauth";
 import { perguntarJev } from "@/lib/whatsapp/agentes/jev";
-import { triar, triagemLocal } from "@/lib/whatsapp/agentes/triagem";
+import { pediuPraParar, triar, triagemLocal } from "@/lib/whatsapp/agentes/triagem";
 import { quebrarEmBolhas as qb } from "@/lib/whatsapp/agentes/bolhas";
 import { custoUsdMicro, escolherModelo, MODELO_GPT_MINI, MODELO_HAIKU, MODELO_SONNET } from "@/lib/whatsapp/agentes/modelos";
 import { conferirTeto, emSilencio, inicioDoDia } from "@/lib/whatsapp/agentes/teto";
@@ -14,7 +14,17 @@ import { listarChaves, salvarChave } from "@/lib/whatsapp/agentes/credenciais";
 import { chamarModelo, ErroModelo, OPENAI_URL, ANTHROPIC_URL } from "@/lib/whatsapp/agentes/provedores";
 import { aprenderTom, limparDadosPessoais } from "@/lib/whatsapp/agentes/tom";
 import { historicoParaChat, lerSaida, montarComando } from "@/lib/whatsapp/agentes/comando";
-import { aprovarRascunho, podeEnviar, processarMensagem, rejeitarRascunho, type DepsMotor } from "@/lib/whatsapp/agentes/motor";
+import {
+  aprovarRascunho,
+  AVISO_CONVERSA_LONGA,
+  AVISO_ERRO,
+  MAX_RESPOSTAS_AGENTE,
+  podeEnviar,
+  processarMensagem,
+  rejeitarRascunho,
+  respostasDoAgente,
+  type DepsMotor,
+} from "@/lib/whatsapp/agentes/motor";
 import type { AgentMode, ConversaContexto, WaMessageLite } from "@/lib/whatsapp/agentes/types";
 import type { PedidoModelo } from "@/lib/whatsapp/agentes/provedores";
 
@@ -817,5 +827,98 @@ describe("resposta num bloco só vira bolhas (07/10)", () => {
   it("frase curta continua numa bolha", () => {
     expect(qb(["Como é seu nome?"])).toEqual(["Como é seu nome?"]);
     expect(qb(["Oi! Como é seu nome?"])).toEqual(["Oi! Como é seu nome?"]);
+  });
+});
+
+describe("travas do agente (14/10, adaptado do whatsapp-skills da Wassenger)", () => {
+  const agente = (id: string, body: string, minutosAtras: number) => msg(id, body, true, minutosAtras, { sentBy: "AGENT" });
+  const ctxAuto = () => store.contextos.get("c1")!;
+
+  it("reconhece quem pediu pra parar, sem pegar frase comum", () => {
+    for (const t of ["pare", "PARE!", "stop", "não quero mais receber", "me tira da lista", "remove meu número", "parem de me mandar mensagem", "não me mande mais nada"]) {
+      expect(pediuPraParar(t), t).toBe(true);
+    }
+    for (const t of ["cancelar meu pedido", "isso é para mim?", "quero saber o preço", "para quando fica pronto?", "não para de chover aqui", ""]) {
+      expect(pediuPraParar(t), t).toBe(false);
+    }
+  });
+
+  it("pediu pra parar: não chama o modelo, pausa a conversa e avisa a equipe", async () => {
+    store.contextos.set("c1", contexto({ numero: "AUTO", historico: [msg("m1", "não quero mais receber mensagem", false, 1)] }));
+    const notificar = vi.fn(async () => {});
+    const r = await processarMensagem(deps({ notificar }), { conversationId: "c1", triggerMsgId: "m1", now: AGORA });
+    expect(r.acao).toBe("ignorado");
+    expect(chamar).not.toHaveBeenCalled();
+    expect(store.envios).toHaveLength(0);
+    expect(ctxAuto().conversation.humanTakeoverUntil!.getTime()).toBeGreaterThan(AGORA.getTime() + 300 * 86_400_000);
+    expect(notificar).toHaveBeenCalledWith(expect.objectContaining({ tipo: "handoff" }));
+  });
+
+  it("modelo fora do ar no AUTO: a pessoa recebe o aviso fixo e a equipe assume", async () => {
+    store.contextos.set("c1", contexto({ numero: "AUTO" }));
+    const notificar = vi.fn(async () => {});
+    const r = await processarMensagem(
+      deps({
+        notificar,
+        chamar: async () => {
+          throw new ErroModelo("fora_do_ar", 503);
+        },
+      }),
+      { conversationId: "c1", triggerMsgId: "m1", now: AGORA }
+    );
+    expect(r.acao).toBe("erro");
+    expect(store.envios).toHaveLength(1);
+    expect(store.envios[0].envios.map((e) => e.texto)).toEqual([AVISO_ERRO]);
+    expect(ctxAuto().conversation.humanTakeoverUntil!.getTime()).toBeGreaterThan(AGORA.getTime());
+    expect(notificar).toHaveBeenCalledWith(expect.objectContaining({ tipo: "handoff" }));
+    // o aviso não conta como gasto do modelo
+    const aviso = [...store.runs.values()].find((x) => x.approvedBy === "sistema:erro")!;
+    expect(aviso.custoUsdMicro).toBe(0);
+    expect(await podeEnviar(store, { runId: store.envios[0].runId, now: AGORA })).toEqual({ ok: true });
+  });
+
+  it("resposta fora do formato no AUTO também cai no aviso fixo", async () => {
+    store.contextos.set("c1", contexto({ numero: "AUTO" }));
+    chamar = modeloFalso("isso não é json");
+    const r = await processarMensagem(deps(), { conversationId: "c1", triggerMsgId: "m1", now: AGORA });
+    expect(r.acao).toBe("erro");
+    expect(store.envios[0]?.envios.map((e) => e.texto)).toEqual([AVISO_ERRO]);
+  });
+
+  it("no RASCUNHO o erro não manda nada sozinho", async () => {
+    chamar = modeloFalso("isso não é json");
+    const r = await processarMensagem(deps(), { conversationId: "c1", triggerMsgId: "m1", now: AGORA });
+    expect(r.acao).toBe("erro");
+    expect(store.envios).toHaveLength(0);
+  });
+
+  it("conta as voltas do agente e zera quando a equipe fala ou depois do aviso de encerrar", () => {
+    const h = [
+      msg("c1", "oi", false, 30),
+      agente("a1", "oi! tudo bem?", 29),
+      agente("a2", "como posso ajudar?", 29),
+      msg("c2", "quero orçamento", false, 20),
+      agente("a3", "de qual cidade?", 19),
+      msg("c3", "campinas", false, 10),
+    ];
+    expect(respostasDoAgente(h)).toBe(2);
+    expect(respostasDoAgente([msg("u", "deixa comigo", true, 25), ...h.slice(3)])).toBe(1);
+    expect(respostasDoAgente([...h.slice(0, 3), msg("u", "assumi", true, 21), ...h.slice(3)])).toBe(1);
+    expect(respostasDoAgente([...h.slice(0, 3), agente("z", AVISO_CONVERSA_LONGA, 21), ...h.slice(3)])).toBe(1);
+  });
+
+  it("conversa longa demais: encerra com a frase combinada e passa pra equipe sem chamar o modelo", async () => {
+    const historico: WaMessageLite[] = [];
+    for (let i = MAX_RESPOSTAS_AGENTE; i > 0; i--) {
+      historico.push(msg(`c${i}`, `pergunta ${i}`, false, i * 4 + 2));
+      historico.push(agente(`a${i}`, `resposta ${i}`, i * 4 + 1));
+    }
+    historico.push(msg("m1", "e mais uma coisa", false, 1));
+    store.contextos.set("c1", contexto({ numero: "AUTO", historico }));
+    const r = await processarMensagem(deps(), { conversationId: "c1", triggerMsgId: "m1", now: AGORA });
+    expect(r.acao).toBe("humano");
+    expect(chamar).not.toHaveBeenCalled();
+    expect(store.envios[0]?.envios.map((e) => e.texto)).toEqual([AVISO_CONVERSA_LONGA]);
+    expect(ctxAuto().conversation.humanTakeoverUntil!.getTime()).toBeGreaterThan(AGORA.getTime());
   });
 });
