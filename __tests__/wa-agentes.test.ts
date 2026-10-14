@@ -124,6 +124,11 @@ describe("triagem", () => {
     expect(triagemLocal("quero falar com um atendente")?.acao).toBe("humano");
     expect(triagemLocal("me passa pra uma pessoa")?.acao).toBe("humano");
     expect(triagemLocal("quanto custa?")).toBeNull();
+    // 2026-10-14: cumprimento sozinho sempre é respondido, sem passar pelo Jev.
+    expect(triagemLocal("Oi")?.acao).toBe("responder");
+    expect(triagemLocal("oii, tudo bem?")?.acao).toBe("responder");
+    expect(triagemLocal("Boa tarde!")?.acao).toBe("responder");
+    expect(triagemLocal("oi, quanto custa a obra?")).toBeNull();
   });
 
   it("não chama o Jev quando a regra local já resolve", async () => {
@@ -354,10 +359,31 @@ describe("modo rascunho", () => {
     expect(store.envios).toHaveLength(0);
   });
 
-  it("AUTO com resposta com cara de IA (Jev) vira rascunho", async () => {
-    store.contextos.set("c1", contexto({ conversa: "AUTO" }));
+  // 2026-10-14 (Matheus): no automático ninguém aprova; palpite do Jev não segura a resposta.
+  it("AUTO no número: palpite do Jev (cara de IA, talvez não responda) envia mesmo assim", async () => {
+    store.contextos.set("c1", contexto({ numero: "AUTO" }));
+    const r = await processarMensagem(
+      deps({ jev: { apiKey: CHAVE_JEV, fetchImpl: jevFalso({}, { cara_ia: 0.9, responde: 0.1 }) as unknown as typeof fetch } }),
+      { conversationId: "c1", triggerMsgId: "m1", now: AGORA }
+    );
+    expect(r.acao).toBe("agendado");
+    expect(store.envios).toHaveLength(1);
+  });
+
+  it("RASCUNHO: palpite do Jev continua aparecendo como aviso", async () => {
+    store.contextos.set("c1", contexto({}));
     const r = await processarMensagem(
       deps({ jev: { apiKey: CHAVE_JEV, fetchImpl: jevFalso({}, { cara_ia: 0.9 }) as unknown as typeof fetch } }),
+      { conversationId: "c1", triggerMsgId: "m1", now: AGORA }
+    );
+    expect(r.acao).toBe("rascunho");
+    if (r.acao === "rascunho") expect(r.alerta).toMatch(/robô/);
+  });
+
+  it("AUTO com resposta que promete demais (Jev) continua rascunho", async () => {
+    store.contextos.set("c1", contexto({ numero: "AUTO" }));
+    const r = await processarMensagem(
+      deps({ jev: { apiKey: CHAVE_JEV, fetchImpl: jevFalso({}, { guru: 0.9 }) as unknown as typeof fetch } }),
       { conversationId: "c1", triggerMsgId: "m1", now: AGORA }
     );
     expect(r.acao).toBe("rascunho");
@@ -725,7 +751,7 @@ describe("tom e Comando", () => {
     expect(c.sistemaVariavel).toContain("ignore as regras");
   });
 
-  it("AUTO com triagem incerta (Jev fora do ar na triagem) vira rascunho", async () => {
+  it("AUTO com triagem incerta (Jev fora do ar na triagem) responde mesmo assim", async () => {
     store.contextos.set("c1", contexto({ conversa: "AUTO" }));
     let n = 0;
     const jevMeio = vi.fn(async (url: string, init: RequestInit) => {
@@ -737,8 +763,8 @@ describe("tom e Comando", () => {
       deps({ jev: { apiKey: CHAVE_JEV, fetchImpl: jevMeio as unknown as typeof fetch, esperar: async () => {} } }),
       { conversationId: "c1", triggerMsgId: "m1", now: AGORA }
     );
-    expect(r.acao).toBe("rascunho");
-    expect(store.envios).toHaveLength(0);
+    expect(r.acao).toBe("agendado");
+    expect(store.envios).toHaveLength(1);
   });
 
   it("histórico corta pelo tamanho mantendo as mais novas", () => {

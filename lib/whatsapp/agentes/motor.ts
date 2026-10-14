@@ -8,7 +8,7 @@
  *   -> teto de gasto
  *   -> cérebro + memória + tom -> modelo (Haiku 4.5 / GPT-5 mini; Sonnet 5 se difícil)
  *   -> travas de conteúdo (preço/prazo/link inventado) + checagem do Jev
- *   -> RASCUNHO (padrão) ou envio agendado com ritmo humano (só se ligado na conversa/etiqueta)
+ *   -> RASCUNHO (padrão) ou envio agendado com ritmo humano (só se ligado no número, conversa ou etiqueta)
  *
  * O envio de verdade é do conector: ele chama podeEnviar() antes de cada bolha,
  * então "Assumir" segura até um envio que já estava na fila.
@@ -393,7 +393,12 @@ export async function processarMensagem(
   const output = { bolhas, motivo: saida.motivo || null };
 
   // 6. Travas de conteúdo e checagem do Jev
+  // 2026-10-14 (Matheus): no automático ninguém fica aprovando. Só trava dura (dado
+  // inventado, regra do negócio quebrada, promessa demais) segura a resposta; os
+  // palpites do Jev (cara de robô, "talvez não responda", triagem em dúvida, Jev fora
+  // do ar) só viram aviso no rascunho quando o modo já é rascunho.
   const alertas: string[] = alertaRegra ? [alertaRegra] : [];
+  const palpites: string[] = [];
   const inventadas = afirmacoesInventadas(bolhas.join("\n"), comando.fontesPermitidas);
   if (inventadas.length) alertas.push(descreverInventadas(inventadas));
   const checagem = await perguntarJev({ ultima_mensagem_do_cliente: textoPlano(ultima).slice(0, 1500), resposta: bolhas.join("\n") }, PERGUNTAS_CHECAR, deps.jev);
@@ -402,12 +407,9 @@ export async function processarMensagem(
       const r = checagem.respostas[k];
       return r?.tipo === "noul" ? r.sim : 0.5;
     };
-    if (sim("cara_ia") >= LIMIAR_CHECAGEM) alertas.push("A resposta parece escrita por robô. Ajuste o tom antes de enviar.");
+    if (sim("cara_ia") >= LIMIAR_CHECAGEM) palpites.push("A resposta parece escrita por robô. Ajuste o tom antes de enviar.");
     if (sim("guru") >= LIMIAR_CHECAGEM) alertas.push("A resposta promete demais. Confira antes de enviar.");
-    if (sim("responde") <= 1 - LIMIAR_CHECAGEM) alertas.push("A resposta talvez não responda o que o cliente perguntou.");
-  } else if (modo.modo === "AUTO" && checagem.erro !== "sem_chave") {
-    // Jev fora do ar (não desligado de propósito): melhor rascunho.
-    alertas.push("Não deu pra conferir a resposta agora, então ela ficou como rascunho.");
+    if (sim("responde") <= 1 - LIMIAR_CHECAGEM) palpites.push("A resposta talvez não responda o que o cliente perguntou.");
   }
 
   await store.salvarMemoria(ctx.contact.id, ctx.ownerUserId, {
@@ -418,8 +420,7 @@ export async function processarMensagem(
   });
 
   // 7. Rascunho ou envio
-  // Triagem incerta (Jev fora do ar ou em dúvida) nunca sai sozinha: vira rascunho.
-  if (modo.modo === "AUTO" && tri.incerto) alertas.push("A triagem ficou em dúvida, então a resposta ficou como rascunho.");
+  if (modo.modo !== "AUTO") alertas.push(...palpites);
   let motivoRascunho: string | null = alertas.length ? alertas.join(" ") : null;
   if (modo.modo === "AUTO" && !motivoRascunho) {
     if (emSilencio(now, ctx.profile?.quietHours, ctx.profile?.timeZone)) motivoRascunho = "Horário de silêncio: ficou como rascunho.";

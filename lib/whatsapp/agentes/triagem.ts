@@ -28,6 +28,11 @@ export interface DecisaoTriagem {
 const SO_CONFIRMACAO =
   /^(ok+|okay|blz|beleza|show|top|massa|valeu|vlw|obg|obrigad[oa]s?|muito obrigad[oa]|brigad[oa]|grat[oa]|tmj|certo|entendi|perfeito|combinado|fechado|t[aá] bom|t[aá]|sim|ss|kk+|haha+|rs+|amém|amem|deus aben[cç]oe|👍|🙏|❤️|😊)[\s!.,]*$/i;
 
+// 2026-10-14 (Matheus: "a pessoa deu oi, vai lá, oi, tudo bem?"): cumprimento
+// sozinho sempre pede resposta, sem gastar o Jev nem cair em "triagem em dúvida".
+const SO_CUMPRIMENTO =
+  /^((oi+e?|ol[aá]+|opa|e a[ií]|eae|eai|bom dia|boa tarde|boa noite|fala|salve|hey|hello)[\s!.,]*)+((tudo bem|tudo bom|td bem|td bom|como vai|blz)[\s?!.,]*)?$/i;
+
 const PEDE_PESSOA =
   /\b(falar|conversar|fala|quero|chama|chamar|passa|passar)\b.{0,20}\b(com )?(um |uma |o |a )?(humano|pessoa|atendente|gerente|dono|respons[aá]vel|algu[eé]m de verdade)\b/i;
 
@@ -54,6 +59,7 @@ export function triagemLocal(texto: string): Pick<DecisaoTriagem, "acao" | "moti
   // 2026-10-06 (Matheus: "só transferir quando qualificar"): só o pedido explícito
   // de falar com uma pessoa transfere. Reclamação e reembolso o agente responde com cuidado.
   if (PEDE_PESSOA.test(t)) return { acao: "humano", motivo: "pediu pra falar com uma pessoa" };
+  if (t.length <= 40 && SO_CUMPRIMENTO.test(t)) return { acao: "responder", motivo: "cumprimento" };
   return null;
 }
 
