@@ -1162,6 +1162,44 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "listar_disparos",
+    description:
+      "Lista os disparos (mensagem pra um segmento): nome, status, conta, segmento e quando foi criado/começou/terminou. Filtro opcional por status.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["DRAFT", "SCHEDULED", "SENDING", "DONE", "CANCELED", "FAILED"],
+          description: "Filtra por status",
+        },
+      },
+    },
+    async run(args, call) {
+      const status = requireString(args, "status");
+      const res = await api(call, "GET", `/api/broadcasts${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "ver_disparo",
+    description:
+      "Um disparo: texto, botões, variantes A/B e os resultados (enviadas, com erro, puladas, cliques, respostas, por variante). Enquanto não começou, mostra também quantos receberiam agora.",
+    inputSchema: {
+      type: "object",
+      properties: { broadcastId: { ...str, description: "ID do disparo (de listar_disparos ou criar_rascunho_disparo)" } },
+      required: ["broadcastId"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "broadcastId");
+      if (!id) return text("Informe o broadcastId.", true);
+      const res = await api(call, "GET", `/api/broadcasts/${encodeURIComponent(id)}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
     name: "listar_segmentos",
     description:
       "Lista os segmentos salvos (filtros do CRM) com a contagem ao vivo: quantos contatos no segmento e quantos estão com conversa aberta agora. Só quem está com conversa aberta (falou com a conta nas últimas 24h), não pediu pra sair e não foi assumido recebe disparo.",
@@ -1430,6 +1468,27 @@ export const TOOLS: Tool[] = [
     },
   },
 
+  // ─── WhatsApp (leitura) ────────────────────────────────────────────────────
+  // Só essa rota foi feita pra aceitar chave de API (2026-10-08, sem o texto
+  // das mensagens). O resto de /api/whatsapp/* (conversas, grupos, enquetes,
+  // sessões, agentes, leads, fila de programados) devolve 403 human_only pra
+  // chave, de propósito: só sessão de pessoa logada (lib/whatsapp/painel-http.ts).
+  {
+    name: "ver_whatsapp_programados",
+    description:
+      "Textos programados do WhatsApp que já saíram da fila desde uma data (padrão 7 dias atrás; sem o texto, só rótulo, conversa e horário) e quantos ainda estão pendentes. O resto do WhatsApp (conversas, grupos, enquetes, sessões, agentes, leads) não tem leitura pela chave de API hoje; só pela tela do Lead Engine.",
+    inputSchema: {
+      type: "object",
+      properties: { desde: { ...str, description: "Data ISO (padrão: 7 dias atrás)" } },
+    },
+    async run(args, call) {
+      const desde = requireString(args, "desde");
+      const res = await api(call, "GET", `/api/whatsapp/programados/enviados${desde ? `?desde=${encodeURIComponent(desde)}` : ""}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+
   // ─── Etapa 6: quiz (funis) ─────────────────────────────────────────────────
   // Pela chave: criar e editar RASCUNHO e ler números. Publicar é só pela tela.
   ...FUNNEL_TOOLS,
@@ -1561,7 +1620,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. WhatsApp: pela chave você só lê o que os textos programados já mandaram (ver_whatsapp_programados); conversas, grupos, enquetes, sessões, agentes e leads do WhatsApp são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
       });
     }
     case "ping":
