@@ -255,13 +255,17 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
   const perguntas = frasesComPergunta(saida.bolhas);
   for (const d of e.defs) {
     const v = e.ficha.campos[d.chave];
-    if (!v || v.origem === "inferido") continue;
+    // Nome do contato do WhatsApp conta como sabido: não pergunta o nome de quem já tem nome salvo (14/10).
+    if (!v || (v.origem === "inferido" && d.tipo !== "nome")) continue;
     const re = PERGUNTA_DE[d.tipo];
     const repetiu = perguntas.some((p) => (re ? re.test(p) : d.tipo === "outro" && d.palavras.some((w) => contemTermo(p, w))));
     if (repetiu) {
       violacoes.push({
         regra: "perguntou_de_novo",
-        paraModelo: `Você perguntou de novo "${d.rotulo}", que o cliente já respondeu (${v.valor}). Não repita: use o que ele já disse e pergunte só o que falta.`,
+        paraModelo:
+          v.origem === "inferido"
+            ? `Você perguntou "${d.rotulo}", mas já sabe pelo contato do WhatsApp (${v.valor}). Não pergunte: use e pergunte só o que falta.`
+            : `Você perguntou de novo "${d.rotulo}", que o cliente já respondeu (${v.valor}). Não repita: use o que ele já disse e pergunte só o que falta.`,
         paraDono: `A resposta perguntava de novo "${d.rotulo}", que o cliente já respondeu.`,
       });
       break;
