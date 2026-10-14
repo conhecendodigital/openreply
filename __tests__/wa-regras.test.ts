@@ -833,10 +833,16 @@ describe("montarComando sem extras continua igual", () => {
 describe("trocas do Testar o agente", () => {
   const com = (n: number) => ({ infoMinima: Array.from({ length: n }, (_, i) => ({ campo: `info ${i}` })) }) as never;
   it("dá tempo de pedir todas as informações mínimas e transferir", () => {
-    expect(turnosDoTeste(null)).toBe(4);
-    expect(turnosDoTeste(com(1))).toBe(4);
-    expect(turnosDoTeste(com(4))).toBe(6);
-    expect(turnosDoTeste(com(10))).toBe(8);
+    expect(turnosDoTeste(null)).toBe(5);
+    expect(turnosDoTeste(com(1))).toBe(5);
+    expect(turnosDoTeste(com(4))).toBe(7);
+    expect(turnosDoTeste(com(10))).toBe(9);
+  });
+
+  it("o cliente simulado chega só com um oi e conta aos poucos (14/10)", () => {
+    expect(SISTEMA_CLIENTE).toMatch(/primeira mensagem, mande só um cumprimento curto/);
+    expect(SISTEMA_CLIENTE).toMatch(/uma informação por vez/);
+    expect(SISTEMA_CLIENTE).not.toMatch(/conte o principal da situação/);
   });
 });
 
