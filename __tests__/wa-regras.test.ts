@@ -137,6 +137,31 @@ describe("serviço", () => {
 
 /* ============================== verificação ============================== */
 
+describe("régua do teste (14/10, todos os casos reprovavam)", () => {
+  it("cumprimento sem pedido: pode perguntar do que a pessoa precisa, sem exigir a cidade", () => {
+    const v = verificar([cliente("oi")], saida({ bolhas: ["Oi, tudo bem? Me conta, o que você está precisando?"] }));
+    expect(v.violacoes.map((x) => x.regra)).not.toContain("nao_perguntou_local");
+    // Já disse o que quer: aí a cidade tem que entrar.
+    const depois = verificar([cliente("oi"), nos("Oi! O que você precisa?"), cliente("quero reformar meu apartamento")], saida({ bolhas: ["Legal! Me conta mais."] }));
+    expect(depois.violacoes.map((x) => x.regra)).toContain("nao_perguntou_local");
+  });
+
+  it("'bancada de granito' não vira a cidade Granito/PE; 'a obra é de Granito' continua contando", () => {
+    expect(local([cliente("quero uma bancada de granito")]).status).toBe("desconhecida");
+    expect(local([cliente("a obra é de Granito")]).status).toBe("fora");
+    expect(local([cliente("a obra é em Sorocaba")]).status).toBe("fora");
+  });
+
+  it("nome respondido sozinho depois da pergunta conta como nome", () => {
+    const h = [cliente("quero reformar meu apartamento em Campinas"), nos("Show! Qual o seu nome?"), cliente("Carla")];
+    const v = verificar(h, saida({ bolhas: ["Obrigado, Carla!"], qualificado: true, passarPraHumano: true }));
+    expect(v.faltando.map((d) => d.rotulo)).not.toContain("Nome");
+    // "sim" depois de outra pergunta não é nome.
+    const h2 = [cliente("quero reformar meu apartamento em Campinas"), nos("Já pegou as chaves?"), cliente("sim")];
+    expect(verificar(h2, saida({ bolhas: ["Show! Qual o seu nome?"] })).faltando.map((d) => d.rotulo)).toContain("Nome");
+  });
+});
+
 describe("verificação determinística", () => {
   it("qualificado fora da área é bloqueado e nunca vira qualificado", () => {
     const v = verificar([cliente("apartamento em Sumaré/SP")], saida({ bolhas: ["Perfeito!"], qualificado: true, passarPraHumano: true }));

@@ -36,6 +36,11 @@ const PALAVRA_COMUM = new Set([
 
 const CONECTOR = new Set(["em", "de", "da", "do", "no", "na", "pra", "para", "cidade", "fica", "moro", "mora", "sou", "obra", "ate", "perto", "regiao", "lado"]);
 
+/** Conector que também liga substantivo comum ("bancada de granito", "piso da sala"). */
+const FRACO = new Set(["de", "da", "do", "pra", "para"]);
+/** Palavra que, antes do "de", mostra que vem um lugar ("sou de", "cidade de", "perto de"). */
+const LOCAL_ANTES = new Set(["sou", "moro", "mora", "cidade", "fica", "obra", "perto", "regiao", "lado", "venho", "vim", "e", "la", "aqui", "interior", "municipio", "proximo", "saindo", "longe"]);
+
 let indice: Map<string, Municipio[]> | null = null;
 function municipios(): Map<string, Municipio[]> {
   if (indice) return indice;
@@ -104,6 +109,12 @@ export function municipiosNoTexto(regras: RegrasNegocio, t: string): LugarAchado
       const l = idx.get(nome);
       if (!l) continue;
       const m = l.length === 1 ? l[0] : l.find((x) => ufs.has(x.uf));
+      // 14/10: "bancada de granito" não é Granito/PE. Cidade de outro estado com "de/da/do/pra"
+      // só conta quando o "de" vem depois de "sou", "moro", "cidade"... ou abre a mensagem.
+      if (m && !ufs.has(m.uf) && FRACO.has(palavras[i - 1]) && i >= 2 && !LOCAL_ANTES.has(palavras[i - 2])) {
+        i += n - 1;
+        break;
+      }
       if (m) out.push({ tipo: "municipio", cidade: { cidade: m.nome, uf: m.uf }, pos: pos[i] });
       i += n - 1;
       break;

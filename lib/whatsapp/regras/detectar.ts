@@ -305,6 +305,18 @@ function perguntouERespondeu(historico: WaMessageLite[], palavras: string[]): bo
   return false;
 }
 
+/** 14/10: o agente perguntou o nome e o cliente respondeu só ele ("Carla", "Paulo Henrique"). */
+function respondeuSoONome(historico: WaMessageLite[]): boolean {
+  let perguntou = false;
+  for (const m of historico) {
+    const t = normalizarTexto(m.body ?? "");
+    if (m.fromMe) perguntou = /\b(seu nome|teu nome|como (voce|vc|tu) se chama|como te chamo|com quem (eu )?falo)\b/.test(t);
+    else if (perguntou && /^[a-z]{2,}( [a-z]{2,}){0,2}$/.test(normalizarTexto(textoPlano(m))) && !SIM_NAO.test(normalizarTexto(textoPlano(m)))) return true;
+    else perguntou = false;
+  }
+  return false;
+}
+
 function coletadoPara(info: InfoMinima, coletado: Record<string, string>): string {
   const c = normalizarTexto(info.campo);
   for (const [k, v] of Object.entries(coletado)) {
@@ -321,7 +333,7 @@ export function infoPresente(info: InfoMinima, historico: WaMessageLite[], ctx: 
 
   if (/\bnome\b/.test(campo)) {
     if (ctx.nomesDoContato.some((n) => normalizarTexto(n).replace(/\s/g, "").length >= 2)) return true;
-    return NOME_DITO.test(cliente);
+    return NOME_DITO.test(cliente) || respondeuSoONome(historico);
   }
   if (/\b(local|cidade|onde|endereco|regiao|bairro)\b/.test(campo)) return ctx.local.status !== "desconhecida";
   if (/\b(necessidade|servico|precisa|pedido|o que)\b/.test(campo) && ctx.servico.status !== "desconhecido") return true;

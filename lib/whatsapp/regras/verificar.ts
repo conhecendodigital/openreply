@@ -365,7 +365,10 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
       });
     }
     // Serviço recusado encerra a conversa: não precisa (nem deve) perguntar o local.
-    if (semLocal && e.agente === "qualificacao" && decisao !== "servico_recusado" && !perguntas.some((p) => PERGUNTA_LOCAL.test(p))) {
+    // 14/10: enquanto o cliente ainda não disse o que quer (só "oi", "boa tarde"), a resposta
+    // pode cumprimentar e perguntar do que ele precisa; o local entra na pergunta seguinte.
+    const aindaSemPedido = servico.status === "desconhecido" && perguntas.length > 0;
+    if (semLocal && e.agente === "qualificacao" && decisao !== "servico_recusado" && !aindaSemPedido && !perguntas.some((p) => PERGUNTA_LOCAL.test(p))) {
       violacoes.push({
         regra: "nao_perguntou_local",
         paraModelo: "Você ainda não sabe onde vai ser a obra. Pergunte em qual cidade vai ser a obra, numa frase curta no fim da resposta.",
