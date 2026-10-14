@@ -77,7 +77,16 @@ export function blocoRegras(r: RegrasNegocio | null | undefined, baseCommand = "
   if (r.horario) partes.push(`HORÁRIO DE ATENDIMENTO: ${r.horario}`);
   partes.push(linha("NUNCA AFIRME OU PROMETA", r.nuncaPrometer));
   const msgs = r.mensagensAprovadas.filter((m) => !baseCommand.includes(m.texto));
-  if (msgs.length) partes.push(`MENSAGENS APROVADAS (use o texto exato):\n${msgs.map((m) => `${m.quando ? `${m.quando}: ` : ""}"${m.texto}"`).join("\n")}`);
+  // 14/10 (Matheus): a saudação fixa fazia toda conversa abrir igual, com cara de robô.
+  // Cumprimento vira exemplo de tom; encaminhamento, recusa e o resto seguem no texto exato.
+  const saudacoes = msgs.filter((m) => ehSaudacao(m.quando));
+  const exatas = msgs.filter((m) => !ehSaudacao(m.quando));
+  if (saudacoes.length) {
+    partes.push(
+      `JEITO DE CUMPRIMENTAR QUEM CHEGA (exemplo de tom, NÃO copie igual): ${saudacoes.map((m) => `"${m.texto}"`).join(" / ")}. Cumprimente com suas palavras, diferente a cada pessoa, no mesmo tom, e faça a mesma primeira pergunta.`
+    );
+  }
+  if (exatas.length) partes.push(`MENSAGENS APROVADAS (use o texto exato):\n${exatas.map((m) => `${m.quando ? `${m.quando}: ` : ""}"${m.texto}"`).join("\n")}`);
   if (r.casosTeste.length) {
     partes.push(
       `CASOS DO DONO (decida assim em casos parecidos):\n${r.casosTeste
@@ -106,4 +115,10 @@ export function blocoFicha(ficha: FichaLead, defs: CampoFichaDef[]): { sabe: str
       ? `O QUE AINDA FALTA PERGUNTAR (pergunte só UM por vez, nessa ordem; nunca pergunte o que já está em "o que você já sabe"):\n${b.falta}`
       : "O QUE AINDA FALTA PERGUNTAR: nada das informações mínimas. Não repita perguntas.",
   };
+}
+
+/** "quando" de mensagem aprovada que é cumprimento de abertura (vira exemplo de tom). */
+export function ehSaudacao(quando: string | null | undefined): boolean {
+  const q = (quando ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return /primeir[oa] (contato|mensagem|resposta)|boas[ -]?vindas|saudacao|cumprimento|abertura|pessoa nova|quando (a pessoa|o cliente) (chega|manda oi)/.test(q);
 }

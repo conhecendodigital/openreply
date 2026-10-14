@@ -101,7 +101,7 @@ describe("treinar com um documento no banco", () => {
     expect(salvo.profile.baseCommand).toContain("Casa Firme Reformas");
     expect(salvo.profile.baseCommand).toContain("MENSAGENS APROVADAS PELA EMPRESA");
     expect(salvo.profile.facts).toContain("Não há taxa de deslocamento");
-    expect(salvo.agents.find((a) => a.agente === "qualificacao")?.instrucoes).toContain("MENSAGEM DE BOAS-VINDAS");
+    expect(salvo.agents.find((a) => a.agente === "qualificacao")?.instrucoes).toContain("JEITO DE CUMPRIMENTAR");
     const sessao = await db.query<{ agentMode: string }>(`SELECT "agentMode" FROM whatsapp."WaSession" WHERE id = 's_d'`);
     expect(sessao.rows[0].agentMode).toBe("OFF");
   });

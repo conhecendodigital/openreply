@@ -105,6 +105,8 @@ export const AVISO_CONVERSA_LONGA = "Vamos analisar o seu caso e, se a gente vir
 export const MAX_RESPOSTAS_SEM_AVANCO = 6;
 /** Teto de respostas do agente numa conversa, mesmo com a ficha andando. */
 export const MAX_RESPOSTAS_AGENTE = 12;
+/** Abaixo disso o Jev tem quase certeza de que a resposta fugiu da pergunta. */
+export const LIMIAR_NAO_RESPONDE = 0.15;
 /** Quem pediu pra parar fica fora do agente até alguém da equipe devolver. */
 const PAUSA_PEDIU_PARAR_DIAS = 365;
 
@@ -455,7 +457,9 @@ export async function processarMensagem(
     };
     if (sim("cara_ia") >= LIMIAR_CHECAGEM) palpites.push("A resposta parece escrita por robô. Ajuste o tom antes de enviar.");
     if (sim("guru") >= LIMIAR_CHECAGEM) alertas.push("A resposta promete demais. Confira antes de enviar.");
-    if (sim("responde") <= 1 - LIMIAR_CHECAGEM) palpites.push("A resposta talvez não responda o que o cliente perguntou.");
+    // 14/10 (Matheus): esse palpite segurava resposta boa. Só avisa quando o cliente fez
+    // pergunta de verdade e o Jev tem quase certeza de que ela ficou sem resposta.
+    if (sim("responde") <= LIMIAR_NAO_RESPONDE && textoPlano(ultima).includes("?")) palpites.push("A resposta talvez não responda o que o cliente perguntou.");
   }
 
   await store.salvarMemoria(ctx.contact.id, ctx.ownerUserId, {

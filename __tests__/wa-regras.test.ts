@@ -3,6 +3,8 @@
  * bolhas, juntar mensagens e "Testar o agente", sem IA de verdade (modelo
  * falso) e com regras FICTÍCIAS (__tests__/helpers/regras-fixtures.ts).
  */
+import { ehSaudacao } from "../lib/whatsapp/regras/prompt";
+import { blocoRitmo } from "../lib/whatsapp/agentes/comando";
 import { describe, expect, it, vi } from "vitest";
 import { encryptToken } from "@/lib/meta/oauth";
 import { StoreRegras } from "./helpers/wa-regras-store";
@@ -835,8 +837,24 @@ describe("trocas do Testar o agente", () => {
   it("dá tempo de pedir todas as informações mínimas e transferir", () => {
     expect(turnosDoTeste(null)).toBe(5);
     expect(turnosDoTeste(com(1))).toBe(5);
-    expect(turnosDoTeste(com(4))).toBe(7);
-    expect(turnosDoTeste(com(10))).toBe(9);
+    expect(turnosDoTeste(com(4))).toBe(8);
+    expect(turnosDoTeste(com(10))).toBe(12);
+    expect(turnosDoTeste(com(20))).toBe(12);
+  });
+
+  it("saudação aprovada vira exemplo de tom, não texto fixo (14/10)", () => {
+    expect(ehSaudacao("primeiro contato")).toBe(true);
+    expect(ehSaudacao("Boas-vindas")).toBe(true);
+    expect(ehSaudacao("ao encaminhar pro Robério")).toBe(false);
+  });
+
+  it("ritmo: conta as respostas do agente e aperta no fim (14/10)", () => {
+    const m = (sentBy: "AGENT" | "CONTACT", body: string) => ({ sentBy, body, fromMe: sentBy === "AGENT" }) as never;
+    expect(blocoRitmo([])).toMatch(/resposta 1 de no máximo 12/);
+    const hist = Array.from({ length: 10 }, (_, i) => [m("CONTACT", `oi ${i}`), m("AGENT", `r ${i}`)]).flat();
+    const r = blocoRitmo(hist);
+    expect(r).toMatch(/resposta 11 de no máximo 12/);
+    expect(r).toMatch(/junte o que falta/);
   });
 
   it("o cliente simulado chega só com um oi e conta aos poucos (14/10)", () => {
