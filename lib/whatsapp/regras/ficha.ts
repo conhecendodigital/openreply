@@ -18,6 +18,7 @@
  */
 import { z } from "zod";
 import { textoPlano } from "@/lib/whatsapp/agentes/comando";
+import { nomeDoContato } from "@/lib/whatsapp/agentes/nome";
 import type { WaMessageLite } from "@/lib/whatsapp/agentes/types";
 import { limparDadosPessoais } from "@/lib/whatsapp/agentes/tom";
 import type { RegrasNegocio } from "./esquema";
@@ -168,13 +169,6 @@ function nomeBonito(s: string): string {
     .join(" ");
 }
 
-function pareceNome(s: string | null | undefined): string | null {
-  const n = (s ?? "").trim();
-  if (n.length < 2 || n.length > 40) return null;
-  if (!/^[A-Za-zÀ-ÿ'’ .]+$/.test(n) || n.split(/\s+/).length > 4) return null;
-  return n;
-}
-
 function agora(now: Date) {
   return now.toISOString();
 }
@@ -246,7 +240,8 @@ export function preencherPorRegra(defs: CampoFichaDef[], e: EntradaRegra): Recor
       }
       if (dito) out[d.chave] = { valor: dito.valor, msgId: dito.msgId, origem: "confirmado", em };
       else {
-        const perfil = pareceNome(e.nomesDoContato.name) ?? pareceNome(e.nomesDoContato.pushName);
+        // Primeiro e segundo nome do contato ("Marcelo H2" vira "Marcelo"), pra o agente não perguntar.
+        const perfil = nomeDoContato(e.nomesDoContato);
         if (perfil) out[d.chave] = { valor: perfil, msgId: null, origem: "inferido", nota: "nome do perfil do WhatsApp", em };
       }
     } else if (d.tipo === "outro" && d.palavras.length) {
