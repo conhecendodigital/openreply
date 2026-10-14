@@ -16,6 +16,7 @@ import { isAllowedImageUrl, isHttpsUrl, isLocalPath } from "@/lib/funnels/media"
 import type { FunnelDefinition, FunnelSettings, FunnelTheme } from "@/lib/funnels/types";
 import { updateSettings } from "@/components/funnels/editor-model";
 import { MediaUploadControl } from "@/components/funnels/media-upload";
+import PopupsEditor from "@/components/funnels/popups-editor";
 import { CheckField, FieldShell, SelectField, TextField, inputClass } from "@/components/funnels/form-controls";
 
 type SetDef = (update: (d: FunnelDefinition) => FunnelDefinition) => void;
@@ -163,6 +164,17 @@ export default function SettingsPanel({ def, setDef, onClose }: { def: FunnelDef
               error={urlError(s.checkoutUrl, isHttpsUrl)}
               hint={t("Used by checkout buttons without their own link. The entry UTMs, fbclid, src and sck go along, plus the visit id for Hotmart.")}
             />
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            id="quiz-popups"
+            variant="group"
+            hideFromIndex
+            defaultOpen={false}
+            title={t("Pop-ups")}
+            summary={(s.popups ?? []).length ? t("{n} pop-up(s)", { n: (s.popups ?? []).length }) : t("No pop-up")}
+          >
+            <PopupsEditor def={def} setDef={setDef} />
           </CollapsibleSection>
 
           <CollapsibleSection

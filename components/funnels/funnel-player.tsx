@@ -24,6 +24,7 @@ import type {
   FunnelDefinition,
   FunnelOption,
   LeadField,
+  PopupAction,
   OptionsBlock,
   PublicBlock,
   PublicFunnel,
@@ -48,6 +49,8 @@ import GalleryView from "@/components/funnels/blocks/gallery";
 import FaqView from "@/components/funnels/blocks/faq";
 import SpacerView from "@/components/funnels/blocks/spacer";
 import ConsentBanner from "@/components/funnels/consent-banner";
+import PopupModal from "@/components/funnels/popup-modal";
+import { exitPopupFor, findPopup, hasExitPopup, timedPopupsFor, type PopupTrigger } from "@/lib/funnels/popups";
 import {
   getVisitorId,
   loadPixel,
@@ -111,7 +114,11 @@ const PLAYER_CSS = `
 .fq-press:active{transform:scale(.98)}
 .fq-root :focus-visible{outline:2px solid var(--fq-primary);outline-offset:2px}
 .fq-root h1:focus,.fq-root h2:focus{outline:none}
-@media (prefers-reduced-motion: reduce){.fq-in,.fq-pulse{animation:none}.fq-press,.fq-press:active{transition:none;transform:none}.fq-fill{animation-duration:.01ms!important}}
+@keyframes fq-pop{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+.fq-pop{animation:fq-pop 220ms ease-out both}
+@keyframes fq-pop-bg{from{opacity:0}to{opacity:1}}
+.fq-pop-bg{animation:fq-pop-bg 180ms ease-out both}
+@media (prefers-reduced-motion: reduce){.fq-in,.fq-pulse,.fq-pop,.fq-pop-bg{animation:none}.fq-press,.fq-press:active{transition:none;transform:none}.fq-fill{animation-duration:.01ms!important}}
 `;
 
 const subscribeNothing = () => () => {};
@@ -363,6 +370,10 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
     }
     if (hasFields && !(await sendLead())) return;
     const action = block.action;
+    if (action.kind === "popup") {
+      showPopup(action.popupId, "button");
+      return;
+    }
     if (action.kind !== "checkout") {
       goTo(nextStepId(def, currentId, { kind: "button", action }));
       return;
@@ -382,6 +393,125 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
     if (action.newTab) window.open(target, "_blank", "noopener");
     else window.location.assign(target);
   }
+
+  // ── Pop-ups (pedido do Matheus, 14/10) ─────────────────────────────────
+  // A button opens its pop-up every time; exit and timer open each pop-up
+  // once per visit. Nothing opens alone inside the editor.
+  const [popupId, setPopupId] = useState<string | null>(null);
+  const popup = popupId ? findPopup(funnel.settings, popupId) : null;
+  // Shown pop-ups live in state (the button path runs from render-built
+  // handlers); the listeners read the mirror ref below.
+  const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set());
+  const shownPopups = useRef<ReadonlySet<string>>(shown);
+  const popupOpen = useRef(false);
+  const autoPopups = mode !== "editor";
+
+  const showPopup = (id: string, via: PopupTrigger) => {
+    if (!findPopup(funnel.settings, id)) return;
+    setShown((prev) => new Set(prev).add(id));
+    setPopupId(id);
+    if (live) pixelCustom("QuizPopup", { popup: id, via });
+  };
+  const showPopupRef = useRef(showPopup);
+  const closePopup = useCallback(() => setPopupId(null), [setPopupId]);
+
+  async function popupAction(action: PopupAction) {
+    if (action.kind === "close") {
+      setPopupId(null);
+      return;
+    }
+    if (action.kind !== "checkout") {
+      setPopupId(null);
+      goTo(nextStepId(def, currentId, { kind: "button", action }));
+      return;
+    }
+    if (!live) {
+      setPopupId(null);
+      setNotice({ tone: "info", text: t("In the preview the button does not open the checkout.") });
+      return;
+    }
+    const url = action.url?.trim() || funnel.settings.checkoutUrl?.trim();
+    const target = url ? buildCheckoutUrl(url, entryParams ?? {}, { visitorId }) : null;
+    if (!target) {
+      setPopupId(null);
+      setNotice({ tone: "error", text: t("This button has no checkout link yet.") });
+      return;
+    }
+    const eventId = newEventId("ic");
+    track("checkout", { eventId });
+    pixelTrack("InitiateCheckout", eventId);
+    if (action.newTab) {
+      setPopupId(null);
+      window.open(target, "_blank", "noopener");
+    } else window.location.assign(target);
+  }
+
+  // Timer: counts from the moment the screen opened.
+  useEffect(() => {
+    if (!autoPopups || !currentId) return;
+    const timers = timedPopupsFor(funnel.settings, currentId, shownPopups.current).map(({ popup: p, afterMs }) =>
+      window.setTimeout(() => {
+        if (!popupOpen.current && !shownPopups.current.has(p.id)) showPopupRef.current(p.id, "timer");
+      }, afterMs)
+    );
+    return () => timers.forEach((x) => window.clearTimeout(x));
+  }, [autoPopups, currentId, funnel.settings]);
+
+  // Exit intent. Computer: the mouse leaves through the top of the window
+  // (towards the tabs / close). Phone: the back button. The back guard is one
+  // extra history entry, pushed only after the first tap (browsers skip
+  // entries made without a gesture) and only on the live page.
+  const currentIdRef = useRef(currentId);
+  // Refs read by the timer / exit listeners, kept fresh after each render.
+  useEffect(() => {
+    popupOpen.current = Boolean(popup);
+    shownPopups.current = shown;
+    showPopupRef.current = showPopup;
+    currentIdRef.current = currentId;
+  });
+  const exitEnabled = autoPopups && hasExitPopup(funnel.settings);
+  useEffect(() => {
+    if (!exitEnabled) return;
+    const tryExit = (): boolean => {
+      if (popupOpen.current) return false;
+      const p = exitPopupFor(funnel.settings, currentIdRef.current, shownPopups.current);
+      if (!p) return false;
+      showPopupRef.current(p.id, "exit");
+      return true;
+    };
+    const onMouseOut = (e: MouseEvent) => {
+      if (e.relatedTarget === null && e.clientY <= 0) tryExit();
+    };
+    document.addEventListener("mouseout", onMouseOut);
+    if (!live) return () => document.removeEventListener("mouseout", onMouseOut);
+
+    let guarded = false;
+    const arm = () => {
+      if (guarded) return;
+      guarded = true;
+      try {
+        window.history.pushState({ ...(window.history.state ?? {}), fqGuard: true }, "", window.location.href);
+      } catch {
+        guarded = false;
+      }
+    };
+    const onPop = () => {
+      if (!guarded) return;
+      guarded = false;
+      // Back pressed: the guard entry is gone. Pop-up left? show it and
+      // re-arm on the next tap. Nothing left: the next back leaves for real.
+      tryExit();
+    };
+    window.addEventListener("pointerdown", arm, { passive: true });
+    window.addEventListener("keydown", arm);
+    window.addEventListener("popstate", onPop);
+    return () => {
+      document.removeEventListener("mouseout", onMouseOut);
+      window.removeEventListener("pointerdown", arm);
+      window.removeEventListener("keydown", arm);
+      window.removeEventListener("popstate", onPop);
+    };
+  }, [exitEnabled, live, funnel.settings]);
 
   function selectOption(block: OptionsBlock, option: FunnelOption) {
     if (pendingOptionId || busy) return;
@@ -655,6 +785,10 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
             />
           )}
         </div>
+      )}
+
+      {popup && (
+        <PopupModal key={popup.id} popup={popup} labels={labels} busy={busy} onAction={(a) => void popupAction(a)} onClose={closePopup} />
       )}
     </div>
   );

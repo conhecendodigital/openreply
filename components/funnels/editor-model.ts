@@ -9,14 +9,16 @@
  */
 
 import { newId } from "@/lib/funnels/ids";
-import { MAX_BLOCKS_PER_STEP, MAX_OPTIONS, MAX_STEPS } from "@/lib/funnels/schema";
+import { MAX_BLOCKS_PER_STEP, MAX_OPTIONS, MAX_POPUPS, MAX_STEPS } from "@/lib/funnels/schema";
 import type {
   BlockType,
   FunnelBlock,
   FunnelDefinition,
   FunnelOption,
+  FunnelPopup,
   FunnelSettings,
   FunnelStep,
+  PopupAction,
 } from "@/lib/funnels/types";
 
 export const PLACEHOLDER_IMAGE = "https://troque.invalid/imagem.jpg";
@@ -182,7 +184,18 @@ export function removeStep(def: FunnelDefinition, stepId: string): FunnelDefinit
   const steps = def.steps
     .filter((s) => s.id !== stepId && s.abOf !== stepId)
     .map((s) => ({ ...s, blocks: s.blocks.map((b) => clearLinksTo(b, stepId)) }));
-  return { ...def, steps };
+  const removed = new Set(def.steps.filter((s) => s.id === stepId || s.abOf === stepId).map((s) => s.id));
+  const popups = def.settings.popups?.map((p) => popupWithoutSteps(p, removed));
+  return { ...def, steps, settings: popups ? { ...def.settings, popups } : def.settings };
+}
+
+/** Pop-up buttons that went to a removed screen go to "next"; its screen filter forgets it. */
+function popupWithoutSteps(popup: FunnelPopup, removed: Set<string>): FunnelPopup {
+  const fix = (a: PopupAction): PopupAction => (a.kind === "goto" && removed.has(a.stepId) ? { kind: "next" } : a);
+  const out: FunnelPopup = { ...popup, primary: { ...popup.primary, action: fix(popup.primary.action) } };
+  if (popup.secondary) out.secondary = { ...popup.secondary, action: fix(popup.secondary.action) };
+  if (popup.trigger?.stepIds) out.trigger = { ...popup.trigger, stepIds: popup.trigger.stepIds.filter((id) => !removed.has(id)) };
+  return out;
 }
 
 function clearLinksTo(block: FunnelBlock, stepId: string): FunnelBlock {
@@ -295,6 +308,53 @@ export function updateBlock(def: FunnelDefinition, stepId: string, blockId: stri
 
 export function updateSettings(def: FunnelDefinition, patch: Partial<FunnelSettings>): FunnelDefinition {
   return { ...def, settings: { ...def.settings, ...patch } };
+}
+
+// ─── Pop-ups (pedido do Matheus, 14/10) ──────────────────────────────────────
+
+/** New retention pop-up: [brackets] keep it from going live until the owner writes it. */
+export function newPopup(): FunnelPopup {
+  return {
+    id: newId("p"),
+    title: "Espera, antes de sair...",
+    text: "[Conte aqui, em 2 ou 3 frases, o que a pessoa perde se sair agora]",
+    primary: { label: "Quero continuar", action: { kind: "next" } },
+    secondary: { label: "Quero sair mesmo", action: { kind: "close" }, delaySec: 3 },
+  };
+}
+
+export function addPopup(def: FunnelDefinition): { def: FunnelDefinition; popupId: string | null } {
+  const list = def.settings.popups ?? [];
+  if (list.length >= MAX_POPUPS) return { def, popupId: null };
+  const popup = newPopup();
+  return { def: updateSettings(def, { popups: [...list, popup] }), popupId: popup.id };
+}
+
+export function updatePopup(def: FunnelDefinition, popupId: string, patch: Partial<Omit<FunnelPopup, "id">>): FunnelDefinition {
+  const list = def.settings.popups ?? [];
+  return updateSettings(def, {
+    popups: list.map((p) => {
+      if (p.id !== popupId) return p;
+      const next = { ...p, ...patch } as FunnelPopup;
+      for (const k of Object.keys(next) as (keyof FunnelPopup)[]) if (next[k] === undefined) delete next[k];
+      return next;
+    }),
+  });
+}
+
+/** Removes a pop-up; buttons that opened it go to "next" (so the quiz never gets stuck). */
+export function removePopup(def: FunnelDefinition, popupId: string): FunnelDefinition {
+  const list = (def.settings.popups ?? []).filter((p) => p.id !== popupId);
+  const steps = def.steps.map((s) => ({
+    ...s,
+    blocks: s.blocks.map((b) =>
+      b.type === "button" && b.action.kind === "popup" && b.action.popupId === popupId ? { ...b, action: { kind: "next" as const } } : b
+    ),
+  }));
+  const settings = { ...def.settings };
+  if (list.length > 0) settings.popups = list;
+  else delete settings.popups;
+  return { ...def, steps, settings };
 }
 
 // ─── Options helpers (used by the properties panel) ─────────────────────────

@@ -111,6 +111,7 @@ const buttonAction = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("next") }),
   z.object({ kind: z.literal("goto"), stepId: id }),
   z.object({ kind: z.literal("checkout"), url: optionalHttpsUrl, newTab: z.boolean().optional() }),
+  z.object({ kind: z.literal("popup"), popupId: id }),
 ]);
 const buttonBlock = z.object({
   ...base,
@@ -262,6 +263,30 @@ const themeSchema = z.object({
   radius: z.enum(["sm", "md", "lg"]).optional(),
 });
 
+const popupAction = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("close") }),
+  z.object({ kind: z.literal("next") }),
+  z.object({ kind: z.literal("goto"), stepId: id }),
+  z.object({ kind: z.literal("checkout"), url: optionalHttpsUrl, newTab: z.boolean().optional() }),
+]);
+const popupButton = { label: label.min(1), action: popupAction };
+const popupSchema = z.object({
+  id,
+  title: label.min(1),
+  text: longText.optional(),
+  imageUrl: optionalImageUrl,
+  primary: z.object(popupButton),
+  secondary: z.object({ ...popupButton, delaySec: z.number().int().min(0).max(15).optional() }).optional(),
+  trigger: z
+    .object({
+      exit: z.boolean().optional(),
+      afterSec: z.number().int().min(1).max(600).optional(),
+      stepIds: z.array(id).max(MAX_STEPS).optional(),
+    })
+    .optional(),
+});
+export const MAX_POPUPS = 10;
+
 const settingsSchema = z.object({
   theme: themeSchema,
   logoUrl: optionalImageUrl,
@@ -285,6 +310,7 @@ const settingsSchema = z.object({
   consentText: z.string().trim().max(500).optional(),
   footerText: z.string().trim().max(500).optional(),
   abPercentB: z.number().int().min(10).max(90).optional(),
+  popups: z.array(popupSchema).max(MAX_POPUPS).optional(),
 });
 
 export const funnelDefinitionSchema = z
@@ -297,6 +323,13 @@ export const funnelDefinitionSchema = z
     const stepIds = new Set<string>();
     const blockIds = new Set<string>();
     const names = new Set<string>();
+    const popupIds = new Set<string>();
+    (def.settings.popups ?? []).forEach((p, pi) => {
+      if (popupIds.has(p.id)) {
+        ctx.addIssue({ code: "custom", message: `Duplicate popup id ${p.id}`, path: ["settings", "popups", pi, "id"] });
+      }
+      popupIds.add(p.id);
+    });
     // Teste A/B: a tela B aponta pra uma tela A que existe e não é B; uma B por A.
     const plainIds = new Set(def.steps.filter((s) => !s.abOf).map((s) => s.id));
     const withB = new Set<string>();

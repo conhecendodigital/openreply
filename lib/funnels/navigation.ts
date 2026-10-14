@@ -60,7 +60,8 @@ export function nextStepId(
 ): string | null {
   switch (via.kind) {
     case "button":
-      if (via.action.kind === "checkout") return null;
+      // checkout leaves the quiz; popup opens a modal and stays on the screen.
+      if (via.action.kind === "checkout" || via.action.kind === "popup") return null;
       if (via.action.kind === "goto") return target(def, currentStepId, via.action.stepId);
       return following(def, currentStepId);
     case "option":

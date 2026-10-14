@@ -75,18 +75,19 @@ function whatIsMissing(detail: Pick<FunnelDetail, "validation"> | null | undefin
 const PUBLISH_NOTE = "Publicar só pela tela, com o dono da conta.";
 
 export const FUNNEL_DRAFT_HELP =
-  "Rascunho = { schemaVersion: 1, settings: { theme: { mode: \"light\"|\"dark\", primary, background, text (#RRGGBB), radius? }, checkoutUrl? (https), pixelId? (só dígitos), pixelConsent? (\"banner\"|\"notice\"), seo?, privacyUrl?, consentText?, footerText?, abPercentB? (10 a 90, padrão 50) }, steps: [{ id, title, header?: { showBack?, showProgress?, showLogo? }, blocks: [...], abOf? }] }. " +
+  "Rascunho = { schemaVersion: 1, settings: { theme: { mode: \"light\"|\"dark\", primary, background, text (#RRGGBB), radius? }, checkoutUrl? (https), pixelId? (só dígitos), pixelConsent? (\"banner\"|\"notice\"), seo?, privacyUrl?, consentText?, footerText?, abPercentB? (10 a 90, padrão 50), popups? },  steps: [{ id, title, header?: { showBack?, showProgress?, showLogo? }, blocks: [...], abOf? }] }. " +
   "Teste A/B: uma tela com abOf:\"<id da tela A>\" é a versão B dela (uma B por tela, B sem B); cada visitante vê sempre a mesma versão e a B entra no lugar da A com o id da A, então botões e destinos continuam apontando pra A. Pra terminar o teste, apague a tela B. " +
   "ids: letras, números, - ou _ (até 40), únicos no funil. Blocos (todos com id e delaySec? em segundos): " +
   '{type:"heading", text, level?:1|2, align?}; {type:"text", text (**negrito**, *itálico*, "- " vira item, {resposta.<name>})}; ' +
   '{type:"image", url (https, GIF ok), alt}; {type:"video", url (YouTube, inclusive não listado, Vimeo, Panda Video ou link de um vídeo já enviado pelo editor), title, vertical?, autoplay? e posterUrl? (só vídeo enviado)};' +
-  '{type:"button", label, action:{kind:"next"}|{kind:"goto",stepId}|{kind:"checkout",url?}, style?, sticky?}; ' +
+  '{type:"button", label, action:{kind:"next"}|{kind:"goto",stepId}|{kind:"checkout",url?}|{kind:"popup",popupId}, style?, sticky?}; ' +
   '{type:"options", name (a-z0-9_-, único), question?, multiple:false|true, options:[{id,label,emoji?,imageUrl?,tag? (etiqueta no contato),goto? (só escolha única),score?}]} (no máximo 1 por tela); ' +
   '{type:"field", field:"name"|"email"|"whatsapp", label, required?}; {type:"compare", before:{title,imageUrl?,items[]}, after:{...}, authorized?}; ' +
   '{type:"testimonial", quote, author, role?, imageUrl?, authorized}; {type:"checklist", title?, items[]}; {type:"countdown", deadline (ISO com fuso, prazo REAL), label}; ' +
   '{type:"loading", text, durationSec? (1 a 8), routes?:[{min?,max?,stepId}] por soma de score}; ' +
   '{type:"offer", title?, priceCents (centavos ou null), compareAtCents?, installmentsText?, bonuses?[], guaranteeDays?, guaranteeText?, deadlineText?}; ' +
   '{type:"gallery", images:[{url,alt}]}; {type:"faq", items:[{q,a}]}; {type:"spacer", size:"sm"|"md"|"lg"}. ' +
+  "Pop-ups (até 10) em settings.popups: [{ id, title, text? (conte a história: o que perde se sair, o que ganha se ficar), imageUrl? (https), primary:{label, action}, secondary?:{label, action, delaySec? (0 a 15, a saída aparece depois)}, trigger?:{ exit? (mouse saindo pelo topo no computador ou botão voltar no celular, 1 vez por visita), afterSec? (1 a 600 s na mesma tela), stepIds? (vazio = todas as telas) } }], action do pop-up = {kind:\"close\"}|{kind:\"next\"}|{kind:\"goto\",stepId}|{kind:\"checkout\",url?,newTab?}. Botão \"Quero sair\" = button com action {kind:\"popup\",popupId}. " +
   "Onde falta dado real (preço, depoimento, número, prazo, link), deixe [colchetes]: o funil não publica enquanto houver colchete. Nunca invente preço, depoimento, aluno, número ou escassez.";
 
 type SummaryRow = FunnelSummary;
