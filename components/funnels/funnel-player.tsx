@@ -186,7 +186,11 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
   const consentChoice = consentPick ?? storedConsent;
   const pixelAllowed = Boolean(pixelId) && (consentMode === "notice" || consentMode === "off" || consentChoice === "accepted");
   // "off": no notice at all; the privacy policy stays linked in the page footer.
-  const showBanner = Boolean(pixelId) && mounted && consentMode !== "off" && consentChoice === null;
+  // "notice" only informs, so it lives at the end of the page (footer), never
+  // floating over the content or above the button: a popup there makes people leave.
+  // "banner" still needs a choice, so it stays in the bottom stack, below the button.
+  const showBanner = Boolean(pixelId) && mounted && consentMode === "banner" && consentChoice === null;
+  const inlineNotice = Boolean(pixelId) && consentMode === "notice";
 
   // LGPD: the signed contact token (?c=) already reached the server; take it
   // out of the address bar so the Pixel (which reads the page URL), a shared
@@ -605,9 +609,10 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
           </Main>
         )}
 
-        {funnel.settings.footerText && (
+        {(funnel.settings.footerText || inlineNotice) && (
           <footer className="space-y-1 pb-6 pt-2 text-center text-xs" style={{ color: "color-mix(in srgb, var(--fq-text) 68%, transparent)" }}>
-            <p>{funnel.settings.footerText}</p>
+            {funnel.settings.footerText && <p>{funnel.settings.footerText}</p>}
+            {inlineNotice && <p>{t("We use measurement cookies (Meta) to understand what works.")}</p>}
             <a href={privacyUrl} target="_blank" rel="noopener" className="inline-block min-h-6 underline underline-offset-2">
               {t("Privacy Policy")}
             </a>
@@ -629,12 +634,17 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
               {notice.text}
             </p>
           )}
+          {stickyButtons.map((b) => (
+            <div key={b.id} className="mx-auto max-w-[28rem]">
+              <ButtonView block={b} ctx={ctx} />
+            </div>
+          ))}
           {showBanner && pixelId && (
             <ConsentBanner
               kind={consentMode}
               privacyUrl={privacyUrl}
               onAccept={() => {
-                const v: ConsentChoice = consentMode === "notice" ? "seen" : "accepted";
+                const v: ConsentChoice = "accepted";
                 saveConsent(v);
                 setConsentPick(v);
               }}
@@ -644,11 +654,6 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
               }}
             />
           )}
-          {stickyButtons.map((b) => (
-            <div key={b.id} className="mx-auto max-w-[28rem]">
-              <ButtonView block={b} ctx={ctx} />
-            </div>
-          ))}
         </div>
       )}
     </div>

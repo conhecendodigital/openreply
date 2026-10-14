@@ -4,7 +4,8 @@
  * Etapa 6 (Quiz): cookie notice of the public page. Only exists when the
  * funnel has a Pixel id. "banner" (default): the Pixel loads only after
  * Accept. "notice": the Pixel already loaded; this only informs.
- * It sits in the bottom stack of the player, above a sticky button, never over it.
+ * "banner" sits in the bottom stack of the player, below the sticky button.
+ * "notice" is not a popup: the player prints it in the page footer.
  */
 
 import { useT } from "@/components/lang-provider";
