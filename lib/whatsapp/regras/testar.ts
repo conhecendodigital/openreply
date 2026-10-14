@@ -5,7 +5,9 @@
  * caso) e o agente de qualificação responde do jeito de sempre: mesmo
  * Comando, mesmas regras duras, mesma verificação e a mesma correção (uma
  * vez). De MAX_TURNOS a MAX_TURNOS_TETO trocas, conforme as informações mínimas
- * (com 4 informações e 4 trocas o agente nunca chegava a qualificar). No fim, a decisão do motor é comparada com a
+ * (com 4 informações e 4 trocas o agente nunca chegava a qualificar), mais uma
+ * pro "oi" (14/10: cliente de verdade chega só com um oi, não com tudo de uma
+ * vez, e o teste tem que mostrar o agente puxando). No fim, a decisão do motor é comparada com a
  * decisão esperada do caso: passou ou falhou, e quais regras foram quebradas.
  *
  * Nada é gravado em conversa nem enviado pra ninguém. O gasto vai pra Gastos
@@ -22,13 +24,13 @@ import { camposDaFicha, fichaVazia, juntarFicha, preencherPorRegra } from "./fic
 import { blocoFicha, blocoRegras, formatoExtra } from "./prompt";
 import { localDaConversa, mensagemDeCorrecaoRegras, verificarResposta, type Verificacao } from "./verificar";
 
-export const MAX_TURNOS = 4;
-export const MAX_TURNOS_TETO = 8;
+export const MAX_TURNOS = 5;
+export const MAX_TURNOS_TETO = 9;
 
-/** Trocas do teste: uma por informação mínima, mais a abertura e a transferência. */
+/** Trocas do teste: uma por informação mínima, mais o oi, a abertura e a transferência. */
 export function turnosDoTeste(regras: RegrasNegocio | null | undefined): number {
   const n = regras?.infoMinima?.length ?? 0;
-  return Math.min(MAX_TURNOS_TETO, Math.max(MAX_TURNOS, n + 2));
+  return Math.min(MAX_TURNOS_TETO, Math.max(MAX_TURNOS, n + 3));
 }
 export const MAX_TOKENS_AGENTE = 600;
 export const MAX_TOKENS_CLIENTE = 200;
@@ -74,13 +76,15 @@ export interface ResultadoTeste {
 
 export const SISTEMA_CLIENTE = `Você faz o papel de um CLIENTE escrevendo no WhatsApp pra uma empresa, num teste. Siga a situação do cliente.
 Escreva como gente de verdade no WhatsApp: mensagens curtas, português do Brasil, sem formalidade.
-Na primeira mensagem, conte o principal da situação de um jeito natural. Depois, responda só o que a empresa perguntar, sempre de acordo com a situação.
+Na primeira mensagem, mande só um cumprimento curto, como cliente de verdade faz ("oi", "olá", "boa tarde", "oi, tudo bem?"). Não conte a situação ainda.
+Depois, conte aos poucos: responda só o que a empresa perguntar, com uma informação por vez, sem adiantar o resto. Se a pergunta for aberta ("como posso ajudar?"), diga só o assunto em poucas palavras, sem detalhes.
+Às vezes responda de um jeito vago ou incompleto, como gente real (ex.: "uns 50 metros por aí", "ainda não sei"). Siga sempre a situação.
 Se a empresa perguntar algo que a situação não diz (por exemplo, o seu nome), invente um dado simples e fictício. Nunca escreva telefone, e-mail ou documento.
 Responda só com um JSON: {"mensagem": "..."}`;
 
 function mensagemCliente(caso: CasoTeste, conversa: ResultadoCaso["conversa"]): string {
   const hist = conversa.map((c) => `${c.de === "cliente" ? "VOCÊ" : "EMPRESA"}: ${c.texto}`).join("\n");
-  return `SITUAÇÃO DO CLIENTE: ${caso.situacao}\n\n${hist ? `CONVERSA ATÉ AGORA:\n${hist}\n\nEscreva a sua próxima mensagem.` : "Escreva a sua primeira mensagem."}`;
+  return `SITUAÇÃO DO CLIENTE: ${caso.situacao}\n\n${hist ? `CONVERSA ATÉ AGORA:\n${hist}\n\nEscreva a sua próxima mensagem.` : "Escreva a sua primeira mensagem: só um cumprimento curto, sem contar a situação."}`;
 }
 
 function lerMensagemCliente(texto: string): string {
