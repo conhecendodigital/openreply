@@ -11,13 +11,14 @@
  * com a conversa. Texto que veio do cliente ou da equipe vai em <dados>.
  */
 import { rotuloCidade, temRegras, type RegrasNegocio } from "./esquema";
+import { FECHO_RECUSA } from "./fecho";
 import { blocosDaFicha, type CampoFichaDef, type FichaLead } from "./ficha";
 
 const DECISAO_TEXTO: Record<string, string> = {
   qualificar: "qualificar",
   analisar: "passar pra análise",
-  fora_da_area: "recusar com educação e encerrar (fora da área)",
-  servico_recusado: "recusar com educação e encerrar (serviço que a empresa não faz)",
+  fora_da_area: "recusar com educação, fechando com \"vamos analisar o seu caso e entramos em contato\" (fora da área)",
+  servico_recusado: "recusar com educação, fechando com \"vamos analisar o seu caso e entramos em contato\" (serviço que a empresa não faz)",
   humano: "passar pra uma pessoa",
   continuar: "seguir a conversa",
 };
@@ -44,22 +45,27 @@ export function blocoRegras(r: RegrasNegocio | null | undefined, baseCommand = "
     );
   }
   partes.push(linha("EXCEÇÕES DE LOCAL (vão pra análise da equipe)", r.excecoesLocal.map((e) => e.descricao)));
+  const quem = r.responsavel.nome.trim() || "o responsável";
   if (r.regioesCuidado.length || r.excecoesLocal.length) {
-    const quem = r.responsavel.nome.trim() || "o responsável";
     partes.push(
       `QUANDO PASSAR PRA ANÁLISE: termine dizendo que vai passar pro ${quem} analisar a possibilidade e que, se for possível, vocês entram em contato. Nunca prometa que vai dar certo nem dê prazo.`
     );
   }
+  // 14/10 (Matheus): o agente entende a pessoa e leva pra qualificação sem esticar; caso complexo é com o responsável.
+  const naoPare = (
+    `NÃO PARE DE ATENDER: toda mensagem do cliente recebe resposta, mesmo depois de uma recusa. Entenda o que a pessoa quer e leve pra qualificação sem esticar a conversa (uma pergunta por vez, só o que falta). CASO COMPLEXO OU FORA DO COMUM (dúvida técnica, vistoria, laudo, pedido que continua confuso depois de uma pergunta): não recuse; passe pra análise dizendo que o ${quem} vai entrar em contato pra marcar uma conversa com você, online ou no escritório. Sem prazo e sem promessa.`
+  );
+  const fechoRecusa = `Sempre feche a recusa com: "${FECHO_RECUSA}" (pode dizer do seu jeito, sem prazo).`;
   if (r.cidadesAtendidas.length) {
     partes.push("SE AINDA NÃO SABE ONDE É A OBRA: pergunte em qual cidade vai ser a obra. Nunca confirme atendimento antes de saber.");
     partes.push(
-      `FORA DA ÁREA: recuse com educação e encerre a conversa. ${r.mensagemForaDaArea ? `Como responder: ${r.mensagemForaDaArea}` : "Diga com gentileza que a empresa não atende essa região, agradeça o contato e deseje boa sorte com a obra."} Não faça pergunta nova, não peça mais dados, não passe pra humano e não marque qualificado. Se a pessoa insistir, repita a recusa com gentileza numa frase. Só se for uma das EXCEÇÕES DE LOCAL, passe pra humano com motivo "para analisar".`
+      `FORA DA ÁREA (fora do perfil): recuse com educação. ${r.mensagemForaDaArea ? `Como responder: ${r.mensagemForaDaArea}` : "Diga com gentileza que a empresa não atende essa região e agradeça o contato."} ${fechoRecusa} Não faça pergunta nova, não peça mais dados, não passe pra humano e não marque qualificado. Se a pessoa insistir, repita a recusa com gentileza numa frase. Só se for uma das EXCEÇÕES DE LOCAL, passe pra humano com motivo "para analisar".`
     );
   }
   partes.push(linha("SERVIÇOS ACEITOS", r.servicosAceitos));
   if (r.servicosRecusados.length) {
     partes.push(
-      `SERVIÇOS QUE A EMPRESA NÃO FAZ: ${r.servicosRecusados.map((s) => s.descricao).join("; ")}. Nunca diga que faz, nunca marque qualificado e não passe pra humano. ${r.mensagemServicoRecusado ? `Como responder: ${r.mensagemServicoRecusado}` : "Recuse com educação, conte numa frase o que a empresa faz e encerre, sem pergunta nova."} Se a pessoa também pedir um serviço que a empresa faz, siga só com esse.`
+      `SERVIÇOS QUE A EMPRESA NÃO FAZ (fora do perfil, ex.: só trocar uma torneira, reforminha simples e isolada): ${r.servicosRecusados.map((s) => s.descricao).join("; ")}. Nunca diga que faz, nunca marque qualificado e não passe pra humano. ${r.mensagemServicoRecusado ? `Como responder: ${r.mensagemServicoRecusado}` : "Recuse com educação e conte numa frase o que a empresa faz, sem pergunta nova."} ${fechoRecusa} Se a pessoa também pedir um serviço que a empresa faz, siga só com esse.`
     );
   }
   partes.push(linha("EXCEÇÕES DE SERVIÇO (esses são atendidos)", r.excecoesServico.map((s) => s.descricao)));
@@ -79,8 +85,8 @@ export function blocoRegras(r: RegrasNegocio | null | undefined, baseCommand = "
         .join("\n")}`
     );
   }
-  const corpo = partes.filter(Boolean).join("\n");
-  if (!corpo) return "";
+  if (!partes.some(Boolean)) return "";
+  const corpo = [...partes, naoPare].filter(Boolean).join("\n");
   return `REGRAS DURAS DO NEGÓCIO (o sistema confere cada resposta; se quebrar uma regra, a resposta não sai):\n${corpo}`;
 }
 
