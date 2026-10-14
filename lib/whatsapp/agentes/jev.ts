@@ -124,7 +124,7 @@ export const PERGUNTAS_TRIAGEM: Record<string, JevPergunta> = {
     instructions:
       "Mensagem que um cliente mandou no WhatsApp de um pequeno negócio. Use o contexto (últimas mensagens). O que o negócio deve fazer?",
     criteria: {
-      responder: "Pergunta, pedido, dúvida ou conversa que pede uma resposta",
+      responder: "Cumprimento (oi, olá, bom dia, tudo bem?), pergunta, pedido, dúvida ou conversa que pede uma resposta",
       nao_precisa: "Só confirma ou encerra: ok, obrigado, beleza, joinha, emoji, áudio de agradecimento",
       humano:
         "Reclamação, cobrança, reembolso, cancelamento, ameaça, Procon, advogado, saúde, assunto delicado ou pede pra falar com uma pessoa",
@@ -159,6 +159,7 @@ export const PERGUNTAS_CHECAR: Record<string, JevPergunta> = {
   },
   responde: {
     type: "noul",
-    instructions: "A resposta responde de verdade o que o cliente perguntou na última mensagem?",
+    instructions:
+      "A resposta responde de verdade o que o cliente perguntou na última mensagem? Se o cliente só cumprimentou (oi, bom dia, tudo bem?), cumprimentar de volta e fazer uma pergunta pra entender o que ele precisa conta como responder.",
   },
 };

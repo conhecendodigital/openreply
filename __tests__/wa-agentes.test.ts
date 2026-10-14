@@ -124,6 +124,11 @@ describe("triagem", () => {
     expect(triagemLocal("quero falar com um atendente")?.acao).toBe("humano");
     expect(triagemLocal("me passa pra uma pessoa")?.acao).toBe("humano");
     expect(triagemLocal("quanto custa?")).toBeNull();
+    // 2026-10-14: cumprimento sozinho sempre é respondido, sem passar pelo Jev.
+    expect(triagemLocal("Oi")?.acao).toBe("responder");
+    expect(triagemLocal("oii, tudo bem?")?.acao).toBe("responder");
+    expect(triagemLocal("Boa tarde!")?.acao).toBe("responder");
+    expect(triagemLocal("oi, quanto custa a obra?")).toBeNull();
   });
 
   it("não chama o Jev quando a regra local já resolve", async () => {
