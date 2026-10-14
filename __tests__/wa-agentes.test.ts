@@ -14,6 +14,8 @@ import { listarChaves, salvarChave } from "@/lib/whatsapp/agentes/credenciais";
 import { chamarModelo, ErroModelo, OPENAI_URL, ANTHROPIC_URL } from "@/lib/whatsapp/agentes/provedores";
 import { aprenderTom, limparDadosPessoais } from "@/lib/whatsapp/agentes/tom";
 import { historicoParaChat, lerSaida, montarComando } from "@/lib/whatsapp/agentes/comando";
+import { frasesJaMandadas, tirarRepetidas } from "@/lib/whatsapp/agentes/variar";
+import { FECHO_RECUSA } from "@/lib/whatsapp/regras/fecho";
 import {
   aprovarRascunho,
   AVISO_CONVERSA_LONGA,
@@ -920,5 +922,46 @@ describe("travas do agente (14/10, adaptado do whatsapp-skills da Wassenger)", (
     expect(chamar).not.toHaveBeenCalled();
     expect(store.envios[0]?.envios.map((e) => e.texto)).toEqual([AVISO_CONVERSA_LONGA]);
     expect(ctxAuto().conversation.humanTakeoverUntil!.getTime()).toBeGreaterThan(AGORA.getTime());
+  });
+});
+
+describe("resposta de gente, sem repetir frase (14/10)", () => {
+  const hist = [
+    msg("a1", "oi", false, 10),
+    msg("a2", "Oi, tudo bem? Que bom ter você por aqui 😊\nEm qual cidade será a obra?", true, 9),
+    msg("a3", "é reforma", false, 8),
+  ];
+
+  it("tira a bolha que é cópia do que o agente já mandou, mas nunca a última", () => {
+    expect(tirarRepetidas(["Oi, tudo bem? Que bom ter você por aqui 😊", "Reforma de quê, cozinha, banheiro?"], hist)).toEqual(["Reforma de quê, cozinha, banheiro?"]);
+    expect(tirarRepetidas(["Entendi, reforma.", "Em qual cidade será a obra?"], hist)).toEqual(["Entendi, reforma.", "Em qual cidade será a obra?"]);
+  });
+
+  it("nunca tira o fecho de recusa e nunca deixa a resposta vazia", () => {
+    const comFecho = [msg("f1", FECHO_RECUSA, true, 3)];
+    expect(tirarRepetidas([FECHO_RECUSA, "Posso ajudar em algo mais?"], comFecho)).toEqual([FECHO_RECUSA, "Posso ajudar em algo mais?"]);
+    expect(tirarRepetidas(["Em qual cidade será a obra?"], hist)).toEqual(["Em qual cidade será a obra?"]);
+  });
+
+  it("sem histórico do agente, nada muda", () => {
+    expect(tirarRepetidas(["Oi!", "Me conta o que precisa?"], [msg("x", "oi")])).toEqual(["Oi!", "Me conta o que precisa?"]);
+  });
+
+  it("o Comando lista as frases já mandadas e não traz mais frase pronta pra copiar", () => {
+    expect(frasesJaMandadas(hist)).toEqual(["Oi, tudo bem? Que bom ter você por aqui 😊", "Em qual cidade será a obra?"]);
+    const c = montarComando({
+      agente: "qualificacao",
+      config: { agente: "qualificacao", instrucoes: "" } as never,
+      profile: null as never,
+      trechos: [],
+      memoria: null,
+      historico: hist,
+      nomesDoContato: [],
+    });
+    expect(c.sistemaVariavel).toContain("FRASES QUE VOCÊ JÁ MANDOU");
+    expect(c.sistemaVariavel).toContain("Em qual cidade será a obra?");
+    expect(c.sistemaFixo).not.toContain("Que bom ter você por aqui");
+    expect(c.sistemaFixo).toContain("NÃO copie");
+    expect(c.sistemaFixo).not.toContain("agradeça o contato");
   });
 });

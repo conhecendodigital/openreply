@@ -36,6 +36,7 @@ import { blocoFicha, blocoRegras, formatoExtra } from "@/lib/whatsapp/regras/pro
 import { normalizarTexto } from "@/lib/whatsapp/regras/texto";
 import { avisoDasViolacoes, localDaConversa, mensagemDeCorrecaoRegras, verificarResposta, type Verificacao, type Violacao } from "@/lib/whatsapp/regras/verificar";
 import { duracaoTotalMs, planejarRitmo, quebrarEmBolhas, type Sorteio } from "./bolhas";
+import { tirarRepetidas } from "./variar";
 import { lerSaida, montarComando, textoPlano, type ComandoMontado, type SaidaAgente } from "./comando";
 import { abrirChave } from "./credenciais";
 import { descreverInventadas, afirmacoesInventadas } from "./guardas";
@@ -415,7 +416,8 @@ export async function processarMensagem(
       motivo: d === "analisar" ? `para analisar: ${verificacao.motivo}` : saida.motivo,
     };
   }
-  const bolhas = alertaRegra ? bolhasDoRascunho(saida, verificacao, defs) : quebrarEmBolhas(saida.bolhas);
+  // 2026-10-14 (Matheus): nada de mandar de novo a mesma frase pra mesma pessoa.
+  const bolhas = alertaRegra ? bolhasDoRascunho(saida, verificacao, defs) : tirarRepetidas(quebrarEmBolhas(saida.bolhas), ctx.historico);
   if (!alertaRegra && (saida.passarPraHumano || bolhas.length === 0)) {
     // 2026-10-06 (Matheus): transfere quando o lead fica qualificado (ou pede uma
     // pessoa, ou um caso vai pra análise); o resumo da ficha vai no motivo e no aviso.
