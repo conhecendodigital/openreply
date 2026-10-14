@@ -40,6 +40,19 @@ const PEDE_PESSOA =
 export const SENSIVEL =
   /\b(reembolso|estorno|devolu[cç][aã]o|cancelar|cancelamento|procon|advogad[oa]|processo|reclame ?aqui|golpe|fraude|denunciar|denúncia|chargeback|absurdo|palha[cç]ada|falar com (um|uma)? ?(humano|pessoa|atendente|gerente|dono))\b/i;
 
+// 2026-10-14 (adaptado do whatsapp-skills da Wassenger, MIT): quem pede pra parar
+// não recebe mais nada do agente. Regra local, sem gastar modelo. "Cancelar" fica de
+// fora de propósito (pode ser cancelar um pedido, não a conversa).
+const PARAR_SOZINHO = /^(pare|parar|para|stop|sair|chega)[\s!.]*$/i;
+const PEDE_PARAR =
+  /\b(n[aã]o (quero|desejo) (mais )?receber|n[aã]o quero mais (mensage|contato|receber)|(me )?(tira|tire|remove|remova|exclui|exclua)( (o )?meu (n[uú]mero|contato))? d[ao] (sua )?lista|sai(r)? d[ao] (sua )?lista|(remove|remova|apaga|apague|exclui|exclua) (o )?meu (n[uú]mero|contato)|parem? de (me )?(mandar|enviar)|n[aã]o (me )?(mande|mandem|envie|enviem) mais|descadastr)/i;
+
+/** A pessoa pediu pra não receber mais mensagens. */
+export function pediuPraParar(texto: string): boolean {
+  const t = texto.trim();
+  return Boolean(t) && (PARAR_SOZINHO.test(t) || PEDE_PARAR.test(t));
+}
+
 // Pares substitutos (emoji) e símbolos comuns, sem flag "u" (alvo ES2017).
 const SO_EMOJI = /^(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[☀-➿️‍\s])+$/;
 
