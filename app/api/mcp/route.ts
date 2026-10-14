@@ -62,7 +62,16 @@ export async function POST(request: NextRequest) {
     const response = await resolved.handler(internal, {
       params: Promise.resolve({ [resolved.param]: resolved.id }),
     });
-    const json = await response.json().catch(() => null);
+    // Most routes answer { success, data }. A couple (ex.: /api/reports/export)
+    // answer a raw file (CSV) instead; clone before the first read so a failed
+    // .json() doesn't consume the body and leave the .text() fallback empty.
+    const json = await response
+      .clone()
+      .json()
+      .catch(async () => {
+        const raw = await response.text().catch(() => null);
+        return raw === null ? null : { success: response.ok, data: raw };
+      });
     return { status: response.status, json };
   };
 

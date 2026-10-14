@@ -438,6 +438,15 @@ describe("MCP", () => {
     expect(resolveHandler("POST", "/api/broadcasts/b_1/winner")).toBeNull();
     expect(resolveHandler("POST", "/api/flows/f_1/publish")).toBeNull();
     expect(resolveHandler("POST", "/api/automations/a_1/ab/active")).toBeNull();
+    // Etapa 7: completar rotas fora do WhatsApp. ver_dashboard, listar_contas_instagram
+    // etc. answered 404 "No route" before this.
+    expect(resolveHandler("GET", "/api/dashboard/stats")).not.toBeNull();
+    expect(resolveHandler("GET", "/api/instagram/accounts")).not.toBeNull();
+    expect(resolveHandler("GET", "/api/instagram/profile")).not.toBeNull();
+    expect(resolveHandler("GET", "/api/instagram/stories")).not.toBeNull();
+    expect(resolveHandler("GET", "/api/reports/export")).not.toBeNull();
+    expect(resolveHandler("GET", "/api/automations/a_1/ab")?.id).toBe("a_1");
+    expect(resolveHandler("GET", "/api/automations/a_1/sequence")?.id).toBe("a_1");
   });
 
   it("has the new tools and criar_rascunho_disparo only POSTs a draft", async () => {
@@ -478,6 +487,130 @@ describe("MCP", () => {
   it("instructions say broadcasts are draft-only through the key", async () => {
     const res = await handleMcpMessage({ jsonrpc: "2.0", id: 3, method: "initialize", params: {} }, vi.fn());
     expect((res?.result as { instructions: string }).instructions).toMatch(/Disparos: pela chave você só cria RASCUNHO/);
+  });
+
+  it("has the etapa 7 read tools (dashboard, instagram, segment count, report export, A/B, sequence)", () => {
+    const names = TOOLS.map((t) => t.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "ver_dashboard",
+        "listar_contas_instagram",
+        "ver_perfil_instagram",
+        "listar_stories_instagram",
+        "contar_segmento",
+        "exportar_relatorio",
+        "ver_teste_ab_automacao",
+        "ver_sequencia_automacao",
+      ])
+    );
+  });
+
+  it("ver_dashboard maps automations, DMs and instagram accounts to pt-BR fields", async () => {
+    const call = vi.fn<InternalCall>(async () => ({
+      status: 200,
+      json: {
+        success: true,
+        data: {
+          userName: "Matheus",
+          contactsCount: 10,
+          instagramAccounts: [{ id: "acc_1", username: "omatheus.ai", name: null, status: "ACTIVE" }],
+          selectedInstagramAccountId: "acc_1",
+          totalAutomations: 5,
+          activeAutomations: 2,
+          dmsSentToday: 1,
+          dmsSentWeek: 4,
+          dmsSentMonth: 9,
+          dmsSkippedMonth: 0,
+          dmsFailedMonth: 1,
+          totalDMs: 100,
+          clicksThisMonth: 3,
+          totalClicks: 20,
+          ctrThisMonth: 0.33,
+          topKeywords: [],
+          dailyDMs: [],
+          recentLogs: [],
+        },
+      },
+    }));
+    const res = await handleMcpMessage(
+      { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "ver_dashboard", arguments: {} } },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("GET", "/api/dashboard/stats", undefined);
+    const out = JSON.parse((res?.result as { content: { text: string }[] }).content[0].text);
+    expect(out).toMatchObject({
+      usuario: "Matheus",
+      contatos: 10,
+      automacoes: { total: 5, ligadas: 2 },
+      dms: { hoje: 1, semana: 4, mes: 9, total: 100, puladasMes: 0, comErroMes: 1 },
+      cliques: { mes: 3, total: 20, ctrMes: 0.33 },
+      contas: [{ id: "acc_1", usuario: "omatheus.ai", nome: null, status: "ACTIVE" }],
+    });
+  });
+
+  it("contar_segmento POSTs the filters and returns the live counts in pt-BR", async () => {
+    const call = vi.fn<InternalCall>(async () => ({
+      status: 200,
+      json: { success: true, data: { total: 50, windowOpen: 12, optedOut: 1, takeover: 0, busy: 2, eligible: 10 } },
+    }));
+    const res = await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "contar_segmento", arguments: { filtros: { hasTag: "cliente" } } },
+      },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("POST", "/api/segments/count", { filters: { hasTag: "cliente" } });
+    const out = JSON.parse((res?.result as { content: { text: string }[] }).content[0].text);
+    expect(out).toMatchObject({ total: 50, comConversaAberta: 12, sairam: 1, assumidos: 0, noMeioDeFluxo: 2, receberiamAgora: 10 });
+  });
+
+  it("exportar_relatorio asks for the CSV and hands the text back", async () => {
+    const csv = "secao,item,metrica,valor\nfunil,comentou,pessoas,0\n";
+    const call = vi.fn<InternalCall>(async () => ({ status: 200, json: { success: true, data: csv } }));
+    const res = await handleMcpMessage(
+      {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: { name: "exportar_relatorio", arguments: { dias: 7, secao: "funnel" } },
+      },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("GET", "/api/reports/export?days=7&section=funnel", undefined);
+    const text = (res?.result as { content: { text: string }[] }).content[0].text;
+    expect(text).toBe(csv);
+  });
+
+  it("ver_teste_ab_automacao and ver_sequencia_automacao read by id", async () => {
+    const call = vi.fn<InternalCall>(async (_method, path) => {
+      if (path.endsWith("/ab")) {
+        return {
+          status: 200,
+          json: { success: true, data: { automationId: "a_1", abTestEnabled: true, abWinnerKey: null, base: {}, variants: [], stats: {} } },
+        };
+      }
+      return { status: 200, json: { success: true, data: { isActive: true, steps: [{ order: 1, message: "Oi", delayMinutes: 10 }], stats: { ACTIVE: 3 } } } };
+    });
+    const ab = await handleMcpMessage(
+      { jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "ver_teste_ab_automacao", arguments: { id: "a_1" } } },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("GET", "/api/automations/a_1/ab", undefined);
+    expect(JSON.parse((ab?.result as { content: { text: string }[] }).content[0].text)).toMatchObject({ automacaoId: "a_1", ligado: true });
+
+    const seq = await handleMcpMessage(
+      { jsonrpc: "2.0", id: 8, method: "tools/call", params: { name: "ver_sequencia_automacao", arguments: { id: "a_1" } } },
+      call
+    );
+    expect(call).toHaveBeenCalledWith("GET", "/api/automations/a_1/sequence", undefined);
+    expect(JSON.parse((seq?.result as { content: { text: string }[] }).content[0].text)).toMatchObject({
+      ligada: true,
+      passos: [{ ordem: 1, texto: "Oi", esperaMinutos: 10 }],
+      porStatus: { ACTIVE: 3 },
+    });
   });
 });
 

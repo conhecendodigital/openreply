@@ -1233,6 +1233,203 @@ export const TOOLS: Tool[] = [
     },
   },
 
+  // ─── Etapa 7: resto do painel (fora do WhatsApp), só leitura ──────────────
+  {
+    name: "ver_dashboard",
+    description:
+      "Resumo do workspace: automações (total/ligadas), DMs enviadas hoje/semana/mês, puladas e com erro no mês, cliques do mês e no total com CTR, palavras-chave que mais converteram, série dos últimos 7 dias e os 10 envios mais recentes. Também lista as contas do Instagram conectadas.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        instagramAccountId: { ...str, description: "Filtra os números por uma conta específica (opcional; padrão = todas)" },
+      },
+    },
+    async run(args, call) {
+      const account = requireString(args, "instagramAccountId");
+      const qs = account ? `?instagramAccountId=${encodeURIComponent(account)}` : "";
+      const res = await api(call, "GET", `/api/dashboard/stats${qs}`);
+      if (!res.ok) return res.result;
+      const d = res.data as DashboardStats;
+      return text({
+        usuario: d.userName,
+        contatos: d.contactsCount,
+        contaSelecionada: d.selectedInstagramAccountId,
+        contas: (d.instagramAccounts ?? []).map((a) => ({ id: a.id, usuario: a.username, nome: a.name, status: a.status })),
+        automacoes: { total: d.totalAutomations, ligadas: d.activeAutomations },
+        dms: {
+          hoje: d.dmsSentToday,
+          semana: d.dmsSentWeek,
+          mes: d.dmsSentMonth,
+          total: d.totalDMs,
+          puladasMes: d.dmsSkippedMonth,
+          comErroMes: d.dmsFailedMonth,
+        },
+        cliques: { mes: d.clicksThisMonth, total: d.totalClicks, ctrMes: d.ctrThisMonth },
+        palavrasChaveTop: d.topKeywords,
+        ultimosDias: d.dailyDMs,
+        ultimosEnvios: d.recentLogs,
+      });
+    },
+  },
+  {
+    name: "listar_contas_instagram",
+    description:
+      "Lista as contas do Instagram conectadas ao workspace (id, @usuario, nome, status). Use o id em instagramAccountId de outras ferramentas (ver_dashboard, ver_perfil_instagram, listar_stories_instagram, criar_rascunho_disparo).",
+    inputSchema: { type: "object", properties: {} },
+    async run(_args, call) {
+      const res = await api(call, "GET", "/api/instagram/accounts");
+      if (!res.ok) return res.result;
+      const d = res.data as InstagramAccountsResult;
+      return text({
+        contaPadrao: d.selectedInstagramAccountId,
+        contas: (d.instagramAccounts ?? []).map((a) => ({ id: a.id, usuario: a.username, nome: a.name, status: a.status })),
+      });
+    },
+  },
+  {
+    name: "ver_perfil_instagram",
+    description: "Perfil ao vivo da conta do Instagram conectada (usuário, nome, foto). Útil pra confirmar qual conta está ligada antes de criar algo.",
+    inputSchema: {
+      type: "object",
+      properties: { instagramAccountId: { ...str, description: "Conta (opcional; padrão a conta ativa)" } },
+    },
+    async run(args, call) {
+      const account = requireString(args, "instagramAccountId");
+      const qs = account ? `?instagramAccountId=${encodeURIComponent(account)}` : "";
+      const res = await api(call, "GET", `/api/instagram/profile${qs}`);
+      if (!res.ok) return res.result;
+      const p = res.data as InstagramProfileResult;
+      return text({ usuario: p.username, nome: p.name, foto: p.profilePictureUrl });
+    },
+  },
+  {
+    name: "listar_stories_instagram",
+    description:
+      "Stories ainda no ar (últimas 24h) da conta conectada, pra escolher o storyId de uma automação do tipo resposta de story (criar_automacao/editar_automacao com trigger STORY_REPLY).",
+    inputSchema: {
+      type: "object",
+      properties: { instagramAccountId: { ...str, description: "Conta (opcional; padrão a conta ativa)" } },
+    },
+    async run(args, call) {
+      const account = requireString(args, "instagramAccountId");
+      const qs = account ? `?instagramAccountId=${encodeURIComponent(account)}` : "";
+      const res = await api(call, "GET", `/api/instagram/stories${qs}`);
+      if (!res.ok) return res.result;
+      const rows = res.data as InstagramStoryRow[];
+      return text(
+        rows.map((s) => ({
+          id: s.id,
+          tipo: s.media_type,
+          url: s.media_url,
+          miniatura: s.thumbnail_url,
+          link: s.permalink,
+          em: s.timestamp,
+        }))
+      );
+    },
+  },
+  {
+    name: "contar_segmento",
+    description:
+      "Conta, sem salvar nada, quantos contatos um filtro de segmento pegaria agora: total, com conversa aberta, que saíram, assumidos, no meio de um fluxo e quantos receberiam um disparo agora (elegíveis). Use pra testar filtros antes de criar o segmento; listar_segmentos lista os já salvos.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filtros: { type: "object", description: "Filtros do segmento (mesmo formato de um segmento salvo)" },
+        instagramAccountId: { ...str, description: "Conta (opcional; padrão a conta ativa)" },
+        ignorarOcupados: { ...bool, description: "Não excluir quem está no meio de um fluxo (padrão false)" },
+      },
+    },
+    async run(args, call) {
+      const body: Record<string, unknown> = {};
+      if (args.filtros && typeof args.filtros === "object") body.filters = args.filtros;
+      const account = requireString(args, "instagramAccountId");
+      if (account) body.instagramAccountId = account;
+      if (typeof args.ignorarOcupados === "boolean") body.skipBusy = args.ignorarOcupados;
+      const res = await api(call, "POST", "/api/segments/count", body);
+      if (!res.ok) return res.result;
+      const c = res.data as SegmentCountResult;
+      return text({
+        total: c.total,
+        comConversaAberta: c.windowOpen,
+        sairam: c.optedOut,
+        assumidos: c.takeover,
+        noMeioDeFluxo: c.busy,
+        receberiamAgora: c.eligible,
+      });
+    },
+  },
+  {
+    name: "exportar_relatorio",
+    description:
+      "Baixa o relatório do período em CSV (texto), pra planilha ou análise fora do chat: período (7, 30 ou 90 dias) e seção (all, dms, campaigns, flows, broadcasts, contacts, tags, posts, moderation, funnel).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dias: { type: "integer", enum: [7, 30, 90], description: "Período (padrão 30)" },
+        secao: {
+          type: "string",
+          enum: ["all", "dms", "campaigns", "flows", "broadcasts", "contacts", "tags", "posts", "moderation", "funnel"],
+          description: "Parte do relatório (padrão all)",
+        },
+      },
+    },
+    async run(args, call) {
+      const days = [7, 30, 90].includes(Number(args.dias)) ? Number(args.dias) : 30;
+      const secao = requireString(args, "secao") ?? "all";
+      const res = await api(call, "GET", `/api/reports/export?days=${days}&section=${encodeURIComponent(secao)}`);
+      if (!res.ok) return res.result;
+      return text(typeof res.data === "string" ? res.data : JSON.stringify(res.data));
+    },
+  },
+  {
+    name: "ver_teste_ab_automacao",
+    description:
+      "Teste A/B de uma campanha: se está ligado, a versão vencedora (se já escolhida), as variantes (texto da abertura e da DM; null = usa o texto da própria campanha) e, por variante, quantas pessoas receberam, clicaram, responderam e o CTR.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { ...str, description: "ID da automação" } },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const res = await api(call, "GET", `/api/automations/${encodeURIComponent(id)}/ab`);
+      if (!res.ok) return res.result;
+      const r = res.data as AutomationAbResult;
+      return text({
+        automacaoId: r.automationId,
+        ligado: r.abTestEnabled,
+        vencedora: r.abWinnerKey,
+        base: r.base,
+        variantes: r.variants,
+        numeros: r.stats,
+      });
+    },
+  },
+  {
+    name: "ver_sequencia_automacao",
+    description:
+      "Sequência de mensagens depois do link de uma campanha (passo a passo, com o texto e a espera em minutos), só enquanto a janela de 24h está aberta e até a pessoa responder. Mostra também quantas pessoas estão em cada status.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { ...str, description: "ID da automação" } },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const res = await api(call, "GET", `/api/automations/${encodeURIComponent(id)}/sequence`);
+      if (!res.ok) return res.result;
+      const r = res.data as AutomationSequenceResult;
+      return text({
+        ligada: r.isActive,
+        passos: (r.steps ?? []).map((s) => ({ ordem: s.order, texto: s.message, esperaMinutos: s.delayMinutes })),
+        porStatus: r.stats,
+      });
+    },
+  },
+
   // ─── Etapa 6: quiz (funis) ─────────────────────────────────────────────────
   // Pela chave: criar e editar RASCUNHO e ler números. Publicar é só pela tela.
   ...FUNNEL_TOOLS,
@@ -1268,6 +1465,67 @@ type SegmentSummaryRow = {
   filters: unknown;
   lastCount: number | null;
   count?: { total: number; windowOpen: number; eligible: number; optedOut: number; takeover: number; busy: number };
+};
+
+type SegmentCountResult = {
+  total: number;
+  windowOpen: number;
+  optedOut: number;
+  takeover: number;
+  busy: number;
+  eligible: number;
+};
+
+type DashboardStats = {
+  userName: string | null;
+  contactsCount: number;
+  instagramAccounts: { id: string; username: string; name: string | null; status: string }[];
+  selectedInstagramAccountId: string | null;
+  totalAutomations: number;
+  activeAutomations: number;
+  dmsSentToday: number;
+  dmsSentWeek: number;
+  dmsSentMonth: number;
+  dmsSkippedMonth: number;
+  dmsFailedMonth: number;
+  totalDMs: number;
+  clicksThisMonth: number;
+  totalClicks: number;
+  ctrThisMonth: number;
+  topKeywords: unknown;
+  dailyDMs: { date: string; count: number }[];
+  recentLogs: unknown;
+};
+
+type InstagramAccountsResult = {
+  instagramAccounts: { id: string; username: string; instagramId: string; name: string | null; status: string }[];
+  selectedInstagramAccountId: string | null;
+};
+
+type InstagramProfileResult = { username: string; name: string | null; profilePictureUrl: string | null };
+
+type InstagramStoryRow = {
+  id: string;
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  timestamp?: string;
+};
+
+type AutomationAbResult = {
+  automationId: string;
+  abTestEnabled: boolean;
+  abWinnerKey: string | null;
+  base: unknown;
+  variants: unknown[];
+  stats: unknown;
+};
+
+type AutomationSequenceResult = {
+  isActive: boolean;
+  steps: { order: number; message: string; delayMinutes: number }[];
+  stats: Record<string, number> | null;
 };
 
 function rpcResult(id: JsonRpcId, result: unknown) {
