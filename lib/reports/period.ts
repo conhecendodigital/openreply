@@ -17,6 +17,26 @@ export type ReportPeriod = (typeof REPORT_PERIODS)[number];
 export const REPORT_TIMEZONE = "America/Sao_Paulo";
 export const LEDGER_SINCE = "2026-10-04";
 
+/** 1 = today (since 00:00 in São Paulo); 7/30/90 = rolling days. */
+export type ReportDays = ReportPeriod | 1;
+
+/** Like parsePeriod, but also accepts "1" or "hoje" for today. Used by /api/reports (and the MCP). */
+export function parseReportDays(value: string | null | undefined): ReportDays {
+  if (value === "1" || value === "hoje") return 1;
+  return parsePeriod(value);
+}
+
+/** 00:00 of the São Paulo day that contains `now`. */
+export function startOfLocalDay(now: Date): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: REPORT_TIMEZONE, hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const hour = get("hour") % 24; // some engines print midnight as "24"
+  const elapsed = ((hour * 60 + get("minute")) * 60 + get("second")) * 1000 + now.getUTCMilliseconds();
+  return new Date(now.getTime() - elapsed);
+}
+
 export function parsePeriod(value: string | null | undefined): ReportPeriod {
   const n = Number.parseInt(value ?? "", 10);
   return (REPORT_PERIODS as readonly number[]).includes(n) ? (n as ReportPeriod) : 30;
@@ -60,8 +80,8 @@ const countOf = (row: { _count?: unknown }) => {
 
 export type PeriodReport = Awaited<ReturnType<typeof buildPeriodReport>>;
 
-export async function buildPeriodReport(workspaceId: string, days: ReportPeriod, now: Date = new Date()) {
-  const since = new Date(now.getTime() - days * 86_400_000);
+export async function buildPeriodReport(workspaceId: string, days: ReportDays, now: Date = new Date()) {
+  const since = days === 1 ? startOfLocalDay(now) : new Date(now.getTime() - days * 86_400_000);
   const ws = workspaceId;
 
   const [
@@ -174,6 +194,22 @@ export async function buildPeriodReport(workspaceId: string, days: ReportPeriod,
   }
   const dmsTotal = Object.values(byOrigin).reduce((s, v) => s + v, 0);
 
+  // Failed sends and distinct people reached (read only; a failure here never breaks the report).
+  let dmsFailed = 0;
+  let dmsPeople = 0;
+  try {
+    const [failed, people] = await Promise.all([
+      prisma.outboundMessage.count({ where: { workspaceId: ws, createdAt: { gte: since }, error: { not: null } } }),
+      prisma.$queryRaw<{ people: number }[]>(Prisma.sql`
+        SELECT count(DISTINCT o."contactIgUserId")::int AS "people" FROM "OutboundMessage" o
+        WHERE o."workspaceId" = ${ws} AND o."createdAt" >= ${since} AND o."error" IS NULL`),
+    ]);
+    dmsFailed = n(failed);
+    dmsPeople = n(Array.isArray(people) ? people[0]?.people : 0);
+  } catch {
+    // Older mocks/clients without these calls: keep 0.
+  }
+
   // Names.
   const campaignIds = [...new Set([...(campaignSent ?? []), ...(campaignClicks ?? [])].map((r) => r.automationId))];
   const flowIds = [...new Set([...(flowSent ?? []), ...(flowClicks ?? [])].map((r) => r.flowId))];
@@ -235,7 +271,15 @@ export async function buildPeriodReport(workspaceId: string, days: ReportPeriod,
     since: since.toISOString(),
     until: now.toISOString(),
     timezone: REPORT_TIMEZONE,
-    dms: { total: dmsTotal, groups, byOrigin, ledgerSince: LEDGER_SINCE, campaignsFromDmLog: n(dmLogSent) },
+    dms: {
+      total: dmsTotal,
+      groups,
+      byOrigin,
+      failed: dmsFailed,
+      people: dmsPeople,
+      ledgerSince: LEDGER_SINCE,
+      campaignsFromDmLog: n(dmLogSent),
+    },
     ctr: { campaigns, flows: flowRows, broadcasts: broadcastRows },
     newContacts: { total: newContactsByDay.reduce((s, d) => s + d.count, 0), byDay: newContactsByDay },
     topTags: (Array.isArray(tags) ? tags : []).map((t) => ({ tag: t.tag, added: n(t.added), removed: n(t.removed), net: n(t.net) })),

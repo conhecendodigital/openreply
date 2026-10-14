@@ -50,7 +50,7 @@ import { describeFilters, EMPTY_FILTERS, parseFilters, segmentFiltersSchema } fr
 import { isWindowOpen } from "../lib/messaging/window";
 import { isOptOutText, normalizeOptOutText, recordOptOut } from "../lib/broadcasts/optout";
 import { csvCell, toCsv } from "../lib/utils/csv-write";
-import { dayKeys, localDay, parsePeriod } from "../lib/reports/period";
+import { dayKeys, localDay, parsePeriod, parseReportDays, startOfLocalDay } from "../lib/reports/period";
 import { createBroadcastSchema } from "../lib/broadcasts/schema";
 import { broadcastPayload, parseBroadcastPayload } from "../lib/broadcasts/jobs";
 
@@ -336,6 +336,20 @@ describe("report period", () => {
     expect(parsePeriod("90")).toBe(90);
     expect(parsePeriod("15")).toBe(30);
     expect(parsePeriod(null)).toBe(30);
+  });
+
+  it("the report also takes today (1 or 'hoje'); funnels keep 7/30/90", () => {
+    expect(parseReportDays("1")).toBe(1);
+    expect(parseReportDays("hoje")).toBe(1);
+    expect(parseReportDays("7")).toBe(7);
+    expect(parseReportDays("15")).toBe(30);
+    expect(parsePeriod("1")).toBe(30);
+  });
+
+  it("today starts at 00:00 in São Paulo", () => {
+    expect(startOfLocalDay(new Date("2026-10-14T21:48:30.250Z")).toISOString()).toBe("2026-10-14T03:00:00.000Z");
+    // 02:00 UTC is still the previous day in São Paulo.
+    expect(startOfLocalDay(new Date("2026-10-15T02:00:00.000Z")).toISOString()).toBe("2026-10-14T03:00:00.000Z");
   });
 
   it("days are São Paulo days", () => {
