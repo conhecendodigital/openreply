@@ -15,6 +15,7 @@
  */
 import { montarComando, lerSaida, type SaidaAgente } from "@/lib/whatsapp/agentes/comando";
 import { quebrarEmBolhas } from "@/lib/whatsapp/agentes/bolhas";
+import { tirarRepetidas } from "@/lib/whatsapp/agentes/variar";
 import { custoMaximoUsdMicro, custoUsdMicro, type Preco } from "@/lib/whatsapp/agentes/modelos";
 import type { ChamarModelo, MensagemChat } from "@/lib/whatsapp/agentes/provedores";
 import type { AgenteConfig, AgentProfile, IaProvider, Uso, WaMessageLite } from "@/lib/whatsapp/agentes/types";
@@ -198,7 +199,7 @@ async function rodarCaso(caso: CasoTeste, e: { regras: RegrasNegocio; profile: A
         for (const p of primeiras) regrasQuebradas.push({ regra: p.regra, aviso: p.paraDono, corrigida: !ainda.has(p.regra) });
         for (const x of v.violacoes) if (!primeiras.some((p) => p.regra === x.regra)) regrasQuebradas.push({ regra: x.regra, aviso: x.paraDono, corrigida: false });
       }
-      const bolhas = quebrarEmBolhas(saida.bolhas);
+      const bolhas = tirarRepetidas(quebrarEmBolhas(saida.bolhas), historico);
       conversa.push({ de: "agente", texto: bolhas.join("\n") });
       historico.push(msg(true, bolhas.join("\n")));
       const obtido = obtidoDa(v);
