@@ -19,6 +19,7 @@ import { classificarLead, decidirMudanca, estagioNaTela } from "@/lib/whatsapp/r
 import { exemploDaRespostaHumana, exemplosParecidos, limparExemplo } from "@/lib/whatsapp/regras/exemplos";
 import { camposDaFicha, conferirExtracao, editarFicha, fichaVazia, juntarFicha, preencherPorRegra } from "@/lib/whatsapp/regras/ficha";
 import { blocoRegras } from "@/lib/whatsapp/regras/prompt";
+import { FECHO_RECUSA } from "@/lib/whatsapp/regras/fecho";
 import { aplicarMudanca, lerSugestoesIa, sugestoesDosCasos } from "@/lib/whatsapp/regras/sugestoes";
 import { SISTEMA_CLIENTE, testarAgente, turnosDoTeste } from "@/lib/whatsapp/regras/testar";
 import { cidadesDoTexto, cidadesParaTexto, itensDoTexto, itensParaTexto, lerCidade, regioesDoTexto, regioesParaTexto } from "@/lib/whatsapp/regras/texto";
@@ -156,12 +157,12 @@ describe("verificação determinística", () => {
     expect(verificar([cliente("obra em Sumaré/SP")], saida({ bolhas: ["A gente atende Sumaré tranquilo"] })).violacoes.map((x) => x.regra)).toContain("confirmou_fora_da_area");
     expect(verificar([cliente("vocês atendem minha cidade?")], saida({ bolhas: ["Claro, atendemos sim!"] })).violacoes.map((x) => x.regra)).toContain("confirmou_sem_local");
     // Informar as cidades atendidas não é confirmar a cidade do cliente.
-    expect(verificar([cliente("obra em Sumaré/SP")], saida({ bolhas: ["A gente atende Paulínia e Campinas. Pra Sumaré a disponibilidade precisa ser analisada."] })).violacoes).toEqual([]);
+    expect(verificar([cliente("obra em Sumaré/SP")], saida({ bolhas: ["A gente atende Paulínia e Campinas. Pra Sumaré a disponibilidade precisa ser analisada. Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível."] })).violacoes).toEqual([]);
   });
 
   it("recusa seca fora da área é violação; com cuidado, não", () => {
     expect(verificar([cliente("obra em Sumaré/SP")], saida({ bolhas: ["Não atendemos aí."] })).violacoes.map((x) => x.regra)).toContain("recusa_seca");
-    expect(verificar([cliente("obra em Sumaré/SP")], saida({ bolhas: ["Poxa, infelizmente ainda não atendemos aí, mas a disponibilidade pode ser analisada."] })).violacoes).toEqual([]);
+    expect(verificar([cliente("obra em Sumaré/SP")], saida({ bolhas: ["Poxa, infelizmente ainda não atendemos aí, mas a disponibilidade pode ser analisada. Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível."] })).violacoes).toEqual([]);
     // Região com cuidado: nunca dizer que não atende.
     expect(verificar([cliente("casa no Campo Grande, Campinas")], saida({ bolhas: ["Infelizmente não atendemos o Campo Grande."] })).violacoes.map((x) => x.regra)).toContain("recusa_seca");
   });
@@ -182,7 +183,7 @@ describe("verificação determinística", () => {
     const h = [cliente("quero trocar uma torneira em Paulínia")];
     expect(verificar(h, saida({ bolhas: ["Ok!"], qualificado: true })).violacoes.map((x) => x.regra)).toContain("qualificado_servico_recusado");
     expect(verificar(h, saida({ bolhas: ["Fazemos sim!"] })).violacoes.map((x) => x.regra)).toContain("confirmou_servico_recusado");
-    const educada = verificar(h, saida({ bolhas: ["A gente trabalha com reformas completas e não faz pequenos serviços isolados, tá?"] }));
+    const educada = verificar(h, saida({ bolhas: ["A gente trabalha com reformas completas e não faz pequenos serviços isolados, tá? Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível."] }));
     expect(educada.violacoes).toEqual([]);
     expect(educada.decisao).toBe("servico_recusado");
     // Pedra é exceção: segue.
@@ -234,7 +235,7 @@ describe("motor com regras duras", () => {
     const usos: string[] = [];
     const m = modeloFalso([
       respostaAgente({ bolhas: ["Que legal! Atendemos sim, vamos marcar uma reunião?"], qualificado: true, passar: true }),
-      respostaAgente({ bolhas: ["Poxa, infelizmente a gente não atende Sumaré. Obrigado pelo contato e boa sorte com a obra!"], local: { cidade: "Sumaré", uf: "SP" } }),
+      respostaAgente({ bolhas: ["Poxa, infelizmente a gente não atende Sumaré. Obrigado pelo contato e boa sorte com a obra! Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível."], local: { cidade: "Sumaré", uf: "SP" } }),
     ]);
     const r = await processarMensagem(deps(store, m.chamar, { registrarUso: async (u) => void usos.push(u.kind ?? "agent") }), { conversationId: ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
     expect(r.acao).toBe("agendado");
@@ -292,7 +293,7 @@ describe("motor com regras duras", () => {
     const { store, ctx } = preparar(h);
     const m = modeloFalso([
       respostaAgente({ bolhas: ["Fazemos sim! Já te passo pra equipe."], qualificado: true, passar: true }),
-      respostaAgente({ bolhas: ["Poxa, a gente trabalha com reformas completas e não faz pequenos serviços isolados, tá?"] }),
+      respostaAgente({ bolhas: ["Poxa, a gente trabalha com reformas completas e não faz pequenos serviços isolados, tá? Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível."] }),
     ]);
     const r = await processarMensagem(deps(store, m.chamar), { conversationId: ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
     expect(r.acao).toBe("agendado");
@@ -505,7 +506,7 @@ describe("estágio do lead (genérico, pelas regras de cada número)", () => {
     const defs = camposDaFicha(R);
     const ficha = juntarFicha(fichaVazia(), preencherPorRegra(defs, { regras: R, historico: h, local: local(h), servico: detectarServico(R, h), nomesDoContato: { name: null, pushName: null }, now: AGORA }), AGORA).ficha;
     ctx.conversation.lead = { ficha, estagio: "qualificado", manual: true, motivo: "o dono marcou" };
-    const m = modeloFalso([respostaAgente({ bolhas: ["Pra Sumaré a disponibilidade precisa ser analisada."] })]);
+    const m = modeloFalso([respostaAgente({ bolhas: ["Pra Sumaré a disponibilidade precisa ser analisada. Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível."] })]);
     await processarMensagem(deps(store, m.chamar, { fichaComIa: false }), { conversationId: ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
     expect(store.estagios).toHaveLength(0);
   });
@@ -794,7 +795,7 @@ describe("Testar o agente (modelo falso)", () => {
       if (!agente) return JSON.stringify({ mensagem: situacao.includes("Sumaré") ? "Oi, quero reformar minha casa em Sumaré/SP" : "Oi, apartamento em Paulínia, quero reforma" });
       // O agente qualifica sem as informações mínimas no caso de Paulínia (e insiste).
       if (situacao.includes("Paulínia") || /paul[ií]nia/i.test(situacao)) return respostaAgente({ bolhas: ["Vou passar pra equipe!"], qualificado: true, passar: true });
-      return respostaAgente({ bolhas: ["Pra Sumaré a disponibilidade precisa ser analisada antes de seguir, tá?"] });
+      return respostaAgente({ bolhas: ["Pra Sumaré a disponibilidade precisa ser analisada antes de seguir, tá? Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível."] });
     });
     const r = await testarAgente(
       { regras, profile: { baseCommand: "Obra Boa Teste", styleSummary: null, styleExamples: null, quietHours: null, maxAutoPerDay: 0, regras }, config: { agente: "qualificacao", ativo: true, provider: "anthropic" } },
@@ -855,7 +856,7 @@ describe("raio de atendimento e recusa que encerra (07/10)", () => {
   it("fora da área: recusa educada encerra; pergunta ou passar pra análise vira correção", () => {
     const r = comRaio(30);
     const h = [cliente("Oi, quero reformar minha casa em Sorocaba/SP")];
-    const ok = verificar(h, saida({ bolhas: ["Poxa, infelizmente a gente não atende Sorocaba. Obrigado pelo contato e boa sorte com a obra!"] }), r);
+    const ok = verificar(h, saida({ bolhas: ["Poxa, infelizmente a gente não atende Sorocaba. Obrigado pelo contato e boa sorte com a obra! Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível."] }), r);
     expect(ok.violacoes).toEqual([]);
     expect(ok.decisao).toBe("fora_da_area");
     const pergunta = verificar(h, saida({ bolhas: ["Infelizmente não atendemos Sorocaba.", "É casa ou apartamento?"] }), r);
@@ -871,14 +872,30 @@ describe("raio de atendimento e recusa que encerra (07/10)", () => {
     const h = [cliente("quero trocar uma torneira em Paulínia")];
     const v = verificar(h, saida({ bolhas: ["A gente trabalha só com reformas completas, não faz pequenos reparos.", "Quer que eu anote seu nome?"] }));
     expect(v.violacoes.map((x) => x.regra)).toContain("seguiu_servico_recusado");
-    expect(blocoRegras(comRaio(0))).toContain("recuse com educação e encerre a conversa");
+    expect(blocoRegras(comRaio(0))).toContain("FORA DA ÁREA (fora do perfil): recuse com educação");
+    expect(blocoRegras(comRaio(0))).toContain(FECHO_RECUSA);
+  });
+});
+
+describe("fora do perfil: recusa sempre fecha com análise e contato (14/10)", () => {
+  it("recusa seca vira recusa_sem_fecho; com o fecho passa", () => {
+    const h = [cliente("quero trocar uma torneira em Paulínia")];
+    const seca = verificar(h, saida({ bolhas: ["A gente trabalha só com reformas completas, não faz pequenos reparos. Obrigado pelo contato."] }));
+    expect(seca.violacoes.map((x) => x.regra)).toContain("recusa_sem_fecho");
+    const ok = verificar(h, saida({ bolhas: ["A gente trabalha só com reformas completas, não faz pequenos reparos.", FECHO_RECUSA] }));
+    expect(ok.violacoes.map((x) => x.regra)).not.toContain("recusa_sem_fecho");
+  });
+  it("o comando manda continuar atendendo e passar caso complexo pro responsável", () => {
+    const b = blocoRegras(lerRegras({ ...obraBoa(), raioKm: 0, mensagemForaDaArea: "" }));
+    expect(b).toContain("NÃO PARE DE ATENDER");
+    expect(b).toContain("CASO COMPLEXO");
   });
 });
 
 describe("teste do agente do Robério (07/10)", () => {
   it("serviço recusado sem local: recusa e encerra, sem exigir a pergunta do local", () => {
     const h = [cliente("quero trocar uma torneira")];
-    const v = verificar(h, saida({ bolhas: ["A gente trabalha com reformas completas e não faz pequenos reparos isolados, como troca de torneira. Obrigado pelo contato!"] }));
+    const v = verificar(h, saida({ bolhas: ["A gente trabalha com reformas completas e não faz pequenos reparos isolados, como troca de torneira. Obrigado pelo contato! Vamos analisar o seu caso e, se a gente vir necessidade, entramos em contato o mais breve possível."] }));
     expect(v.decisao).toBe("servico_recusado");
     expect(v.violacoes.map((x) => x.regra)).not.toContain("nao_perguntou_local");
   });

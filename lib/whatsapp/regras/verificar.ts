@@ -22,6 +22,7 @@ import {
   type SinaisModelo,
 } from "./detectar";
 import { valorDoTipo, type CampoFichaDef, type FichaLead } from "./ficha";
+import { FECHO_RECUSA, temFechoRecusa } from "./fecho";
 import { contemTermo, normalizarFrase, normalizarTexto } from "./texto";
 
 export type CodigoRegra =
@@ -32,6 +33,7 @@ export type CodigoRegra =
   | "confirmou_fora_da_area"
   | "confirmou_sem_local"
   | "recusa_seca"
+  | "recusa_sem_fecho"
   | "confirmou_servico_recusado"
   | "nao_perguntou_local"
   | "perguntou_de_novo"
@@ -200,10 +202,13 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
   const violacoes: Violacao[] = [];
   const cidade = local.cidade ?? "esse local";
   const atendidas = listaAtendidas(regras);
-  const comoForaDaArea =
-    regras.mensagemForaDaArea || "diga com gentileza que a empresa não atende essa região, agradeça o contato e encerre, sem pergunta nova e sem passar pra humano";
-  const comoServicoRecusado =
-    regras.mensagemServicoRecusado || "diga com educação que a empresa não faz esse tipo de serviço, conte numa frase o que ela faz e encerre, sem pergunta nova";
+  const fecho = `Feche com: "${FECHO_RECUSA}"`;
+  const comoForaDaArea = `${
+    regras.mensagemForaDaArea || "diga com gentileza que a empresa não atende essa região e agradeça o contato, sem pergunta nova e sem passar pra humano"
+  }. ${fecho}`;
+  const comoServicoRecusado = `${
+    regras.mensagemServicoRecusado || "diga com educação que a empresa não faz esse tipo de serviço e conte numa frase o que ela faz, sem pergunta nova"
+  }. ${fecho}`;
 
   // Texto da resposta.
   if (fora || cuidado) {
@@ -367,6 +372,14 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
         paraDono: "Regra do negócio: a resposta não perguntava onde é a obra.",
       });
     }
+  }
+  // 14/10 (Matheus): recusa nunca termina seca; sempre "vamos analisar o seu caso e entramos em contato".
+  if ((decisao === "fora_da_area" || decisao === "servico_recusado") && !temFechoRecusa(texto)) {
+    violacoes.push({
+      regra: "recusa_sem_fecho",
+      paraModelo: `A recusa terminou sem o fecho combinado. ${fecho}`,
+      paraDono: "Regra do negócio: a recusa não fechava dizendo que a equipe vai analisar o caso e entrar em contato.",
+    });
   }
   if (!motivo && fora && !excecaoLocal) motivo = motivoFora;
   if (!motivo && recusado) motivo = motivoServico;
