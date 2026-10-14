@@ -52,6 +52,15 @@ import * as funnelRoute from "@/app/api/funnels/[id]/route";
 import * as funnelDuplicateRoute from "@/app/api/funnels/[id]/duplicate/route";
 import * as funnelResultsRoute from "@/app/api/funnels/[id]/results/route";
 import * as waProgramadosEnviadosRoute from "@/app/api/whatsapp/programados/enviados/route";
+// Etapa 7 (completar rotas fora do WhatsApp): leitura só, rotas que já
+// existiam mas nenhuma ferramenta do MCP chamava ainda.
+import * as dashboardStatsRoute from "@/app/api/dashboard/stats/route";
+import * as instagramAccountsRoute from "@/app/api/instagram/accounts/route";
+import * as instagramProfileRoute from "@/app/api/instagram/profile/route";
+import * as instagramStoriesRoute from "@/app/api/instagram/stories/route";
+import * as reportsExportRoute from "@/app/api/reports/export/route";
+import * as automationAbRoute from "@/app/api/automations/[id]/ab/route";
+import * as automationSequenceRoute from "@/app/api/automations/[id]/sequence/route";
 
 export type Handler = (
   request: NextRequest,
@@ -109,6 +118,14 @@ export function resolveHandler(
     [/^\/api\/funnels\/([^/]+)\/results$/, funnelResultsRoute],
     [/^\/api\/funnels\/([^/]+)$/, funnelRoute],
     [/^\/api\/whatsapp\/programados\/enviados$/, waProgramadosEnviadosRoute],
+    // Etapa 7. Static paths before the [id] patterns.
+    [/^\/api\/dashboard\/stats$/, dashboardStatsRoute],
+    [/^\/api\/instagram\/accounts$/, instagramAccountsRoute],
+    [/^\/api\/instagram\/profile$/, instagramProfileRoute],
+    [/^\/api\/instagram\/stories$/, instagramStoriesRoute],
+    [/^\/api\/reports\/export$/, reportsExportRoute],
+    [/^\/api\/automations\/([^/]+)\/ab$/, automationAbRoute],
+    [/^\/api\/automations\/([^/]+)\/sequence$/, automationSequenceRoute],
   ];
   for (const [pattern, mod, param] of routes) {
     const match = pattern.exec(pathname);
