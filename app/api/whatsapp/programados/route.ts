@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { readJson } from "@/lib/api-helpers";
-import { withPainel } from "@/lib/whatsapp/painel-http";
+import { withPainel, withPainelLeitura } from "@/lib/whatsapp/painel-http";
 import { adicionarProgramados, listarProgramados } from "@/lib/whatsapp/programados";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** A fila de textos programados (?conversationId= pra uma conversa só). */
 export async function GET(request: NextRequest) {
   const conversationId = request.nextUrl.searchParams.get("conversationId");
-  return withPainel({ action: "read WhatsApp" }, (ctx, deps) => listarProgramados(ctx, deps, conversationId));
+  return withPainelLeitura((ctx, deps) => listarProgramados(ctx, deps, conversationId));
 }
 
 /** Põe textos no fim da fila: { conversationId, itens: [{ label, text }] }. Só dono ou admin. */

@@ -61,7 +61,7 @@ vi.mock("@/lib/workspace-access", () => ({
 }));
 
 import { proxy, config as proxyConfig } from "../proxy";
-import { API_KEY_ROUTES, isApiKeyRouteAllowed } from "../lib/api-key-routes";
+import { API_KEY_GET_ONLY_ROUTES, API_KEY_ROUTES, isApiKeyRouteAllowed } from "../lib/api-key-routes";
 import nextConfig, { PUBLIC_FUNNEL_CSP, SECURITY_HEADERS } from "../next.config";
 import { hitRateLimit, MAGIC_LINK_LIMIT } from "../lib/http-rate-limit";
 import { allowSignIn } from "../lib/auth-signin";
@@ -136,8 +136,10 @@ describe("proxy: chave de API só nas rotas do MCP", () => {
     expect(patterns.length).toBeGreaterThan(30);
     for (const pattern of patterns) {
       const sample = pattern.replace(/^\^/, "").replace(/\$$/, "").replace(/\(\[\^\/\]\+\)/g, "x1").replace(/\\\//g, "/");
+      // Leitura do WhatsApp (14/10): só GET passa pela chave; POST/PATCH nem chegam no handler.
+      const soLeitura = API_KEY_GET_ONLY_ROUTES.some((re) => re.test(sample));
       for (const method of ["GET", "POST", "PATCH"]) {
-        expect(isApiKeyRouteAllowed(method, sample), `${method} ${sample}`).toBe(true);
+        expect(isApiKeyRouteAllowed(method, sample), `${method} ${sample}`).toBe(!soLeitura || method === "GET");
       }
       expect(isApiKeyRouteAllowed("DELETE", sample)).toBe(false);
     }

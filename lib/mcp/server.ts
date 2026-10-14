@@ -39,6 +39,8 @@ const SERVER_INFO = { name: "openreply", version: "0.1.0" };
 
 const str = { type: "string" };
 const bool = { type: "boolean" };
+/** ler_conversa_whatsapp devolve só as últimas N mensagens (a rota manda até 200). */
+const WA_MAX_MENSAGENS = 50;
 const strList = { type: "array", items: { type: "string" } };
 
 // Campaign fields accepted by POST/PATCH /api/automations. `isActive` is left
@@ -1469,14 +1471,13 @@ export const TOOLS: Tool[] = [
   },
 
   // ─── WhatsApp (leitura) ────────────────────────────────────────────────────
-  // Só essa rota foi feita pra aceitar chave de API (2026-10-08, sem o texto
-  // das mensagens). O resto de /api/whatsapp/* (conversas, grupos, enquetes,
-  // sessões, agentes, leads, fila de programados) devolve 403 human_only pra
-  // chave, de propósito: só sessão de pessoa logada (lib/whatsapp/painel-http.ts).
+  // ver_whatsapp_programados (2026-10-08, sem o texto) e as 6 leituras de 14/10
+  // (withPainelLeitura em lib/whatsapp/painel-http.ts). Escrita no WhatsApp
+  // devolve 403 human_only pra chave, de propósito.
   {
     name: "ver_whatsapp_programados",
     description:
-      "Textos programados do WhatsApp que já saíram da fila desde uma data (padrão 7 dias atrás; sem o texto, só rótulo, conversa e horário) e quantos ainda estão pendentes. O resto do WhatsApp (conversas, grupos, enquetes, sessões, agentes, leads) não tem leitura pela chave de API hoje; só pela tela do Lead Engine.",
+      "Textos programados do WhatsApp que já saíram da fila desde uma data (padrão 7 dias atrás; sem o texto, só rótulo, conversa e horário) e quantos ainda estão pendentes. Conversas, números, status, leads e fila têm as ferramentas próprias de leitura.",
     inputSchema: {
       type: "object",
       properties: { desde: { ...str, description: "Data ISO (padrão: 7 dias atrás)" } },
@@ -1484,6 +1485,115 @@ export const TOOLS: Tool[] = [
     async run(args, call) {
       const desde = requireString(args, "desde");
       const res = await api(call, "GET", `/api/whatsapp/programados/enviados${desde ? `?desde=${encodeURIComponent(desde)}` : ""}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+
+  // ─── WhatsApp, só leitura (14/10) ─────────────────────────────────────────
+  // Os GET usam withPainelLeitura (aceita chave). Enviar, programar, conectar
+  // número, mexer em agente ou lead continua withPainel: 403 human_only.
+  {
+    name: "listar_conversas_whatsapp",
+    description:
+      "Lista as conversas do WhatsApp (inbox). Filtros: q (nome, número ou texto), filtro (unread ou drafts), sessionId (número), estagio (estágio do lead), tipo (chats ou groups). Só leitura.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        q: { ...str, description: "Nome, número ou texto da mensagem" },
+        filtro: { ...str, description: "unread ou drafts" },
+        sessionId: { ...str, description: "Id do número (ver_numeros_whatsapp)" },
+        estagio: { ...str, description: "Estágio do lead" },
+        tipo: { ...str, description: "chats ou groups (sem isso: tudo)" },
+      },
+    },
+    async run(args, call) {
+      const qs = new URLSearchParams();
+      for (const [arg, param] of [["q", "q"], ["filtro", "filter"], ["sessionId", "sessionId"], ["estagio", "stage"], ["tipo", "kind"]] as const) {
+        const v = requireString(args, arg);
+        if (v) qs.set(param, v);
+      }
+      const res = await api(call, "GET", `/api/whatsapp/conversations${qs.size ? `?${qs}` : ""}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "ler_conversa_whatsapp",
+    description:
+      "Abre uma conversa do WhatsApp: contato, lead, janela de 24h, rascunho pendente e as últimas 50 mensagens (as mais antigas ficam de fora). Só leitura.",
+    inputSchema: {
+      type: "object",
+      properties: { conversationId: { ...str, description: "Id da conversa (listar_conversas_whatsapp)" } },
+      required: ["conversationId"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "conversationId");
+      if (!id) return text("conversationId é obrigatório", true);
+      const res = await api(call, "GET", `/api/whatsapp/conversations/${encodeURIComponent(id)}`);
+      if (!res.ok) return res.result;
+      const data = res.data as { messages?: unknown[] } | null;
+      if (data && Array.isArray(data.messages) && data.messages.length > WA_MAX_MENSAGENS) {
+        const total = data.messages.length;
+        return text({ ...data, messages: data.messages.slice(-WA_MAX_MENSAGENS), mensagensOmitidas: total - WA_MAX_MENSAGENS });
+      }
+      return text(data);
+    },
+  },
+  {
+    name: "ver_numeros_whatsapp",
+    description: "Os números de WhatsApp conectados do workspace (status, modo do agente) e os excluídos que ainda guardam conversas. Só leitura.",
+    inputSchema: { type: "object", properties: {} },
+    async run(_args, call) {
+      const res = await api(call, "GET", "/api/whatsapp/sessions");
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "ver_status_whatsapp",
+    description: "Se o WhatsApp está ligado no servidor e se o gateway e a IA estão prontos. Nunca devolve chave. Só leitura.",
+    inputSchema: { type: "object", properties: {} },
+    async run(_args, call) {
+      const res = await api(call, "GET", "/api/whatsapp/status");
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "listar_leads_whatsapp",
+    description: "Quadro de leads do WhatsApp (CRM), com colunas por estágio. Filtros: sessionId, estagio, de e ate (AAAA-MM-DD), q. Só leitura.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { ...str, description: "Id do número" },
+        estagio: { ...str, description: "Estágio do lead" },
+        de: { ...str, description: "Data inicial AAAA-MM-DD" },
+        ate: { ...str, description: "Data final AAAA-MM-DD" },
+        q: { ...str, description: "Busca por nome ou número" },
+      },
+    },
+    async run(args, call) {
+      const qs = new URLSearchParams();
+      for (const [arg, param] of [["sessionId", "sessionId"], ["estagio", "stage"], ["de", "from"], ["ate", "to"], ["q", "q"]] as const) {
+        const v = requireString(args, arg);
+        if (v) qs.set(param, v);
+      }
+      const res = await api(call, "GET", `/api/whatsapp/leads${qs.size ? `?${qs}` : ""}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "listar_programados_whatsapp",
+    description: "A fila de textos programados do WhatsApp (o que ainda vai sair). conversationId limita a uma conversa. Só leitura; programar é só pela tela.",
+    inputSchema: {
+      type: "object",
+      properties: { conversationId: { ...str, description: "Só desta conversa" } },
+    },
+    async run(args, call) {
+      const id = requireString(args, "conversationId");
+      const res = await api(call, "GET", `/api/whatsapp/programados${id ? `?conversationId=${encodeURIComponent(id)}` : ""}`);
       if (!res.ok) return res.result;
       return text(res.data);
     },
@@ -1620,7 +1730,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. WhatsApp: pela chave você só lê o que os textos programados já mandaram (ver_whatsapp_programados); conversas, grupos, enquetes, sessões, agentes e leads do WhatsApp são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
       });
     }
     case "ping":

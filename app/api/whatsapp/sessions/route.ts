@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { readJson } from "@/lib/api-helpers";
-import { withPainel } from "@/lib/whatsapp/painel-http";
+import { withPainel, withPainelLeitura } from "@/lib/whatsapp/painel-http";
 import { createSession, listSessions } from "@/lib/whatsapp/painel";
 import { listRemovedSessions } from "@/lib/whatsapp/painel-excluir";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /** Números de WhatsApp do workspace, e os excluídos que ainda têm conversas guardadas. */
 export async function GET() {
-  return withPainel({ action: "read WhatsApp" }, async (ctx, deps) => ({
+  return withPainelLeitura(async (ctx, deps) => ({
     sessions: await listSessions(ctx, deps),
     removed: await listRemovedSessions(ctx, deps),
   }));

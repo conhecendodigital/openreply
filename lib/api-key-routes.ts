@@ -67,6 +67,21 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   /^\/api\/automations\/[^/]+\/sequence$/,
 ];
 
+/**
+ * Rotas só de LEITURA (GET) que a chave alcança. O POST/PATCH das mesmas rotas
+ * (conectar número, programar texto) nem passa do proxy; e o handler ainda
+ * responde 403 human_only (withPainel), então são duas travas.
+ */
+export const API_KEY_GET_ONLY_ROUTES: readonly RegExp[] = [
+  // 2026-10-14: leitura do WhatsApp pela chave (withPainelLeitura).
+  /^\/api\/whatsapp\/conversations$/,
+  /^\/api\/whatsapp\/conversations\/[^/]+$/,
+  /^\/api\/whatsapp\/sessions$/,
+  /^\/api\/whatsapp\/status$/,
+  /^\/api\/whatsapp\/leads$/,
+  /^\/api\/whatsapp\/programados$/,
+];
+
 /** True when a request with an Authorization header may reach this route. */
 export function isApiKeyRouteAllowed(method: string, pathname: string): boolean {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
@@ -75,5 +90,6 @@ export function isApiKeyRouteAllowed(method: string, pathname: string): boolean 
   if (/^\/api\/cron\/[^/]+$/.test(path)) return true;
   if (path === "/api/health") return true;
   if (!KEY_METHODS.has(method.toUpperCase())) return false;
+  if (method.toUpperCase() === "GET" && API_KEY_GET_ONLY_ROUTES.some((pattern) => pattern.test(path))) return true;
   return API_KEY_ROUTES.some((pattern) => pattern.test(path));
 }
