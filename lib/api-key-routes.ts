@@ -47,6 +47,9 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   /^\/api\/broadcasts$/,
   /^\/api\/broadcasts\/[^/]+$/,
   /^\/api\/broadcasts\/[^/]+\/cancel$/,
+  // 2026-10-15: quem recebeu o disparo (só GET existe na rota) e testar a conexão do Instagram.
+  /^\/api\/broadcasts\/[^/]+\/recipients$/,
+  /^\/api\/channels\/instagram\/[^/]+\/test$/,
   /^\/api\/reports$/,
   // ver_canais (MCP, 09/10): só leitura do status dos canais (sem token).
   /^\/api\/channels$/,
