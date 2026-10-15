@@ -490,7 +490,7 @@ describe("MCP", () => {
   it("instructions say broadcasts are draft-only through the key", async () => {
     const res = await handleMcpMessage({ jsonrpc: "2.0", id: 3, method: "initialize", params: {} }, vi.fn());
     expect((res?.result as { instructions: string }).instructions).toMatch(/Disparos: pela chave você só cria RASCUNHO/);
-    expect((res?.result as { instructions: string }).instructions).toMatch(/pela chave você só lê o que os textos programados já mandaram/);
+    expect((res?.result as { instructions: string }).instructions).toMatch(/pela chave você só LÊ \(listar_conversas_whatsapp/);
   });
 
   it("listar_disparos and ver_disparo are read-only GETs", async () => {

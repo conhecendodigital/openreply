@@ -71,9 +71,11 @@ describe("DELETE /api/whatsapp/sessions/[id]", () => {
     expect(h.del).not.toHaveBeenCalled();
   });
 
-  it("o proxy nunca deixa chave de API chegar nas rotas do WhatsApp", () => {
+  it("o proxy só deixa a chave de API ler no WhatsApp (nunca escrever nem apagar)", () => {
     expect(isApiKeyRouteAllowed("DELETE", "/api/whatsapp/sessions/s1")).toBe(false);
-    expect(isApiKeyRouteAllowed("GET", "/api/whatsapp/sessions")).toBe(false);
+    // 14/10: a lista de números (GET) passou a ser leitura pela chave; escrever segue barrado.
+    expect(isApiKeyRouteAllowed("GET", "/api/whatsapp/sessions")).toBe(true);
+    expect(isApiKeyRouteAllowed("POST", "/api/whatsapp/sessions")).toBe(false);
   });
 
   it("erro da regra vira mensagem simples (sem stack)", async () => {

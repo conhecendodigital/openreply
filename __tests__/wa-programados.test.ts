@@ -184,7 +184,8 @@ describe("o que já saiu (lido pelo Mac com chave de API)", () => {
   it("a chave de API só lê os enviados; enfileirar e tirar da fila continuam só pra pessoa", () => {
     expect(isApiKeyRouteAllowed("GET", "/api/whatsapp/programados/enviados")).toBe(true);
     expect(isApiKeyRouteAllowed("POST", "/api/whatsapp/programados")).toBe(false);
-    expect(isApiKeyRouteAllowed("GET", "/api/whatsapp/programados")).toBe(false);
+    // 14/10: ler a fila (GET) passou a valer pela chave; escrever segue barrado acima.
+    expect(isApiKeyRouteAllowed("GET", "/api/whatsapp/programados")).toBe(true);
     expect(isApiKeyRouteAllowed("DELETE", "/api/whatsapp/programados/x")).toBe(false);
   });
 });

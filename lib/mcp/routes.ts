@@ -52,6 +52,13 @@ import * as funnelRoute from "@/app/api/funnels/[id]/route";
 import * as funnelDuplicateRoute from "@/app/api/funnels/[id]/duplicate/route";
 import * as funnelResultsRoute from "@/app/api/funnels/[id]/results/route";
 import * as waProgramadosEnviadosRoute from "@/app/api/whatsapp/programados/enviados/route";
+// WhatsApp, só leitura (withPainelLeitura). Os POST das mesmas rotas seguem human_only.
+import * as waConversationsRoute from "@/app/api/whatsapp/conversations/route";
+import * as waConversationRoute from "@/app/api/whatsapp/conversations/[id]/route";
+import * as waSessionsRoute from "@/app/api/whatsapp/sessions/route";
+import * as waStatusRoute from "@/app/api/whatsapp/status/route";
+import * as waLeadsRoute from "@/app/api/whatsapp/leads/route";
+import * as waProgramadosRoute from "@/app/api/whatsapp/programados/route";
 // Etapa 7 (completar rotas fora do WhatsApp): leitura só, rotas que já
 // existiam mas nenhuma ferramenta do MCP chamava ainda.
 import * as dashboardStatsRoute from "@/app/api/dashboard/stats/route";
@@ -118,6 +125,12 @@ export function resolveHandler(
     [/^\/api\/funnels\/([^/]+)\/results$/, funnelResultsRoute],
     [/^\/api\/funnels\/([^/]+)$/, funnelRoute],
     [/^\/api\/whatsapp\/programados\/enviados$/, waProgramadosEnviadosRoute],
+    [/^\/api\/whatsapp\/conversations$/, waConversationsRoute],
+    [/^\/api\/whatsapp\/conversations\/([^/]+)$/, waConversationRoute],
+    [/^\/api\/whatsapp\/sessions$/, waSessionsRoute],
+    [/^\/api\/whatsapp\/status$/, waStatusRoute],
+    [/^\/api\/whatsapp\/leads$/, waLeadsRoute],
+    [/^\/api\/whatsapp\/programados$/, waProgramadosRoute],
     // Etapa 7. Static paths before the [id] patterns.
     [/^\/api\/dashboard\/stats$/, dashboardStatsRoute],
     [/^\/api\/instagram\/accounts$/, instagramAccountsRoute],
