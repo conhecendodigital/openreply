@@ -58,6 +58,7 @@ import * as waConversationRoute from "@/app/api/whatsapp/conversations/[id]/rout
 import * as waSessionsRoute from "@/app/api/whatsapp/sessions/route";
 import * as waStatusRoute from "@/app/api/whatsapp/status/route";
 import * as waLeadsRoute from "@/app/api/whatsapp/leads/route";
+import * as waAgentsRoute from "@/app/api/whatsapp/agents/route";
 import * as waProgramadosRoute from "@/app/api/whatsapp/programados/route";
 // Etapa 7 (completar rotas fora do WhatsApp): leitura só, rotas que já
 // existiam mas nenhuma ferramenta do MCP chamava ainda.
@@ -131,6 +132,7 @@ export function resolveHandler(
     [/^\/api\/whatsapp\/status$/, waStatusRoute],
     [/^\/api\/whatsapp\/leads$/, waLeadsRoute],
     [/^\/api\/whatsapp\/programados$/, waProgramadosRoute],
+    [/^\/api\/whatsapp\/agents$/, waAgentsRoute],
     // Etapa 7. Static paths before the [id] patterns.
     [/^\/api\/dashboard\/stats$/, dashboardStatsRoute],
     [/^\/api\/instagram\/accounts$/, instagramAccountsRoute],
