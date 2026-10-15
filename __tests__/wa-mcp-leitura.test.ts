@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
   createSession: vi.fn(),
   listLeads: vi.fn(),
   listarProgramados: vi.fn(),
+  getAgents: vi.fn(),
+  saveAgents: vi.fn(),
   adicionarProgramados: vi.fn(),
 }));
 
@@ -33,6 +35,8 @@ vi.mock("@/lib/whatsapp/painel", async (orig) => ({
   listSessions: h.listSessions,
   serverStatus: h.serverStatus,
   createSession: h.createSession,
+  getAgents: h.getAgents,
+  saveAgents: h.saveAgents,
 }));
 vi.mock("@/lib/whatsapp/painel-excluir", () => ({ listRemovedSessions: vi.fn(async () => []) }));
 vi.mock("@/lib/whatsapp/regras/painel", () => ({ listLeads: h.listLeads }));
@@ -47,6 +51,7 @@ import * as conversationRoute from "../app/api/whatsapp/conversations/[id]/route
 import * as sessionsRoute from "../app/api/whatsapp/sessions/route";
 import * as statusRoute from "../app/api/whatsapp/status/route";
 import * as leadsRoute from "../app/api/whatsapp/leads/route";
+import * as agentsRoute from "../app/api/whatsapp/agents/route";
 import * as programadosRoute from "../app/api/whatsapp/programados/route";
 import { isApiKeyRouteAllowed } from "../lib/api-key-routes";
 import { resolveHandler } from "../lib/mcp/routes";
@@ -72,10 +77,11 @@ beforeEach(() => {
   h.serverStatus.mockResolvedValue({ enabled: true });
   h.listLeads.mockResolvedValue({ columns: [] });
   h.listarProgramados.mockResolvedValue({ itens: [] });
+  h.getAgents.mockResolvedValue({ agents: [] });
 });
 
 describe("WhatsApp leitura pela chave de API", () => {
-  it("os 6 GET respondem 200 com chave", async () => {
+  it("os 7 GET respondem 200 com chave", async () => {
     const idParams = { params: Promise.resolve({ id: "c_1" }) };
     const statuses = [
       (await conversationsRoute.GET(req("/api/whatsapp/conversations"))).status,
@@ -84,8 +90,9 @@ describe("WhatsApp leitura pela chave de API", () => {
       (await statusRoute.GET()).status,
       (await leadsRoute.GET(req("/api/whatsapp/leads"))).status,
       (await programadosRoute.GET(req("/api/whatsapp/programados"))).status,
+      (await agentsRoute.GET(req("/api/whatsapp/agents?sessionId=s_1"))).status,
     ];
-    expect(statuses).toEqual([200, 200, 200, 200, 200, 200]);
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 200, 200]);
   });
 
   it("GET sem login = 401, nada é lido", async () => {
@@ -103,6 +110,9 @@ describe("WhatsApp leitura pela chave de API", () => {
       req("/api/whatsapp/programados", "POST", { conversationId: "c_1", itens: [{ label: "R1", text: "oi" }] })
     );
     expect(programar.status).toBe(403);
+    const salvar = await agentsRoute.PUT(req("/api/whatsapp/agents", "PUT", { sessionId: "s_1", numberMode: "AUTO" }));
+    expect(salvar.status).toBe(403);
+    expect(h.saveAgents).not.toHaveBeenCalled();
     expect(h.createSession).not.toHaveBeenCalled();
     expect(h.adicionarProgramados).not.toHaveBeenCalled();
   });
@@ -115,6 +125,7 @@ describe("WhatsApp leitura pela chave de API", () => {
       "/api/whatsapp/status",
       "/api/whatsapp/leads",
       "/api/whatsapp/programados",
+      "/api/whatsapp/agents",
     ]) {
       expect(isApiKeyRouteAllowed("GET", p), p).toBe(true);
       expect(resolveHandler("GET", p), p).not.toBeNull();
@@ -123,7 +134,8 @@ describe("WhatsApp leitura pela chave de API", () => {
     for (const p of [
       "/api/whatsapp/conversations/c_1/messages",
       "/api/whatsapp/conversations/c_1/agent",
-      "/api/whatsapp/agents",
+      "/api/whatsapp/agents/aprendizado",
+      "/api/whatsapp/agents/treinar",
       "/api/whatsapp/drafts",
       "/api/whatsapp/leads/export",
       "/api/whatsapp/programados/c_1",
@@ -133,6 +145,7 @@ describe("WhatsApp leitura pela chave de API", () => {
     for (const m of ["POST", "PATCH", "DELETE"]) {
       expect(isApiKeyRouteAllowed(m, "/api/whatsapp/sessions"), m).toBe(false);
       expect(isApiKeyRouteAllowed(m, "/api/whatsapp/programados"), m).toBe(false);
+      expect(isApiKeyRouteAllowed(m, "/api/whatsapp/agents"), m).toBe(false);
     }
   });
 });
@@ -144,7 +157,7 @@ describe("ferramentas MCP de leitura do WhatsApp", () => {
     return { call, out: JSON.parse((res?.result as { content: { text: string }[] }).content[0].text) };
   };
 
-  it("existem as 6 e só chamam GET", async () => {
+  it("existem as 7 e só chamam GET", async () => {
     const names = TOOLS.map((t) => t.name);
     expect(names).toEqual(
       expect.arrayContaining([
@@ -154,6 +167,7 @@ describe("ferramentas MCP de leitura do WhatsApp", () => {
         "ver_status_whatsapp",
         "listar_leads_whatsapp",
         "listar_programados_whatsapp",
+        "ver_agentes_whatsapp",
       ])
     );
     const casos: [string, Record<string, unknown>, string][] = [
@@ -163,6 +177,7 @@ describe("ferramentas MCP de leitura do WhatsApp", () => {
       ["ver_numeros_whatsapp", {}, "/api/whatsapp/sessions"],
       ["ver_status_whatsapp", {}, "/api/whatsapp/status"],
       ["listar_leads_whatsapp", { estagio: "quente", de: "2026-10-01" }, "/api/whatsapp/leads?stage=quente&from=2026-10-01"],
+      ["ver_agentes_whatsapp", { sessionId: "s_1" }, "/api/whatsapp/agents?sessionId=s_1"],
       ["listar_programados_whatsapp", { conversationId: "c_1" }, "/api/whatsapp/programados?conversationId=c_1"],
     ];
     for (const [name, args, path] of casos) {

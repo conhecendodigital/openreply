@@ -1585,6 +1585,21 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "ver_agentes_whatsapp",
+    description:
+      "Os 3 agentes de IA de um número de WhatsApp: modo do número (OFF, rascunho ou automático), perfil (Comando base, limites, horário de silêncio, fatos permitidos), instruções de cada agente, regras do negócio e estágios do lead. sessionId vem de ver_numeros_whatsapp (sem ele, o primeiro número). Só leitura; mudar agente é só pela tela.",
+    inputSchema: {
+      type: "object",
+      properties: { sessionId: { ...str, description: "Id do número (ver_numeros_whatsapp)" } },
+    },
+    async run(args, call) {
+      const id = requireString(args, "sessionId");
+      const res = await api(call, "GET", `/api/whatsapp/agents${id ? `?sessionId=${encodeURIComponent(id)}` : ""}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
     name: "listar_programados_whatsapp",
     description: "A fila de textos programados do WhatsApp (o que ainda vai sair). conversationId limita a uma conversa. Só leitura; programar é só pela tela.",
     inputSchema: {
@@ -1730,7 +1745,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
       });
     }
     case "ping":

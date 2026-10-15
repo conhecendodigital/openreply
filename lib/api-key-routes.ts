@@ -80,6 +80,7 @@ export const API_KEY_GET_ONLY_ROUTES: readonly RegExp[] = [
   /^\/api\/whatsapp\/status$/,
   /^\/api\/whatsapp\/leads$/,
   /^\/api\/whatsapp\/programados$/,
+  /^\/api\/whatsapp\/agents$/,
 ];
 
 /** True when a request with an Authorization header may reach this route. */
