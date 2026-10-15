@@ -40,6 +40,8 @@ import * as segmentRoute from "@/app/api/segments/[id]/route";
 import * as segmentCountRoute from "@/app/api/segments/count/route";
 import * as broadcastsRoute from "@/app/api/broadcasts/route";
 import * as broadcastRoute from "@/app/api/broadcasts/[id]/route";
+import * as broadcastRecipientsRoute from "@/app/api/broadcasts/[id]/recipients/route";
+import * as channelTestRoute from "@/app/api/channels/instagram/[id]/test/route";
 import * as broadcastCancelRoute from "@/app/api/broadcasts/[id]/cancel/route";
 import * as reportsRoute from "@/app/api/reports/route";
 // ver_canais: the tool existed but the route was missing here, so it answered
@@ -117,6 +119,8 @@ export function resolveHandler(
     [/^\/api\/segments\/([^/]+)$/, segmentRoute],
     [/^\/api\/broadcasts$/, broadcastsRoute],
     [/^\/api\/broadcasts\/([^/]+)\/cancel$/, broadcastCancelRoute],
+    [/^\/api\/broadcasts\/([^/]+)\/recipients$/, broadcastRecipientsRoute],
+    [/^\/api\/channels\/instagram\/([^/]+)\/test$/, channelTestRoute],
     [/^\/api\/broadcasts\/([^/]+)$/, broadcastRoute],
     [/^\/api\/reports$/, reportsRoute],
     [/^\/api\/channels$/, channelsRoute],

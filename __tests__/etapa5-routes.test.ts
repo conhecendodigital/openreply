@@ -63,6 +63,7 @@ import * as abActiveRoute from "../app/api/automations/[id]/ab/active/route";
 import * as abWinnerRoute from "../app/api/automations/[id]/ab/winner/route";
 import * as reportsRoute from "../app/api/reports/route";
 import * as exportRoute from "../app/api/reports/export/route";
+import { isApiKeyRouteAllowed } from "../lib/api-key-routes";
 import { resolveHandler } from "../lib/mcp/routes";
 import { handleMcpMessage, TOOLS, type InternalCall } from "../lib/mcp/server";
 
@@ -706,4 +707,34 @@ describe("A/B and broadcast numbers", () => {
     ]);
     expect(data.stats.replyWindowHours).toBe(72);
   });
+
+  it("ver_destinatarios_disparo lê só (GET) e testar_conexao_instagram chama o POST do teste, sem rota de envio", async () => {
+    const names = TOOLS.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["ver_destinatarios_disparo", "testar_conexao_instagram"]));
+    const calls: [string, string][] = [];
+    const call: InternalCall = async (method, path) => {
+      calls.push([method, path]);
+      return { status: 200, json: { success: true, data: [] } };
+    };
+    for (const [name, args] of [
+      ["ver_destinatarios_disparo", { broadcastId: "b_1", status: "FAILED", page: 2 }],
+      ["ver_destinatarios_disparo", { broadcastId: "b_1" }],
+      ["testar_conexao_instagram", { accountId: "acc_1" }],
+    ] as const) {
+      await handleMcpMessage({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name, arguments: args } }, call);
+    }
+    expect(calls).toEqual([
+      ["GET", "/api/broadcasts/b_1/recipients?status=FAILED&page=2"],
+      ["GET", "/api/broadcasts/b_1/recipients"],
+      ["POST", "/api/channels/instagram/acc_1/test"],
+    ]);
+    expect(resolveHandler("GET", "/api/broadcasts/b_1/recipients")?.id).toBe("b_1");
+    expect(resolveHandler("POST", "/api/channels/instagram/acc_1/test")?.id).toBe("acc_1");
+    expect(isApiKeyRouteAllowed("GET", "/api/broadcasts/b_1/recipients")).toBe(true);
+    expect(isApiKeyRouteAllowed("POST", "/api/channels/instagram/acc_1/test")).toBe(true);
+    // enviar e declarar vencedor continuam fora
+    expect(resolveHandler("POST", "/api/broadcasts/b_1/send")).toBeNull();
+    expect(isApiKeyRouteAllowed("POST", "/api/broadcasts/b_1/send")).toBe(false);
+  });
+
 });

@@ -879,6 +879,23 @@ export const TOOLS: Tool[] = [
 
   // ─── Canais ───────────────────────────────────────────────────────────────
   {
+    name: "testar_conexao_instagram",
+    description:
+      "Testa a conexão de uma conta do Instagram com o token guardado (GET /me na Meta). Se o token voltou a funcionar, o canal sai de \"Precisa reconectar\" e volta a Conectado; se foi recusado, passa a \"Precisa reconectar\". Não apaga nada, não envia mensagem. Conta desconectada não é testada (reconectar é só pela tela). O id vem de ver_canais.",
+    inputSchema: {
+      type: "object",
+      properties: { accountId: { ...str, description: "ID da conta (instagram[].id de ver_canais)" } },
+      required: ["accountId"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "accountId");
+      if (!id) return text("Informe o accountId (ver_canais).", true);
+      const res = await api(call, "POST", `/api/channels/instagram/${encodeURIComponent(id)}/test`, {});
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
     name: "ver_canais",
     description:
       "Mostra os canais ligados (só leitura): status de cada Instagram (Conectado / Precisa reconectar / Desconectado), token vence em, webhooks assinados, último aviso recebido, campanhas ligadas, modo da moderação, contatos, rascunhos pendentes e alertas. Não liga, não desliga e não apaga nada.",
@@ -1197,6 +1214,31 @@ export const TOOLS: Tool[] = [
       const id = requireString(args, "broadcastId");
       if (!id) return text("Informe o broadcastId.", true);
       const res = await api(call, "GET", `/api/broadcasts/${encodeURIComponent(id)}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "ver_destinatarios_disparo",
+    description:
+      "Quem recebeu um disparo (ou por que não): @, nome, variante A/B, status (SENT, FAILED, SKIPPED_* ...), erro e horário. 50 por página, mais recentes primeiro. Só leitura. Filtros: status e page.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        broadcastId: { ...str, description: "ID do disparo (listar_disparos)" },
+        status: { ...str, description: "Ex.: SENT, FAILED, MAYBE_SENT, SKIPPED_WINDOW, SKIPPED_TAKEOVER, SKIPPED_OPTOUT" },
+        page: { type: "number", description: "Página (padrão 1)" },
+      },
+      required: ["broadcastId"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "broadcastId");
+      if (!id) return text("Informe o broadcastId.", true);
+      const qs = new URLSearchParams();
+      const status = requireString(args, "status");
+      if (status) qs.set("status", status);
+      if (typeof args.page === "number" && args.page >= 1) qs.set("page", String(Math.floor(args.page)));
+      const res = await api(call, "GET", `/api/broadcasts/${encodeURIComponent(id)}/recipients${qs.size ? `?${qs}` : ""}`);
       if (!res.ok) return res.result;
       return text(res.data);
     },
@@ -1745,7 +1787,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo) e lê quem recebeu (ver_destinatarios_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
       });
     }
     case "ping":
