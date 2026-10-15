@@ -31,6 +31,7 @@ const PALAVRA_COMUM = new Set([
   "campos", "vale", "praia", "ilha", "rio", "jardim", "planalto", "centro", "bela vista", "boa vista", "nova",
   "sao jose", "santa rita", "bom jesus", "agua boa", "cascata", "colina", "aurora", "bandeira", "cachoeira", "sobral",
   "anta", "quatis", "pedra", "salto", "alianca", "liberdade", "fortaleza", "pacoti", "cristal", "mirante", "oriente",
+  "granito", "cedro", "cumaru", "escada", "ipe", "jatoba", "laje", "ouro", "pedreira", "portao", "prata", "telha",
   "general", "presidente", "silva", "costa", "lima", "freitas", "souza", "barbosa", "marcos", "patos", "garca",
 ]);
 
