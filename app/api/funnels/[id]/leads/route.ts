@@ -1,18 +1,16 @@
 import { NextRequest } from "next/server";
 import { fail, intParam, ok, requireContext } from "@/lib/api-helpers";
-import { findFunnel, humanOnly } from "@/lib/funnels/api";
+import { findFunnel } from "@/lib/funnels/api";
 import { funnelLeads } from "@/lib/funnels/service";
 
 export const dynamic = "force-dynamic";
 
 type RouteProps = { params: Promise<{ id: string }> };
 
-// Leads are personal data: only a signed-in owner/admin reads them.
+// Leads are personal data: only an owner/admin (session or their own API key) reads them. Read-only; export and delete stay on the screen.
 export async function GET(request: NextRequest, { params }: RouteProps) {
   const auth = await requireContext({ manage: true });
   if ("response" in auth) return auth.response;
-  const blocked = await humanOnly("read quiz leads");
-  if (blocked) return blocked;
   const { id } = await params;
   const row = await findFunnel(id, auth.context.workspaceId);
   if (!row) return fail("Funnel not found", 404);

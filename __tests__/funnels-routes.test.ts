@@ -248,12 +248,11 @@ describe("criar e editar rascunho", () => {
   });
 });
 
-describe("só humano: publicar, despublicar, apagar, leads", () => {
+describe("só humano: publicar, despublicar, apagar, exportar leads", () => {
   it.each([
     ["publish", () => publishRoute.POST(req("/api/funnels/f_1/publish", "POST"), params())],
     ["unpublish", () => unpublishRoute.POST(req("/api/funnels/f_1/unpublish", "POST", { archive: true }), params())],
     ["delete", () => funnelRoute.DELETE(req("/api/funnels/f_1", "DELETE"), params())],
-    ["leads", () => leadsRoute.GET(req("/api/funnels/f_1/leads"), params())],
     ["export", () => exportRoute.GET(req("/api/funnels/f_1/leads/export"), params())],
   ])("%s com chave = 403 human_only", async (_n, call) => {
     h.mockCaller.mockResolvedValue(TOKEN);
@@ -261,6 +260,15 @@ describe("só humano: publicar, despublicar, apagar, leads", () => {
     const res = await call();
     expect(res.status).toBe(403);
     expect((await res.json()).details).toEqual({ code: "human_only" });
+    expect(h.prisma.funnel.update).not.toHaveBeenCalled();
+    expect(h.prisma.funnel.delete).not.toHaveBeenCalled();
+  });
+
+  it("leads com chave = 200, só leitura (listar_leads_quiz)", async () => {
+    h.mockCaller.mockResolvedValue(TOKEN);
+    h.prisma.funnel.findFirst.mockResolvedValue(row());
+    const res = await leadsRoute.GET(req("/api/funnels/f_1/leads"), params());
+    expect(res.status).toBe(200);
     expect(h.prisma.funnel.update).not.toHaveBeenCalled();
     expect(h.prisma.funnel.delete).not.toHaveBeenCalled();
   });
