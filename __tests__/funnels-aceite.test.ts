@@ -236,12 +236,16 @@ describe("aceite: Claude monta o quiz Chat Sem Frescura pelo MCP", () => {
     expect(direct.status).toBe(400);
     expect((direct.json as { details?: { code?: string } }).details?.code ?? JSON.stringify(direct.json)).toMatch(/draft_only/);
 
-    for (const p of [`/api/funnels/${id}/publish`, `/api/funnels/${id}/unpublish`, `/api/funnels/${id}/leads`, `/api/funnels/${id}/leads/export`]) {
+    for (const p of [`/api/funnels/${id}/publish`, `/api/funnels/${id}/unpublish`, `/api/funnels/${id}/leads/export`]) {
       expect(resolveHandler("POST", p), p).toBeNull();
       expect(isApiKeyRouteAllowed("POST", p), p).toBe(false);
       expect(isApiKeyRouteAllowed("GET", p), p).toBe(false);
     }
     expect(isApiKeyRouteAllowed("DELETE", `/api/funnels/${id}`)).toBe(false);
+    // Leads do quiz: a chave só lê (GET), nunca escreve.
+    expect(isApiKeyRouteAllowed("GET", `/api/funnels/${id}/leads`)).toBe(true);
+    expect(isApiKeyRouteAllowed("POST", `/api/funnels/${id}/leads`)).toBe(false);
+    expect(isApiKeyRouteAllowed("DELETE", `/api/funnels/${id}/leads`)).toBe(false);
 
     const pub = await publishRoute.POST(req(`/api/funnels/${id}/publish`), params(id));
     expect(pub.status).toBe(403);

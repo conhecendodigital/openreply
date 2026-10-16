@@ -340,7 +340,7 @@ describe("quiz (funis)", () => {
   it.each([
     ["POST", "/api/funnels/f1/publish"],
     ["POST", "/api/funnels/f1/unpublish"],
-    ["GET", "/api/funnels/f1/leads"],
+    ["POST", "/api/funnels/f1/leads"],
     ["GET", "/api/funnels/f1/leads/export"],
     ["DELETE", "/api/funnels/f1"],
   ])("%s %s com Bearer = 403 no proxy", async (method, path) => {
@@ -350,7 +350,7 @@ describe("quiz (funis)", () => {
   });
 
   it("rascunho por chave passa (a rota decide)", async () => {
-    for (const [method, path] of [["POST", "/api/funnels"], ["PATCH", "/api/funnels/f1"], ["GET", "/api/funnels/f1/results"]]) {
+    for (const [method, path] of [["POST", "/api/funnels"], ["PATCH", "/api/funnels/f1"], ["GET", "/api/funnels/f1/results"], ["GET", "/api/funnels/f1/leads"]]) {
       expect((await proxy(req(path, method, BEARER))).headers.get("x-middleware-next"), path).toBe("1");
     }
   });

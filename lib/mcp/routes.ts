@@ -53,6 +53,7 @@ import * as funnelsRoute from "@/app/api/funnels/route";
 import * as funnelRoute from "@/app/api/funnels/[id]/route";
 import * as funnelDuplicateRoute from "@/app/api/funnels/[id]/duplicate/route";
 import * as funnelResultsRoute from "@/app/api/funnels/[id]/results/route";
+import * as funnelLeadsRoute from "@/app/api/funnels/[id]/leads/route";
 import * as waProgramadosEnviadosRoute from "@/app/api/whatsapp/programados/enviados/route";
 // WhatsApp, só leitura (withPainelLeitura). Os POST das mesmas rotas seguem human_only.
 import * as waConversationsRoute from "@/app/api/whatsapp/conversations/route";
@@ -128,6 +129,7 @@ export function resolveHandler(
     [/^\/api\/funnels$/, funnelsRoute],
     [/^\/api\/funnels\/([^/]+)\/duplicate$/, funnelDuplicateRoute],
     [/^\/api\/funnels\/([^/]+)\/results$/, funnelResultsRoute],
+    [/^\/api\/funnels\/([^/]+)\/leads$/, funnelLeadsRoute],
     [/^\/api\/funnels\/([^/]+)$/, funnelRoute],
     [/^\/api\/whatsapp\/programados\/enviados$/, waProgramadosEnviadosRoute],
     [/^\/api\/whatsapp\/conversations$/, waConversationsRoute],

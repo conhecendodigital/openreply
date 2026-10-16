@@ -16,7 +16,7 @@ import { isApiKeyRouteAllowed } from "../lib/api-key-routes";
 import { getFunnelTemplate } from "../lib/funnels/templates";
 import { validateFunnel } from "../lib/funnels/validate";
 
-const NAMES = ["listar_funis", "ver_funil", "listar_modelos_funil", "criar_funil", "duplicar_modelo", "editar_funil", "ver_resultados_funil"];
+const NAMES = ["listar_funis", "ver_funil", "listar_modelos_funil", "criar_funil", "duplicar_modelo", "editar_funil", "ver_resultados_funil", "listar_leads_quiz"];
 
 describe("ferramentas MCP do quiz", () => {
   const calls: { method: string; path: string; body?: unknown }[] = [];
@@ -65,12 +65,12 @@ describe("ferramentas MCP do quiz", () => {
     calls.length = 0;
   });
 
-  it("tools/list tem as 7 e nenhuma publica", async () => {
+  it("tools/list tem as 8 e nenhuma publica", async () => {
     const list = (await handleMcpMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, fake)) as { result: { tools: { name: string }[] } };
     const names = list.result.tools.map((t) => t.name);
     for (const n of NAMES) expect(names).toContain(n);
     expect(FUNNEL_TOOLS.map((t) => t.name)).toEqual(NAMES);
-    expect(TOOLS.filter((t) => /funi|funnel/.test(t.name)).every((t) => !/publicar|publish|apagar|delete|leads|exportar/i.test(t.name))).toBe(true);
+    expect(TOOLS.filter((t) => /funi|funnel/.test(t.name)).every((t) => !/publicar|publish|apagar|delete|exportar/i.test(t.name))).toBe(true);
     expect(FUNNEL_TOOLS.some((t) => /publicar|publish/i.test(t.name))).toBe(false);
   });
 
@@ -136,14 +136,16 @@ describe("ferramentas MCP do quiz", () => {
 });
 
 describe("rotas da chave", () => {
-  it("resolveHandler acha as 4 rotas e não acha publish/unpublish/leads", () => {
+  it("resolveHandler acha as rotas de rascunho e leitura e não acha publish/unpublish/export", () => {
     expect(resolveHandler("GET", "/api/funnels")).not.toBeNull();
     expect(resolveHandler("POST", "/api/funnels")).not.toBeNull();
     expect(resolveHandler("GET", "/api/funnels/x")).toMatchObject({ id: "x", param: "id" });
     expect(resolveHandler("PATCH", "/api/funnels/x")).not.toBeNull();
     expect(resolveHandler("POST", "/api/funnels/x/duplicate")).toMatchObject({ id: "x" });
     expect(resolveHandler("GET", "/api/funnels/x/results")).toMatchObject({ id: "x" });
-    for (const p of ["/api/funnels/x/publish", "/api/funnels/x/unpublish", "/api/funnels/x/leads", "/api/funnels/x/leads/export"]) {
+    expect(resolveHandler("GET", "/api/funnels/x/leads")).toMatchObject({ id: "x" });
+    expect(resolveHandler("POST", "/api/funnels/x/leads")).toBeNull();
+    for (const p of ["/api/funnels/x/publish", "/api/funnels/x/unpublish", "/api/funnels/x/leads/export"]) {
       expect(resolveHandler("POST", p), p).toBeNull();
       expect(resolveHandler("GET", p), p).toBeNull();
     }
@@ -151,14 +153,15 @@ describe("rotas da chave", () => {
     // (funnels-routes.test.ts) e o proxy barra DELETE de chave.
   });
 
-  it("isApiKeyRouteAllowed: rascunho sim, publicar/despublicar/leads/apagar não", () => {
+  it("isApiKeyRouteAllowed: rascunho e leitura de leads sim, publicar/despublicar/exportar/apagar não", () => {
     expect(isApiKeyRouteAllowed("POST", "/api/funnels")).toBe(true);
     expect(isApiKeyRouteAllowed("PATCH", "/api/funnels/x")).toBe(true);
     expect(isApiKeyRouteAllowed("POST", "/api/funnels/x/duplicate")).toBe(true);
     expect(isApiKeyRouteAllowed("GET", "/api/funnels/x/results")).toBe(true);
     expect(isApiKeyRouteAllowed("POST", "/api/funnels/x/publish")).toBe(false);
     expect(isApiKeyRouteAllowed("POST", "/api/funnels/x/unpublish")).toBe(false);
-    expect(isApiKeyRouteAllowed("GET", "/api/funnels/x/leads")).toBe(false);
+    expect(isApiKeyRouteAllowed("GET", "/api/funnels/x/leads")).toBe(true);
+    expect(isApiKeyRouteAllowed("POST", "/api/funnels/x/leads")).toBe(false);
     expect(isApiKeyRouteAllowed("GET", "/api/funnels/x/leads/export")).toBe(false);
     expect(isApiKeyRouteAllowed("DELETE", "/api/funnels/x")).toBe(false);
   });

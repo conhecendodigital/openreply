@@ -1,7 +1,7 @@
 /**
  * Etapa 6: MCP tools for quizzes (funis). Through the API key the AI lists,
  * reads, creates and edits DRAFTS and reads the numbers. No tool publishes,
- * unpublishes, archives, deletes or reads leads: those are only on the
+ * unpublishes, archives or deletes: those are only on the
  * screen, with the account owner (the routes answer 403 human_only to a key).
  *
  * Self-contained (own tiny helpers) so lib/mcp/server.ts only spreads
@@ -321,6 +321,52 @@ export const FUNNEL_TOOLS: FunnelTool[] = [
               })),
             }
           : null,
+      });
+    },
+  },
+  {
+    name: "listar_leads_quiz",
+    description:
+      "Lista os leads de um quiz (funil) com nome, WhatsApp, e-mail, respostas, origem e se comprou, do mais novo pro mais antigo. Só leitura, 100 por página (use proximoCursor pra continuar). Dado pessoal: use só pro dono da conta, nunca mande mensagem sem o ok dele.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { ...str, description: "ID do funil" },
+        limite: { type: "integer", description: "Quantos por página (1 a 100, padrão 50)" },
+        cursor: { ...str, description: "proximoCursor da página anterior (opcional)" },
+        busca: { ...str, description: "Filtrar por parte do nome, WhatsApp ou e-mail (opcional)" },
+      },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const q = new URLSearchParams();
+      if (typeof args.limite === "number") q.set("limit", String(args.limite));
+      const cursor = requireString(args, "cursor");
+      if (cursor) q.set("cursor", cursor);
+      const qs = q.toString();
+      const res = await api(call, "GET", `/api/funnels/${encodeURIComponent(id)}/leads${qs ? `?${qs}` : ""}`);
+      if (!res.ok) return res.result;
+      const r = res.data as { rows: Array<{ createdAt: string; name: string | null; email: string | null; whatsapp: string | null; answers: Record<string, string>; tags: string[]; source: string | null; purchasedAt: string | null }>; nextCursor: string | null; total: number };
+      const busca = requireString(args, "busca")?.toLowerCase();
+      const rows = busca
+        ? r.rows.filter((l) => [l.name, l.whatsapp, l.email].some((v) => (v ?? "").toLowerCase().includes(busca)))
+        : r.rows;
+      return text({
+        total: r.total,
+        nestaPagina: rows.length,
+        proximoCursor: r.nextCursor,
+        leads: rows.map((l) => ({
+          data: l.createdAt,
+          nome: l.name,
+          whatsapp: l.whatsapp,
+          email: l.email,
+          respostas: l.answers,
+          etiquetas: l.tags,
+          origem: l.source,
+          comprou: Boolean(l.purchasedAt),
+        })),
       });
     },
   },

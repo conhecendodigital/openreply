@@ -53,7 +53,7 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   /^\/api\/reports$/,
   // ver_canais (MCP, 09/10): só leitura do status dos canais (sem token).
   /^\/api\/channels$/,
-  // Etapa 6 (quiz): drafts and numbers only. Never publish, unpublish, leads.
+  // Etapa 6 (quiz): drafts and numbers. Never publish, unpublish or export leads.
   /^\/api\/funnels$/,
   /^\/api\/funnels\/[^/]+\/duplicate$/,
   /^\/api\/funnels\/[^/]+\/results$/,
@@ -76,6 +76,8 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
  * responde 403 human_only (withPainel), então são duas travas.
  */
 export const API_KEY_GET_ONLY_ROUTES: readonly RegExp[] = [
+  // 2026-10-16: leads do quiz só leitura (listar_leads_quiz), a pedido do Matheus. Export CSV segue só na tela.
+  /^\/api\/funnels\/[^/]+\/leads$/,
   // 2026-10-14: leitura do WhatsApp pela chave (withPainelLeitura).
   /^\/api\/whatsapp\/conversations$/,
   /^\/api\/whatsapp\/conversations\/[^/]+$/,
