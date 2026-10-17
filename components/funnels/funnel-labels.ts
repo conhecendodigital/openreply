@@ -12,7 +12,7 @@ export const BLOCK_TYPE_LABEL: Record<BlockType, string> = BLOCK_TYPE_NAMES;
 
 /** Order of the "+ Block" menu, grouped like the Inlead menu. */
 export const BLOCK_MENU: { group: string; types: BlockType[] }[] = [
-  { group: "Content", types: ["heading", "text", "image", "video", "gallery", "spacer"] },
+  { group: "Content", types: ["heading", "text", "image", "video", "gallery", "spacer", "html"] },
   { group: "Interaction", types: ["button", "options", "field", "loading"] },
   { group: "Proof and offer", types: ["checklist", "compare", "testimonial", "offer", "faq", "countdown"] },
 ];
@@ -35,6 +35,7 @@ export const BLOCK_TYPE_HINT: Record<BlockType, string> = {
   gallery: "Several images or prints",
   faq: "Questions and answers",
   spacer: "Empty space",
+  html: "Your own HTML page (price stack, custom layout)",
 };
 
 export const STATUS_LABEL: Record<FunnelStatus, string> = {

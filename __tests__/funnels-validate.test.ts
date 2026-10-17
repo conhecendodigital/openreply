@@ -74,7 +74,7 @@ describe("validateFunnel", () => {
 
   it("cada código tem mensagem", () => {
     for (const code of FUNNEL_ISSUE_CODES) expect(ISSUE_MESSAGES[code], code).toBeTruthy();
-    expect(Object.keys(BLOCK_TYPE_NAMES)).toHaveLength(16);
+    expect(Object.keys(BLOCK_TYPE_NAMES)).toHaveLength(17);
   });
 
   it("no_steps", () => {

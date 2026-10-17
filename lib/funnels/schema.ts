@@ -220,6 +220,13 @@ const faqBlock = z.object({
   type: z.literal("faq"),
   items: z.array(z.object({ q: label.max(300), a: z.string().trim().max(MAX_TEXT) })).max(MAX_LIST),
 });
+export const MAX_HTML = 60000;
+const htmlBlock = z.object({
+  ...base,
+  type: z.literal("html"),
+  html: z.string().max(MAX_HTML),
+  height: z.number().int().min(80).max(4000).optional(),
+});
 const spacerBlock = z.object({ ...base, type: z.literal("spacer"), size: z.enum(["sm", "md", "lg"]) });
 
 export const funnelBlockSchema = z.discriminatedUnion("type", [
@@ -239,6 +246,7 @@ export const funnelBlockSchema = z.discriminatedUnion("type", [
   galleryBlock,
   faqBlock,
   spacerBlock,
+  htmlBlock,
 ]);
 
 const stepSchema = z.object({
