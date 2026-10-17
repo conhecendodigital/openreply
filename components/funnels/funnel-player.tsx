@@ -48,6 +48,7 @@ import OfferView from "@/components/funnels/blocks/offer";
 import GalleryView from "@/components/funnels/blocks/gallery";
 import FaqView from "@/components/funnels/blocks/faq";
 import SpacerView from "@/components/funnels/blocks/spacer";
+import HtmlView from "@/components/funnels/blocks/html";
 import ConsentBanner from "@/components/funnels/consent-banner";
 import PopupModal from "@/components/funnels/popup-modal";
 import { exitPopupFor, findPopup, hasExitPopup, timedPopupsFor, type PopupTrigger } from "@/lib/funnels/popups";
@@ -640,6 +641,8 @@ export default function FunnelPlayer({ funnel, mode, entryParams, contactToken, 
         return <FaqView block={b} ctx={ctx} />;
       case "spacer":
         return <SpacerView block={b} />;
+      case "html":
+        return <HtmlView block={b} />;
     }
   };
 

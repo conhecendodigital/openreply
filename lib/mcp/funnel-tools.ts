@@ -86,7 +86,7 @@ export const FUNNEL_DRAFT_HELP =
   '{type:"testimonial", quote, author, role?, imageUrl?, authorized}; {type:"checklist", title?, items[]}; {type:"countdown", deadline (ISO com fuso, prazo REAL), label}; ' +
   '{type:"loading", text, durationSec? (1 a 8), routes?:[{min?,max?,stepId}] por soma de score}; ' +
   '{type:"offer", title?, priceCents (centavos ou null), compareAtCents?, installmentsText?, bonuses?[], guaranteeDays?, guaranteeText?, deadlineText?}; ' +
-  '{type:"gallery", images:[{url,alt}]}; {type:"faq", items:[{q,a}]}; {type:"spacer", size:"sm"|"md"|"lg"}. ' +
+  '{type:"gallery", images:[{url,alt}]}; {type:"faq", items:[{q,a}]}; {type:"spacer", size:"sm"|"md"|"lg"}; {type:"html", html (página própria com CSS e JS, até 60000 caracteres, roda em iframe isolado sem rede; ótimo pra pilha de valor), height? (80 a 4000 px)}. ' +
   "Pop-ups (até 10) em settings.popups: [{ id, title, text? (conte a história: o que perde se sair, o que ganha se ficar), imageUrl? (https), primary:{label, action}, secondary?:{label, action, delaySec? (0 a 15, a saída aparece depois)}, trigger?:{ exit? (mouse saindo pelo topo no computador ou botão voltar no celular, 1 vez por visita), afterSec? (1 a 600 s na mesma tela), stepIds? (vazio = todas as telas) } }], action do pop-up = {kind:\"close\"}|{kind:\"next\"}|{kind:\"goto\",stepId}|{kind:\"checkout\",url?,newTab?}. Botão \"Quero sair\" = button com action {kind:\"popup\",popupId}. " +
   "Onde falta dado real (preço, depoimento, número, prazo, link), deixe [colchetes]: o funil não publica enquanto houver colchete. Nunca invente preço, depoimento, aluno, número ou escassez.";
 

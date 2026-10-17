@@ -78,4 +78,5 @@ export const ptFunnelsApi: Record<string, string> = {
   "Image gallery": "Galeria de imagens",
   Questions: "Perguntas frequentes",
   Spacer: "Espaço",
+  "HTML page": "Página em HTML",
 };

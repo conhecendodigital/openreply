@@ -67,6 +67,7 @@ export const BLOCK_TYPE_NAMES: Record<BlockType, string> = {
   gallery: "Image gallery",
   faq: "Questions",
   spacer: "Spacer",
+  html: "HTML page",
 };
 
 /** {step} of an issue that is in Settings, not on a screen. */
@@ -122,6 +123,7 @@ export function publicTexts(block: FunnelBlock): (string | undefined)[] {
     case "faq":
       return block.items.flatMap((i) => [i.q, i.a]);
     case "spacer":
+    case "html":
       return [];
   }
 }

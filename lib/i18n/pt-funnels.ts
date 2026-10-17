@@ -122,6 +122,10 @@ export const ptFunnels: Record<string, string> = {
   "Several images or prints": "Várias imagens ou prints",
   "Questions and answers": "Perguntas e respostas",
   "Empty space": "Espaço vazio",
+  "Your own HTML page (price stack, custom layout)": "Sua própria página em HTML (pilha de valor, layout livre)",
+  "HTML of the page": "HTML da página",
+  "Starting height (px)": "Altura inicial (px)",
+  "Runs in an isolated frame: it cannot read the quiz or the visitor data, and it has no network. Images only by https. Links open in a new tab.": "Roda num quadro isolado: não lê o quiz nem os dados da pessoa e não acessa a internet. Imagens só por https. Links abrem em outra aba.",
 
   // Editor: propriedades
   "Pick a screen on the left.": "Escolha uma tela à esquerda.",

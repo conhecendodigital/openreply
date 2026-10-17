@@ -110,6 +110,8 @@ export function defaultBlock(type: BlockType, def?: FunnelDefinition): FunnelBlo
       return { id, type, items: [{ q: "[Pergunta]", a: "[Resposta]" }] };
     case "spacer":
       return { id, type, size: "md" };
+    case "html":
+      return { id, type, html: "<p>Cole aqui o HTML da sua página.</p>", height: 400 };
   }
 }
 
@@ -408,5 +410,7 @@ export function blockSummary(block: FunnelBlock): string {
       return block.items.map((i) => i.q).join(" · ");
     case "spacer":
       return block.size;
+    case "html":
+      return `${block.html.length} caracteres`;
   }
 }

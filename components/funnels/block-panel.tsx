@@ -24,7 +24,7 @@ import type {
   LeadField,
   ScoreRoute,
 } from "@/lib/funnels/types";
-import { MAX_POPUPS } from "@/lib/funnels/schema";
+import { MAX_HTML, MAX_POPUPS } from "@/lib/funnels/schema";
 import { BLOCK_TYPE_LABEL, issueText } from "@/components/funnels/funnel-labels";
 import { MAX_OPTIONS_PER_BLOCK, PLACEHOLDER_IMAGE, PLACEHOLDER_VIDEO, newOption, newPopup, updateBlock, updateSettings, updateStep } from "@/components/funnels/editor-model";
 import {
@@ -483,6 +483,28 @@ function BlockFields({
             </button>
           )}
         </fieldset>
+      );
+
+    case "html":
+      return (
+        <>
+          <TextField
+            label={t("HTML of the page")}
+            value={block.html}
+            multiline
+            rows={14}
+            maxLength={MAX_HTML}
+            onChange={(v) => set({ html: v })}
+            hint={t("Runs in an isolated frame: it cannot read the quiz or the visitor data, and it has no network. Images only by https. Links open in a new tab.")}
+          />
+          <NumberField
+            label={t("Starting height (px)")}
+            value={block.height ?? 600}
+            min={80}
+            max={4000}
+            onChange={(v) => set({ height: v })}
+          />
+        </>
       );
 
     case "spacer":

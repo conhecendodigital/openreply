@@ -12,7 +12,7 @@ export const FUNNEL_SCHEMA_VERSION = 1 as const;
 export const BLOCK_TYPES = [
   "heading", "text", "image", "video", "button", "options", "field",
   "compare", "testimonial", "checklist", "countdown", "loading", "offer",
-  "gallery", "faq", "spacer",
+  "gallery", "faq", "spacer", "html",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
@@ -159,11 +159,18 @@ export type OfferBlock = BlockBase & {
 export type GalleryBlock = BlockBase & { type: "gallery"; images: { url: string; alt: string }[] };
 export type FaqBlock = BlockBase & { type: "faq"; items: { q: string; a: string }[] };
 export type SpacerBlock = BlockBase & { type: "spacer"; size: "sm" | "md" | "lg" };
+/**
+ * Página própria (HTML + CSS + JS do dono) dentro da tela. Roda num iframe
+ * isolado (sandbox sem allow-same-origin, CSP sem rede): não lê o quiz, os
+ * cookies nem os dados do visitante. height = altura inicial em px; se o
+ * HTML avisar a altura (postMessage), o iframe se ajusta.
+ */
+export type HtmlBlock = BlockBase & { type: "html"; html: string; height?: number };
 
 export type FunnelBlock =
   | HeadingBlock | TextBlock | ImageBlock | VideoBlock | ButtonBlock | OptionsBlock
   | FieldBlock | CompareBlock | TestimonialBlock | ChecklistBlock | CountdownBlock
-  | LoadingBlock | OfferBlock | GalleryBlock | FaqBlock | SpacerBlock;
+  | LoadingBlock | OfferBlock | GalleryBlock | FaqBlock | SpacerBlock | HtmlBlock;
 
 export type StepHeader = { showBack?: boolean; showProgress?: boolean; showLogo?: boolean };
 export type FunnelStep = {
