@@ -9,7 +9,7 @@ import type { NormalizedMessage, NormalizedSessionEvent } from "@/lib/whatsapp/t
 export interface IngestDeps {
   repo: WaRepository;
   /** Mensagem nova do contato (pra fila do agente / SSE). Não roda em reprocessamento nem histórico. */
-  onInboundMessage?: (info: { ownerUserId: string; sessionId: string; conversationId: string; messageId: string }) => Promise<void>;
+  onInboundMessage?: (info: { ownerUserId: string; sessionId: string; conversationId: string; messageId: string; body?: string | null }) => Promise<void>;
   /**
    * Mensagem nova do DONO pelo celular (eco fromMe, sentBy USER_PHONE). É aqui que
    * o "Assumir" automático entra (agentes/modo.ts aoMensagemDoUsuario).
@@ -103,6 +103,7 @@ export async function processIngestJob(job: WaIngestJob, deps: IngestDeps): Prom
         sessionId: session.id,
         conversationId: conversation.id,
         messageId: message.id,
+        body: event.isGroup ? null : event.body,
       });
     }
   }
