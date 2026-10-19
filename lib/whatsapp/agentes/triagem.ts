@@ -63,6 +63,18 @@ export function ultimaDoContato(historico: WaMessageLite[]): WaMessageLite | nul
   return null;
 }
 
+// 19/10 (Robério): "Parabéns, filho... Jesus te ama" e "te amo papis" chegam no número
+// da empresa. Recado pessoal sem nenhum pedido não é cliente: o agente não responde.
+const PESSOAL =
+  /\b(parab[eé]ns|feliz anivers[aá]rio|te amo+|amo voc[eê]|jesus te ama|saudades?|sumiu|filh[oa]|papis?|paiz[aã]o|m[aã]ezinha|meu amor|minha linda|meu querido|minha querida|vov[oóô])\b/i;
+const TEM_PEDIDO =
+  /\b(obra|reform\w*|constru\w*|or[cç]amento\w*|apartamento|casa|im[oó]vel|banheiro|cozinha|piso|granito|m[aá]rmore|pedra|planta|projeto|servi[cç]o|pre[cç]o|valor|quanto|comprar|pedido|produto|curso|agendar|reuni[aã]o)\b/i;
+
+/** Recado pessoal (família, amigo), sem nenhum pedido pro negócio. */
+export function recadoPessoal(texto: string): boolean {
+  return PESSOAL.test(texto) && !TEM_PEDIDO.test(texto);
+}
+
 /** Regras que decidem sozinhas, sem gastar nada. null = precisa do Jev. */
 export function triagemLocal(texto: string): Pick<DecisaoTriagem, "acao" | "motivo"> | null {
   const t = texto.trim();
@@ -72,6 +84,7 @@ export function triagemLocal(texto: string): Pick<DecisaoTriagem, "acao" | "moti
   // 2026-10-06 (Matheus: "só transferir quando qualificar"): só o pedido explícito
   // de falar com uma pessoa transfere. Reclamação e reembolso o agente responde com cuidado.
   if (PEDE_PESSOA.test(t)) return { acao: "humano", motivo: "pediu pra falar com uma pessoa" };
+  if (recadoPessoal(t)) return { acao: "nao_precisa", motivo: "recado pessoal, sem pedido pro negócio" };
   if (t.length <= 40 && SO_CUMPRIMENTO.test(t)) return { acao: "responder", motivo: "cumprimento" };
   return null;
 }

@@ -377,7 +377,10 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
     }
   }
   // 14/10 (Matheus): recusa nunca termina seca; sempre "vamos analisar o seu caso e entramos em contato".
-  if ((decisao === "fora_da_area" || decisao === "servico_recusado") && !temFechoRecusa(texto)) {
+  // 19/10 (Robério): o fecho saía de novo a cada mensagem ("Vamos analisar o seu caso..." 3 vezes).
+  // Já mandado uma vez nessa conversa, não precisa (nem deve) repetir.
+  const fechoJaMandado = e.historico.some((m) => m.fromMe && temFechoRecusa(normalizarFrase(m.body ?? "")));
+  if ((decisao === "fora_da_area" || decisao === "servico_recusado") && !fechoJaMandado && !temFechoRecusa(texto)) {
     violacoes.push({
       regra: "recusa_sem_fecho",
       paraModelo: `A recusa terminou sem o fecho combinado. ${fecho}`,

@@ -13,6 +13,7 @@
  * O envio de verdade é do conector: ele chama podeEnviar() antes de cada bolha,
  * então "Assumir" segura até um envio que já estava na fila.
  */
+import { conversaPessoalDoDono, ehNumeroDoResponsavel } from "./pessoal";
 import { createHash } from "node:crypto";
 import { temRegras, type RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
 import { detectarServico } from "@/lib/whatsapp/regras/detectar";
@@ -161,6 +162,18 @@ export async function processarMensagem(
     }
     return store.registrarRun({ ...base, ...extra, status });
   };
+
+  // 0a. 19/10 (Robério): o responsável e as conversas pessoais do dono ficam fora do agente (sem modelo).
+  const regrasDoNumero = ctx.profile?.regras ?? null;
+  if (ehNumeroDoResponsavel(ctx.contact.phoneE164, regrasDoNumero?.responsavel?.telefone)) {
+    const runId = await registrar("skipped", { blockedReason: "é o número do responsável" });
+    return { acao: "ignorado", motivo: "é o número do responsável", runId };
+  }
+  if (conversaPessoalDoDono(ctx.historico, ctx.conversation.lead?.ficha, camposDaFicha(regrasDoNumero))) {
+    const motivo = "conversa do dono: ele já escreveu à mão e não há pedido na ficha";
+    const runId = await registrar("skipped", { blockedReason: motivo });
+    return { acao: "ignorado", motivo, runId };
+  }
 
   // 0. Pediu pra parar: o agente sai da conversa e não responde nada (sem modelo).
   if (ultima.type === "text" || ultima.mediaTextKind === "audio") {

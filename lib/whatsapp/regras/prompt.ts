@@ -59,7 +59,7 @@ export function blocoRegras(r: RegrasNegocio | null | undefined, baseCommand = "
   if (r.cidadesAtendidas.length) {
     partes.push("SE AINDA NÃO SABE ONDE É A OBRA: pergunte em qual cidade vai ser a obra. Nunca confirme atendimento antes de saber.");
     partes.push(
-      `FORA DA ÁREA (fora do perfil): recuse com educação. ${r.mensagemForaDaArea ? `Como responder: ${r.mensagemForaDaArea}` : "Diga com gentileza que a empresa não atende essa região e agradeça o contato."} ${fechoRecusa} Não faça pergunta nova, não peça mais dados, não passe pra humano e não marque qualificado. Se a pessoa insistir, repita a recusa com gentileza numa frase. Só se for uma das EXCEÇÕES DE LOCAL, passe pra humano com motivo "para analisar".`
+      `FORA DA ÁREA (fora do perfil): recuse com educação. ${r.mensagemForaDaArea ? `Como responder: ${r.mensagemForaDaArea}` : "Diga com gentileza que a empresa não atende essa região e agradeça o contato."} ${fechoRecusa} Não faça pergunta nova, não peça mais dados, não passe pra humano e não marque qualificado. Se você já recusou nessa conversa, não repita a recusa nem o fecho: responda numa frase curta o que a pessoa disse agora (se ela disse que a cidade não é essa, peça desculpa e pergunte de novo em qual cidade é a obra). Só se for uma das EXCEÇÕES DE LOCAL, passe pra humano com motivo "para analisar".`
     );
   }
   partes.push(linha("SERVIÇOS ACEITOS", r.servicosAceitos));

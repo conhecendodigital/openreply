@@ -196,7 +196,7 @@ export class PrismaAgentStore implements AgentStore {
         where: { id: conversationId, workspaceId: this.workspaceId },
         include: {
           session: { select: { id: true, provider: true, agentMode: true, ownerUserId: true } },
-          contact: { select: { id: true, isGroup: true, name: true, pushName: true } },
+          contact: { select: { id: true, isGroup: true, name: true, pushName: true, phoneE164: true } },
           labels: { include: { label: { select: { agentMode: true } } } },
         },
       });
@@ -226,7 +226,7 @@ export class PrismaAgentStore implements AgentStore {
             motivo: c.leadStageMotivo,
           },
         },
-        contact: { id: c.contact.id, isGroup: c.contact.isGroup, name: c.contact.name, pushName: c.contact.pushName },
+        contact: { id: c.contact.id, isGroup: c.contact.isGroup, name: c.contact.name, pushName: c.contact.pushName, phoneE164: c.contact.phoneE164 },
         profile: profile
           ? {
               baseCommand: profile.baseCommand,

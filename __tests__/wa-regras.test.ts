@@ -6,6 +6,8 @@
 import { ehSaudacao } from "../lib/whatsapp/regras/prompt";
 import { blocoRitmo } from "../lib/whatsapp/agentes/comando";
 import { describe, expect, it, vi } from "vitest";
+import { triagemLocal as triagemLocalR } from "@/lib/whatsapp/agentes/triagem";
+import { conversaPessoalDoDono, ehNumeroDoResponsavel } from "@/lib/whatsapp/agentes/pessoal";
 import { encryptToken } from "@/lib/meta/oauth";
 import { StoreRegras } from "./helpers/wa-regras-store";
 import { AGORA, cliente, contextoComRegras, lojaOnline, modeloFalso, nos, obraBoa, respostaAgente, salao } from "./helpers/regras-fixtures";
@@ -976,5 +978,60 @@ describe("arquivo de lugares: cidade, estado e bairro (07/10)", () => {
   });
   it("Campo Grande continua região com cuidado", () => {
     expect(st("casa de médio porte no Campo Grande")).toBe("cuidado");
+  });
+});
+
+/* ============================== 19/10: conversas do Robério ============================== */
+
+describe("19/10 (Robério): agente sem cidade inventada, sem conversa pessoal, fecho uma vez", () => {
+  it("cidade que não existe ('trinco' da foto de fechadura) não vira local da obra", () => {
+    const h = [cliente("[foto] fechadura com trinco lateral na porta")];
+    const sinais = { ...SINAIS_VAZIOS, localObra: { cidade: "Trinco", uf: "MA", bairro: "" } };
+    expect(detectarLocal(obraBoa(), h, sinais).status).toBe("desconhecida");
+    // Município de verdade dito pelo cliente continua valendo.
+    const sumare = detectarLocal(obraBoa(), [cliente("a obra é em sumaré")], { ...SINAIS_VAZIOS, localObra: { cidade: "Sumaré", uf: "SP", bairro: "" } });
+    expect(sumare.status).toBe("fora");
+    expect(sumare.cidade).toContain("Sumaré");
+  });
+
+  it("recado pessoal não é respondido; pedido com palavra de família é", () => {
+    expect(triagemLocalR("Bom dia, filho. Parabéns, que Deus te abençoe. Jesus te ama. Sumiu, hein?")?.acao).toBe("nao_precisa");
+    expect(triagemLocalR("Oi papisssss, feliz aniversário, te amo")?.acao).toBe("nao_precisa");
+    expect(triagemLocalR("quero reformar o quarto do meu filho")).toBeNull();
+    expect(triagemLocalR("bom dia")?.acao).toBe("responder");
+  });
+
+  it("número do responsável: com ou sem 55 e o 9", () => {
+    expect(ehNumeroDoResponsavel("+5519981320365", "(19) 98132-0365")).toBe(true);
+    expect(ehNumeroDoResponsavel("+551981320365", "(19) 98132-0365")).toBe(true);
+    expect(ehNumeroDoResponsavel("+5519998040719", "(19) 98132-0365")).toBe(false);
+    expect(ehNumeroDoResponsavel("+5519998040719", "")).toBe(false);
+  });
+
+  it("conversa em que o dono escreveu à mão e não há pedido na ficha é dele", () => {
+    const regras = obraBoa();
+    const defs = camposDaFicha(regras);
+    const dono: WaMessageLite = { id: "d1", fromMe: true, sentBy: "USER_PHONE", type: "text", body: "Posso ir umas 16:00", sentAt: AGORA };
+    expect(conversaPessoalDoDono([cliente("Esquecemos de comprar o livro"), dono], fichaVazia(), defs)).toBe(true);
+    expect(conversaPessoalDoDono([cliente("Esquecemos de comprar o livro")], fichaVazia(), defs)).toBe(false);
+    const cidade = defs.find((d) => d.tipo === "cidade")!;
+    const comPedido = { campos: { [cidade.chave]: { valor: "Campinas/SP", msgId: "c1", origem: "confirmado" as const, em: AGORA.toISOString() } }, atualizadoEm: null };
+    expect(conversaPessoalDoDono([cliente("a obra é em Campinas"), dono], comPedido, defs)).toBe(false);
+  });
+
+  it("motor: o responsável escrevendo pro número não gasta modelo nem recebe resposta", async () => {
+    const h = [cliente("Oi, quero reformar meu apartamento em Campinas")];
+    const { store, ctx } = preparar(h);
+    ctx.contact.phoneE164 = "+5519900003333";
+    const m = modeloFalso([respostaAgente({ bolhas: ["Show! Qual seu nome?"] })]);
+    const r = await processarMensagem(deps(store, m.chamar), { conversationId: ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
+    expect(r.acao).toBe("ignorado");
+    expect(m.doAgente()).toHaveLength(0);
+  });
+
+  it("recusa já fechada uma vez: a próxima não é obrigada a repetir o fecho", () => {
+    const h = [cliente("quero reformar meu apartamento em Sumaré/SP", 5), nos(`Poxa, Sumaré fica fora da nossa área. ${FECHO_RECUSA}`, 4), cliente("mas é pertinho", 1)];
+    const v = verificar(h, saida({ bolhas: ["Entendo, mas por enquanto Sumaré fica fora mesmo."] }));
+    expect(v.violacoes.map((x) => x.regra)).not.toContain("recusa_sem_fecho");
   });
 });
