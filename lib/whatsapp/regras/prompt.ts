@@ -105,16 +105,33 @@ export function formatoExtra(r: RegrasNegocio | null | undefined): string {
   return `CAMPOS EXTRAS NO JSON (obrigatórios quando há regras do negócio): "local_obra": {"cidade": "", "uf": "", "bairro": ""} com o que o CLIENTE disse sobre o local da OBRA (vazio se não disse), "servico": "aceito" | "recusado" | "excecao" | "desconhecido", "excecao": "" (qual exceção de local vale, ou vazio), "coletado": {"<informação mínima>": "como o cliente disse"} (só o que ele disse). Nunca preencha nada que o cliente não disse.`;
 }
 
-/** Ficha do lead (parte variável). */
+/**
+ * Ficha do lead (parte variável).
+ * 19/10: o agente só soube das regras de local e de pergunta repetida DEPOIS de errar (o verificador
+ * mandava corrigir). Agora a próxima pergunta já vem decidida aqui, calculada em código com a mesma
+ * lógica do verificador: cidade primeiro enquanto o local é desconhecido, nunca o que já foi dito.
+ * Só texto da parte variável; a parte fixa do Comando não muda (custo igual).
+ */
 export function blocoFicha(ficha: FichaLead, defs: CampoFichaDef[]): { sabe: string; falta: string } {
   if (!defs.length) return { sabe: "", falta: "" };
   const b = blocosDaFicha(ficha, defs);
-  return {
-    sabe: b.sabe,
-    falta: b.falta
-      ? `O QUE AINDA FALTA PERGUNTAR (pergunte só UM por vez, nessa ordem; nunca pergunte o que já está em "o que você já sabe"):\n${b.falta}`
-      : "O QUE AINDA FALTA PERGUNTAR: nada das informações mínimas. Não repita perguntas.",
-  };
+  const faltando = defs.filter((d) => d.obrigatorio && !ficha.campos[d.chave]);
+  if (!faltando.length) {
+    return { sabe: b.sabe, falta: "O QUE AINDA FALTA PERGUNTAR: nada das informações mínimas. Não repita perguntas." };
+  }
+  const semLocal = defs.some((d) => d.tipo === "cidade") && !defs.some((d) => d.tipo === "cidade" && ficha.campos[d.chave]);
+  const ordem = semLocal ? [...faltando].sort((a, c) => Number(c.tipo === "cidade") - Number(a.tipo === "cidade")) : faltando;
+  const rotulo = (d: CampoFichaDef) => `${d.rotulo}${d.pergunta ? ` (ex.: "${d.pergunta}")` : ""}`;
+  const respondidos = defs.filter((d) => ficha.campos[d.chave]).map((d) => d.rotulo);
+  const linhas = [
+    `PERGUNTE AGORA, e só isso (uma pergunta, na última bolha): ${rotulo(ordem[0])}.`,
+    ordem.length > 1 ? `Depois, uma por vez, nessa ordem: ${ordem.slice(1).map((d) => d.rotulo).join("; ")}.` : "",
+    respondidos.length ? `JÁ RESPONDIDO, nunca pergunte de novo (nem com outras palavras): ${respondidos.join("; ")}.` : "",
+    semLocal
+      ? "O LOCAL DA OBRA AINDA É DESCONHECIDO: não diga que atende, que faz nem \"claro, dá sim\" pra nenhum lugar ou serviço até o cliente dizer a cidade. Primeiro a cidade."
+      : "",
+  ].filter(Boolean);
+  return { sabe: b.sabe, falta: `O QUE AINDA FALTA PERGUNTAR:\n${linhas.join("\n")}` };
 }
 
 /** "quando" de mensagem aprovada que é cumprimento de abertura (vira exemplo de tom). */
