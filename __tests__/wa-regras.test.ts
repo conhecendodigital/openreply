@@ -7,7 +7,7 @@ import { ehSaudacao } from "../lib/whatsapp/regras/prompt";
 import { blocoRitmo } from "../lib/whatsapp/agentes/comando";
 import { describe, expect, it, vi } from "vitest";
 import { triagemLocal as triagemLocalR } from "@/lib/whatsapp/agentes/triagem";
-import { conversaPessoalDoDono, ehNumeroDoResponsavel } from "@/lib/whatsapp/agentes/pessoal";
+import { conversaDoDono, ehNumeroDoResponsavel } from "@/lib/whatsapp/agentes/pessoal";
 import { encryptToken } from "@/lib/meta/oauth";
 import { StoreRegras } from "./helpers/wa-regras-store";
 import { AGORA, cliente, contextoComRegras, lojaOnline, modeloFalso, nos, obraBoa, respostaAgente, salao } from "./helpers/regras-fixtures";
@@ -1008,15 +1008,22 @@ describe("19/10 (Robério): agente sem cidade inventada, sem conversa pessoal, f
     expect(ehNumeroDoResponsavel("+5519998040719", "")).toBe(false);
   });
 
-  it("conversa em que o dono escreveu à mão e não há pedido na ficha é dele", () => {
-    const regras = obraBoa();
-    const defs = camposDaFicha(regras);
+  it("conversa em que o dono escreveu à mão é dele, até alguém escolher o modo na tela", () => {
     const dono: WaMessageLite = { id: "d1", fromMe: true, sentBy: "USER_PHONE", type: "text", body: "Posso ir umas 16:00", sentAt: AGORA };
-    expect(conversaPessoalDoDono([cliente("Esquecemos de comprar o livro"), dono], fichaVazia(), defs)).toBe(true);
-    expect(conversaPessoalDoDono([cliente("Esquecemos de comprar o livro")], fichaVazia(), defs)).toBe(false);
-    const cidade = defs.find((d) => d.tipo === "cidade")!;
-    const comPedido = { campos: { [cidade.chave]: { valor: "Campinas/SP", msgId: "c1", origem: "confirmado" as const, em: AGORA.toISOString() } }, atualizadoEm: null };
-    expect(conversaPessoalDoDono([cliente("a obra é em Campinas"), dono], comPedido, defs)).toBe(false);
+    const agente: WaMessageLite = { id: "g1", fromMe: true, sentBy: "AGENT", type: "text", body: "Em qual cidade é a obra?", sentAt: AGORA };
+    expect(conversaDoDono([cliente("Esquecemos de comprar o livro"), dono], "INHERIT")).toBe(true);
+    expect(conversaDoDono([cliente("a obra é em Campinas"), agente, dono], "INHERIT")).toBe(true);
+    expect(conversaDoDono([cliente("a obra é em Campinas"), agente], "INHERIT")).toBe(false);
+    expect(conversaDoDono([cliente("a obra é em Campinas"), dono], "AUTO")).toBe(false);
+  });
+
+  it("motor: conversa em que o dono escreveu não gasta modelo", async () => {
+    const h: WaMessageLite[] = [cliente("oi", 5), { id: "d2", fromMe: true, sentBy: "USER_PHONE", type: "text", body: "Oi! Tudo bem?", sentAt: new Date(AGORA.getTime() - 4 * 60_000) }, cliente("quero reformar meu apartamento em Campinas", 1)];
+    const { store, ctx } = preparar(h);
+    const m = modeloFalso([respostaAgente({ bolhas: ["Show! Qual seu nome?"] })]);
+    const r = await processarMensagem(deps(store, m.chamar), { conversationId: ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
+    expect(r.acao).toBe("ignorado");
+    expect(m.doAgente()).toHaveLength(0);
   });
 
   it("motor: o responsável escrevendo pro número não gasta modelo nem recebe resposta", async () => {
