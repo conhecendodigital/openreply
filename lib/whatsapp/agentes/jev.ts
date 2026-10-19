@@ -125,7 +125,7 @@ export const PERGUNTAS_TRIAGEM: Record<string, JevPergunta> = {
       "Mensagem que um cliente mandou no WhatsApp de um pequeno negócio. Use o contexto (últimas mensagens). O que o negócio deve fazer?",
     criteria: {
       responder: "Cumprimento (oi, olá, bom dia, tudo bem?), pergunta, pedido, dúvida ou conversa que pede uma resposta",
-      nao_precisa: "Só confirma ou encerra: ok, obrigado, beleza, joinha, emoji, áudio de agradecimento",
+      nao_precisa: "Só confirma ou encerra (ok, obrigado, beleza, joinha, emoji, áudio de agradecimento) ou é conversa pessoal de família ou amigo (parabéns, te amo, recado do dia a dia) sem nenhum pedido pro negócio",
       humano:
         "Reclamação, cobrança, reembolso, cancelamento, ameaça, Procon, advogado, saúde, assunto delicado ou pede pra falar com uma pessoa",
       spam: "Golpe, propaganda, corrente, link estranho, mensagem automática de outro robô",

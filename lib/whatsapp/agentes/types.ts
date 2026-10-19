@@ -65,6 +65,8 @@ export interface ConversaContexto {
     /** Nome salvo e pushName, usados só pra tirar o nome da pessoa dos exemplos de tom. */
     name: string | null;
     pushName: string | null;
+    /** Número do contato (19/10: o número do responsável não é atendido pelo agente). */
+    phoneE164?: string | null;
   };
   /** WaAgentProfile do número. */
   profile: AgentProfile | null;

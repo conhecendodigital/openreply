@@ -937,9 +937,10 @@ describe("resposta de gente, sem repetir frase (14/10)", () => {
     expect(tirarRepetidas(["Entendi, reforma.", "Em qual cidade será a obra?"], hist)).toEqual(["Entendi, reforma.", "Em qual cidade será a obra?"]);
   });
 
-  it("nunca tira o fecho de recusa e nunca deixa a resposta vazia", () => {
+  it("fecho de recusa sai só uma vez (19/10) e a resposta nunca fica vazia", () => {
     const comFecho = [msg("f1", FECHO_RECUSA, true, 3)];
-    expect(tirarRepetidas([FECHO_RECUSA, "Posso ajudar em algo mais?"], comFecho)).toEqual([FECHO_RECUSA, "Posso ajudar em algo mais?"]);
+    expect(tirarRepetidas([FECHO_RECUSA, "Posso ajudar em algo mais?"], comFecho)).toEqual(["Posso ajudar em algo mais?"]);
+    expect(tirarRepetidas(["Entendi.", FECHO_RECUSA], hist)).toEqual(["Entendi.", FECHO_RECUSA]);
     expect(tirarRepetidas(["Em qual cidade será a obra?"], hist)).toEqual(["Em qual cidade será a obra?"]);
   });
 

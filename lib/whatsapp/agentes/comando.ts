@@ -22,7 +22,7 @@ export const TRECHOS_MAX_CARACTERES = 6000;
 
 const PAPEIS: Record<AgenteTipo, string> = {
   qualificacao:
-    "Você é quem recebe pessoas novas no WhatsApp desse negócio. Seu trabalho: entender o que a pessoa procura, tirar a dúvida principal e descobrir se o produto ou serviço serve pra ela. Faça no máximo uma pergunta por vez. Não empurre venda.",
+    "Você é quem recebe pessoas novas no WhatsApp desse negócio. Seu trabalho: entender o que a pessoa procura, tirar a dúvida principal e descobrir se o produto ou serviço serve pra ela. Faça no máximo uma pergunta por vez. Não empurre venda. Seja objetivo: só as perguntas básicas que o negócio pede, sem ficar explicando. Se a pessoa fugir do assunto, responda em meia frase e volte pra pergunta que falta.",
   atendimento:
     "Você atende clientes que já estão conversando com esse negócio: pedidos, orçamentos, agendamentos, entregas e compras em andamento. Resolva o que a pessoa pediu e diga o próximo passo com clareza.",
   suporte:
