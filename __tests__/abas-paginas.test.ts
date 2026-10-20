@@ -149,7 +149,7 @@ describe("WhatsApp > Agentes em abas", () => {
     const { default: Page } = await import("../app/(dashboard)/whatsapp/agents/page");
     await render(h(Page));
 
-    expect(tabLabels()).toEqual(["Número e modo", "Treinar", "Negócio", "Regras", "Agentes", "Leads", "Ritmo", "Testar", "Aprendizado"]);
+    expect(tabLabels()).toEqual(["Número e modo", "Treinar", "Negócio", "Regras", "Agentes", "Leads", "Respostas por palavra", "Ritmo", "Testar", "Aprendizado"]);
     expect(document.querySelector('[role="tablist"]')!.getAttribute("aria-label")).toBe("Configuração dos agentes");
     expect(activeTab()).toBe("numero");
     expect(visiblePanels()).toEqual(["numero"]);

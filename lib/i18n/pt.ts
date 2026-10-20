@@ -18,6 +18,7 @@ import { ptDmFormato } from "@/lib/i18n/pt-dm-formato";
 import { ptCanais } from "@/lib/i18n/pt-canais";
 import { ptWaRegras } from "@/lib/i18n/pt-wa-regras";
 import { ptWaLeads } from "@/lib/i18n/pt-wa-leads";
+import { ptWaPalavra } from "@/lib/i18n/pt-wa-palavra";
 import { ptSecoes } from "@/lib/i18n/pt-secoes";
 import { ptAbas } from "@/lib/i18n/pt-abas";
 import { ptLinks } from "@/lib/i18n/pt-links";
@@ -31,6 +32,7 @@ export const pt: Record<string, string> = {
   // 2026-10-06: seções recolhíveis, índice e resumos em todo o painel, em lib/i18n/pt-secoes.ts.
   ...ptSecoes,
   ...ptAbas,
+  ...ptWaPalavra,
   // 2026-10-06: regras duras, aprendizado e teste do agente (WhatsApp > Agentes), em lib/i18n/pt-wa-regras.ts.
   ...ptWaRegras,
   // 2026-10-06: WhatsApp > Leads, ficha e estágio do lead, em lib/i18n/pt-wa-leads.ts.

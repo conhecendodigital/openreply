@@ -14,6 +14,7 @@
  * Assim nada é contado duas vezes: o run vira linha de WaAiUsage quando o
  * modelo responde, e deixa de ser "pending".
  */
+import { lerRespostasPalavra } from "./resposta-palavra";
 import type { PrismaClient } from "@/app/generated/prisma/client";
 import { getAgentModelConfig } from "@/lib/ai/credentials";
 import { getAppPrisma, withRls, withSystemRole, type RlsContext } from "@/lib/db/rls";
@@ -243,6 +244,7 @@ export class PrismaAgentStore implements AgentStore {
               atrasoInicialMs: { min: profile.delayMinSeconds * 1000, max: profile.delayMaxSeconds * 1000 },
               regras: regrasDoPerfil(profile.regrasNegocio),
               avisarResponsavel: avisoDe(profile.avisarResponsavel),
+              respostasPalavra: lerRespostasPalavra(profile.respostasPalavra),
             }
           : null,
         historico: mensagens.reverse().map((m) => ({ ...m, sentBy: m.sentBy as SentBy })),
