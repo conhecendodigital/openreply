@@ -1,0 +1,11 @@
+-- WhatsApp: resposta automática por palavra (pedido do dono, 20/10/2026: "o agente
+-- não está enviando automático a aula do workshop").
+--
+-- A página da aula manda a pessoa pro número com "Quero a aula do workshop" já
+-- escrito e promete a resposta com o link. Sem agente ligado, ninguém respondia.
+-- Agora cada número pode ter respostas fixas por palavra: chegou a frase, sai o
+-- texto cadastrado, uma vez por pessoa, mesmo com os agentes desligados. Sem IA.
+--
+-- SÓ ADITIVA: uma coluna opcional (NULL). Nada é apagado nem muda de tipo.
+-- [{"id":"...","palavras":["quero a aula do workshop"],"texto":"...","ativo":true}]
+ALTER TABLE whatsapp."WaAgentProfile" ADD COLUMN IF NOT EXISTS "respostasPalavra" JSONB;

@@ -2225,6 +2225,8 @@ model WaAgentProfile {
   estagiosLead    Json?
   /// {"ligado": false, "telefone": "+55..."}: resumo do lead qualificado pro responsável.
   avisarResponsavel Json?
+  /// [{"id","palavras":[...],"texto","ativo"}]: resposta fixa por palavra, sem IA (20/10/2026).
+  respostasPalavra Json?
   learnedAt       DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @default(now()) @updatedAt
