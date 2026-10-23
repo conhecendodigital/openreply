@@ -48,7 +48,8 @@ vi.mock("@/lib/media/s3", async (importOriginal) => {
 import { draftSettingsSchema, tiktokSettingsSchema, DEFAULT_TIKTOK_SETTINGS } from "../lib/tiktok/settings";
 import { planChunks } from "../lib/tiktok/client";
 import { getTikTokAuthorizationUrl, getMissingTikTokEnv } from "../lib/tiktok/oauth";
-import { createPostSchema, mediaUrlProblem } from "../lib/tiktok/posts-api";
+import { createPostSchema, mediaLimitsProblem, mediaUrlProblem } from "../lib/tiktok/posts-api";
+import { tiktokProvider } from "../lib/social/providers/tiktok";
 import { isApiKeyRouteAllowed } from "../lib/api-key-routes";
 import { resolveHandler } from "../lib/mcp/routes";
 import { handleMcpMessage, TOOLS, type InternalCall } from "../lib/mcp/server";
@@ -137,7 +138,10 @@ describe("endereço do vídeo (o servidor baixa esse endereço)", () => {
   it("o corpo de criação é estrito e limita legenda e tipo de vídeo", () => {
     const base = { socialAccountId: "a_1", caption: "oi", mediaUrl: GOOD_URL, mediaBytes: 5 * MB, mediaContentType: "video/mp4" };
     expect(createPostSchema.safeParse(base).success).toBe(true);
-    expect(createPostSchema.safeParse({ ...base, caption: "x".repeat(2201) }).success).toBe(false);
+    // O corpo aceita até a maior legenda das redes (YouTube, 5000); o limite do TikTok (2200) vale ao escolher a conta.
+    expect(createPostSchema.safeParse({ ...base, caption: "x".repeat(5001) }).success).toBe(false);
+    expect(mediaLimitsProblem(tiktokProvider, { caption: "x".repeat(2201) })).not.toBeNull();
+    expect(mediaLimitsProblem(tiktokProvider, { caption: "x".repeat(2200) })).toBeNull();
     expect(createPostSchema.safeParse({ ...base, mediaContentType: "image/png" }).success).toBe(false);
     expect(createPostSchema.safeParse({ ...base, status: "SCHEDULED" }).success).toBe(false);
   });

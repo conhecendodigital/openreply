@@ -3,7 +3,7 @@ import { fail, ok, requireContext } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db/client";
 import { humanOnly } from "@/lib/flows/api";
 import { postDto } from "@/lib/tiktok/dto";
-import { findPost } from "@/lib/tiktok/posts-api";
+import { findPost } from "@/lib/social/posts-api";
 
 export const dynamic = "force-dynamic";
 

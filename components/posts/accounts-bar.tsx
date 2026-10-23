@@ -1,16 +1,29 @@
 "use client";
 
-/** Contas sociais conectadas (TikTok) e o botão Conectar TikTok. */
+/** Contas conectadas (TikTok, YouTube, Instagram, Facebook) e os botões de conectar cada rede. */
 
+import Link from "next/link";
 import { useState } from "react";
 import { useT } from "@/components/lang-provider";
 import { callApi } from "@/components/posts/api";
-import type { SocialAccountDTO } from "@/lib/tiktok-composer";
+import { BrandIcon } from "@/components/social/brand-icon";
+import { NETWORK_NAME } from "@/lib/social-composer";
+import type { PostNetwork, SocialAccountDTO } from "@/lib/tiktok-composer";
 
 const btn = "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50";
 export const btnPrimary = `${btn} bg-accent text-white hover:bg-accent-hover`;
 export const btnSecondary = `${btn} bg-surface-hover text-foreground hover:bg-border`;
 export const btnDanger = `${btn} border border-error/30 text-error hover:bg-error/10`;
+
+const NETWORKS: PostNetwork[] = ["TIKTOK", "YOUTUBE", "INSTAGRAM", "FACEBOOK"];
+
+/** TikTok e YouTube conectam direto daqui; Instagram e Facebook, na página Canais. */
+export const CONNECT_HREF: Record<PostNetwork, string> = {
+  TIKTOK: "/api/tiktok/connect",
+  YOUTUBE: "/api/youtube/connect",
+  INSTAGRAM: "/channels",
+  FACEBOOK: "/channels",
+};
 
 const STATUS: Record<SocialAccountDTO["status"], { label: string; tone: string; dot: string }> = {
   ACTIVE: { label: "Connected", tone: "bg-success/10 text-success", dot: "bg-success" },
@@ -63,9 +76,14 @@ export function AccountsBar({
     <section aria-label={t("Connected accounts")} className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{t("Connected accounts")}</h2>
-        <a href="/api/tiktok/connect" className={btnPrimary}>
-          {t("Connect TikTok")}
-        </a>
+        <div className="flex flex-wrap gap-2">
+          {NETWORKS.map((n) => (
+            <a key={n} href={CONNECT_HREF[n]} className={`${btnSecondary} gap-2`} aria-label={t("Connect {network}", { network: NETWORK_NAME[n] })}>
+              <BrandIcon brand={n} size={18} />
+              {t("Connect {network}", { network: NETWORK_NAME[n] })}
+            </a>
+          ))}
+        </div>
       </div>
 
       {error && <p className="rounded-xl bg-error/10 px-4 py-2.5 text-sm text-error">{error}</p>}
@@ -73,7 +91,7 @@ export function AccountsBar({
 
       {!loading && accounts.length === 0 && (
         <div className="panel rounded-xl border border-border p-5 text-sm text-muted">
-          {t("No TikTok account connected yet. Click Connect TikTok to start.")}
+          {t("No account connected yet. Connect TikTok, YouTube, Instagram or Facebook to start.")}
         </div>
       )}
 
@@ -82,27 +100,39 @@ export function AccountsBar({
           const st = STATUS[a.status];
           return (
             <div key={a.id} className="panel flex flex-wrap items-center gap-3 rounded-xl border border-border p-4">
-              <Avatar url={a.avatarUrl} name={a.displayName} />
+              <div className="relative">
+                <Avatar url={a.avatarUrl} name={a.displayName} />
+                <span className="absolute -bottom-1 -right-1 rounded-full ring-2 ring-[var(--surface,transparent)]">
+                  <BrandIcon brand={a.platform} size={18} />
+                </span>
+              </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{a.displayName}</p>
                 <p className="truncate text-xs text-muted">
-                  TikTok{a.username ? ` · @${a.username}` : ""}
+                  {NETWORK_NAME[a.platform]}
+                  {a.username ? ` · @${a.username}` : ""}
                 </p>
                 <span className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${st.tone}`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
                   {t(st.label)}
                 </span>
+                {a.missingScopes.length > 0 && (
+                  <p className="mt-1 break-words text-xs text-warning">
+                    {t("Missing")}: {a.missingScopes.join(", ")}
+                  </p>
+                )}
                 {a.lastError && a.status !== "ACTIVE" && (
-                  <p className="mt-1 break-words text-xs text-error">{a.lastError}</p>
+                  <p className="mt-1 break-words text-xs text-error">{t(a.lastError)}</p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {a.status === "NEEDS_RECONNECT" && (
-                  <a href="/api/tiktok/connect" className={btnSecondary}>
+                  <a href={CONNECT_HREF[a.platform]} className={btnSecondary}>
                     {t("Reconnect")}
                   </a>
                 )}
                 {a.status !== "DISCONNECTED" &&
+                  a.canDisconnect &&
                   (confirming === a.id ? (
                     <>
                       <button type="button" disabled={busy === a.id} onClick={() => void disconnect(a.id)} className={btnDanger}>
@@ -117,6 +147,11 @@ export function AccountsBar({
                       {t("Disconnect")}
                     </button>
                   ))}
+                {a.status !== "DISCONNECTED" && !a.canDisconnect && (
+                  <Link href="/channels" className={btnSecondary}>
+                    {t("Manage in Channels")}
+                  </Link>
+                )}
               </div>
             </div>
           );

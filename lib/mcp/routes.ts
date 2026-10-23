@@ -112,7 +112,7 @@ export function resolveHandler(
     [/^\/api\/inbox\/unanswered$/, unansweredRoute],
     [/^\/api\/conversation-links$/, conversationLinksRoute],
     [/^\/api\/conversation-links\/([^/]+)$/, conversationLinkRoute],
-    // Agendamento de posts (TikTok): leitura e rascunho. Schedule/publish/cancel não entram aqui.
+    // Agendamento de posts (TikTok, YouTube, Instagram, Facebook): leitura e rascunho. Schedule/publish/cancel não entram aqui.
     [/^\/api\/social-accounts$/, socialAccountsRoute],
     [/^\/api\/posts$/, socialPostsRoute],
     [/^\/api\/posts\/([^/]+)$/, socialPostRoute],

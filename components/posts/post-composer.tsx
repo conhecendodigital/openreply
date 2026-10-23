@@ -1,26 +1,43 @@
 "use client";
 
 /**
- * Compositor de post do TikTok (Direct Post). Segue as regras de UX do TikTok:
- * nome da conta, privacidade SEM valor padrão (só as opções que o TikTok devolve),
- * comentários/duet/stitch desligados por padrão, aviso de conteúdo comercial,
- * declaração de uso de música e duração máxima. Nada é publicado sem a pessoa
- * clicar em Agendar ou Publicar agora.
+ * Compositor de post (TikTok, YouTube, Instagram Reels, Facebook Página). Esta casca cuida do
+ * que é igual em todas as redes: conta, vídeo, legenda, quando publicar e salvar. As opções de
+ * cada rede ficam em components/posts/options/. Nada é publicado sem a pessoa clicar em
+ * Agendar ou Publicar agora.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/components/lang-provider";
 import { callApi, putFile, type UploadTicket } from "@/components/posts/api";
 import { Avatar, btnPrimary, btnSecondary } from "@/components/posts/accounts-bar";
+import { FacebookTop } from "@/components/posts/options/facebook";
+import { InstagramFields } from "@/components/posts/options/instagram";
+import { TikTokFields, TikTokFooter, TikTokTop } from "@/components/posts/options/tiktok";
+import { YouTubeFields, YouTubeTop } from "@/components/posts/options/youtube";
+import { fieldClass, labelClass } from "@/components/posts/styles";
+import { VideoPicker, type MediaState, type UploadState } from "@/components/posts/video-picker";
+import { BrandIcon } from "@/components/social/brand-icon";
+import { NETWORK_LIMITS } from "@/lib/social/limits";
 import {
-  CAPTION_MAX,
-  PRIVACY_LABELS,
-  availablePrivacyOptions,
+  NETWORK_NAME,
+  acceptForNetwork,
+  emptyFacebookForm,
+  emptyInstagramForm,
+  emptyYouTubeForm,
+  facebookFormFromSettings,
+  facebookSettingsPayload,
+  instagramFormFromSettings,
+  validateSocialComposer,
+  youTubeFormFromSettings,
+  youTubeSettingsPayload,
+  type FacebookForm,
+  type InstagramForm,
+  type YouTubeForm,
+} from "@/lib/social-composer";
+import {
   brasiliaLocalToIso,
-  disclosureKind,
   emptySettings,
-  formatBytes,
-  isAllowedVideoType,
   isoToBrasiliaLocal,
   normalizeSettings,
   validateComposer,
@@ -31,10 +48,7 @@ import {
   type TikTokSettings,
 } from "@/lib/tiktok-composer";
 
-const BC_POLICY = "https://www.tiktok.com/legal/page/global/bc-policy/en";
-const MUSIC_POLICY = "https://www.tiktok.com/legal/page/global/music-usage-confirmation/en";
-const field = "w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent/40 disabled:opacity-50";
-const label = "text-xs font-semibold uppercase tracking-wide text-zinc-500";
+const YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload";
 
 export function PostComposer({
   accounts,
@@ -51,11 +65,17 @@ export function PostComposer({
 }) {
   const t = useT();
   const active = accounts.filter((a) => a.status === "ACTIVE");
-  const [accountId, setAccountId] = useState(post?.socialAccountId ?? (active.length === 1 ? active[0].id : ""));
+  const [accountId, setAccountId] = useState(post?.accountId ?? (active.length === 1 ? active[0].id : ""));
+  const account = accounts.find((a) => a.id === accountId) ?? null;
+  const network = account?.platform ?? post?.platform ?? null;
+
   const [info, setInfo] = useState<{ id: string; data: CreatorInfo | null } | null>(null);
   const [caption, setCaption] = useState(post?.caption ?? "");
-  const [settings, setSettings] = useState<TikTokSettings>(post?.settings ?? emptySettings());
-  const [media, setMedia] = useState({
+  const [tiktok, setTiktok] = useState<TikTokSettings>(post?.platform === "TIKTOK" ? (post.settings as unknown as TikTokSettings) : emptySettings());
+  const [youtube, setYoutube] = useState<YouTubeForm>(post?.platform === "YOUTUBE" ? youTubeFormFromSettings(post.settings) : emptyYouTubeForm());
+  const [instagram, setInstagram] = useState<InstagramForm>(post?.platform === "INSTAGRAM" ? instagramFormFromSettings(post.settings) : emptyInstagramForm());
+  const [facebook, setFacebook] = useState<FacebookForm>(post?.platform === "FACEBOOK" ? facebookFormFromSettings(post.settings) : emptyFacebookForm());
+  const [media, setMedia] = useState<MediaState>({
     url: post?.mediaUrl ?? "",
     bytes: post?.mediaBytes ?? 0,
     type: post?.mediaContentType ?? "",
@@ -63,7 +83,7 @@ export function PostComposer({
     preview: post?.mediaUrl ?? "",
   });
   const [durationSec, setDurationSec] = useState<number | null>(null);
-  const [upload, setUpload] = useState<{ pct: number; error: string | null } | null>(null);
+  const [upload, setUpload] = useState<UploadState>(null);
   const [mode, setMode] = useState<"now" | "schedule">(initialMode === "schedule" || post?.status === "SCHEDULED" ? "schedule" : "now");
   const [scheduledLocal, setScheduledLocal] = useState(isoToBrasiliaLocal(post?.scheduledAt));
   const [errors, setErrors] = useState<string[]>([]);
@@ -71,23 +91,23 @@ export function PostComposer({
   const [postId, setPostId] = useState<string | null>(post?.id ?? null);
   const objectUrl = useRef<string | null>(null);
 
-  const infoData = info?.id === accountId ? info.data : null;
-  const infoLoading = Boolean(accountId) && info?.id !== accountId;
-  const infoFailed = Boolean(accountId) && info?.id === accountId && !info.data;
+  const infoData = network === "TIKTOK" && info?.id === accountId ? info.data : null;
+  const infoLoading = network === "TIKTOK" && Boolean(accountId) && info?.id !== accountId;
+  const infoFailed = network === "TIKTOK" && Boolean(accountId) && info?.id === accountId && !info.data;
 
-  // Detalhes do criador (privacidades, interações e duração) toda vez que a conta muda.
+  // Detalhes do criador do TikTok (privacidades, interações e duração) toda vez que a conta muda.
   useEffect(() => {
-    if (!accountId) return;
+    if (!accountId || network !== "TIKTOK") return;
     let alive = true;
     void callApi<CreatorInfo>(`/api/social-accounts/${accountId}/creator-info`).then((res) => {
       if (!alive) return;
       setInfo({ id: accountId, data: res.data });
-      if (res.data) setSettings((s) => normalizeSettings(s, res.data));
+      if (res.data) setTiktok((s) => normalizeSettings(s, res.data));
     });
     return () => {
       alive = false;
     };
-  }, [accountId]);
+  }, [accountId, network]);
 
   useEffect(
     () => () => {
@@ -96,15 +116,19 @@ export function PostComposer({
     []
   );
 
-  const patch = useCallback((next: Partial<TikTokSettings>) => {
-    setSettings((s) => normalizeSettings({ ...s, ...next }, infoData));
-  }, [infoData]);
+  const patchTikTok = useCallback(
+    (next: Partial<TikTokSettings>) => {
+      setTiktok((s) => normalizeSettings({ ...s, ...next }, infoData));
+    },
+    [infoData]
+  );
 
   async function pickFile(file: File | undefined) {
     if (!file) return;
     setErrors([]);
-    if (!isAllowedVideoType(file.type)) {
-      setUpload({ pct: 0, error: t("Use an MP4, MOV or WebM video.") });
+    const accepted = NETWORK_LIMITS[network ?? "TIKTOK"].videoTypes;
+    if (!accepted.includes(file.type)) {
+      setUpload({ pct: 0, error: network === "TIKTOK" || !network ? t("Use an MP4, MOV or WebM video.") : t("Use an MP4 or MOV video.") });
       return;
     }
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
@@ -133,12 +157,23 @@ export function PostComposer({
     setUpload(null);
   }
 
+  function settingsFor(action: ComposerAction): Record<string, unknown> {
+    if (network === "YOUTUBE") return youTubeSettingsPayload(youtube);
+    if (network === "INSTAGRAM") return { ...instagram };
+    if (network === "FACEBOOK") return facebookSettingsPayload(facebook);
+    void action;
+    return { ...tiktok };
+  }
+
   async function submit(action: ComposerAction) {
-    const errs = validateComposer(
-      { accountId, caption, mediaUrl: media.url, mediaContentType: media.type, durationSec, settings, scheduledLocal },
-      infoData,
-      action
-    );
+    const errs =
+      network && network !== "TIKTOK"
+        ? validateSocialComposer(
+            { network, accountId, caption, mediaUrl: media.url, mediaBytes: media.bytes, mediaContentType: media.type, youtube, facebook, scheduledLocal },
+            action
+          )
+        : validateComposer({ accountId, caption, mediaUrl: media.url, mediaContentType: media.type, durationSec, settings: tiktok, scheduledLocal }, infoData, action);
+    if (!network && !errs.length) errs.push("Pick the account.");
     if (upload && !upload.error) errs.push("Wait for the upload to finish.");
     setErrors(errs);
     if (errs.length) return;
@@ -150,7 +185,7 @@ export function PostComposer({
       mediaUrl: media.url,
       mediaBytes: media.bytes,
       mediaContentType: media.type,
-      settings,
+      settings: settingsFor(action),
     };
     const saved = postId
       ? await callApi<PostDTO>(`/api/posts/${postId}`, { method: "PATCH", body: JSON.stringify(body) })
@@ -187,13 +222,15 @@ export function PostComposer({
     onClose();
   }
 
-  const c = settings.commercial;
-  const privacyOptions = infoData?.privacyLevelOptions ?? [];
-  const allowedPrivacy = availablePrivacyOptions(privacyOptions, c.enabled && c.brandedContent);
-  const tooLong = infoData != null && durationSec != null && durationSec > infoData.maxVideoPostDurationSec;
-  const disclosure = disclosureKind(c);
   const nowLocal = isoToBrasiliaLocal(new Date().toISOString());
   const uploading = Boolean(upload && !upload.error);
+  const captionMax = NETWORK_LIMITS[network ?? "TIKTOK"].captionMax;
+  const isYouTube = network === "YOUTUBE";
+  const lockedAccount = Boolean(post?.status === "SCHEDULED" || postId);
+  const lacksYouTubeUpload = isYouTube && account != null && !account.scopes.includes(YOUTUBE_UPLOAD_SCOPE);
+  const grouped = (["TIKTOK", "YOUTUBE", "INSTAGRAM", "FACEBOOK"] as const)
+    .map((n) => ({ network: n, items: active.filter((a) => a.platform === n) }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <section aria-label={post ? t("Edit post") : t("New post")} className="panel space-y-5 rounded-xl border border-border p-4 sm:p-6">
@@ -205,275 +242,90 @@ export function PostComposer({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        {/* Vídeo e conta */}
-        <div className="space-y-3">
-          <span className={label}>{t("Video")}</span>
-          <div className="mx-auto w-full max-w-[260px] overflow-hidden rounded-xl border border-border bg-surface-hover">
-            {media.preview ? (
-              <video
-                key={media.preview}
-                src={media.preview}
-                controls
-                playsInline
-                preload="metadata"
-                onLoadedMetadata={(e) => setDurationSec(e.currentTarget.duration)}
-                className="aspect-[9/16] w-full bg-black object-contain"
-              />
-            ) : (
-              <div className="flex aspect-[9/16] w-full items-center justify-center p-4 text-center text-sm text-muted">
-                {t("Your video preview shows here.")}
-              </div>
-            )}
-          </div>
-          <label className={`${btnSecondary} w-full cursor-pointer`}>
-            {media.preview ? t("Change video") : t("Choose video")}
-            <input
-              type="file"
-              accept="video/mp4,video/quicktime,video/webm"
-              className="sr-only"
-              disabled={uploading}
-              onChange={(e) => {
-                void pickFile(e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
-          </label>
-          {media.name && (
-            <p className="break-all text-xs text-muted">
-              {media.name} · {formatBytes(media.bytes)}
-            </p>
-          )}
-          {upload && !upload.error && (
-            <div>
-              <div className="h-2 overflow-hidden rounded-full bg-surface-hover" role="progressbar" aria-valuenow={upload.pct} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full bg-accent transition-all" style={{ width: `${upload.pct}%` }} />
-              </div>
-              <p className="mt-1 text-xs text-muted">{t("Uploading {n}%", { n: upload.pct })}</p>
-            </div>
-          )}
-          {upload?.error && <p className="rounded-lg bg-error/10 px-3 py-2 text-xs text-error">{upload.error}</p>}
-          {media.url && !upload && <p className="text-xs text-success">{t("Video uploaded")}</p>}
-        </div>
+        <VideoPicker media={media} upload={upload} accept={acceptForNetwork(network)} onPick={(f) => void pickFile(f)} onDuration={setDurationSec} />
 
-        {/* Campos */}
         <div className="min-w-0 space-y-5">
           <label className="flex flex-col gap-2 text-sm">
-            <span className={label}>{t("TikTok account")}</span>
-            <select
-              value={accountId}
-              disabled={Boolean(post?.status === "SCHEDULED" || postId)}
-              onChange={(e) => setAccountId(e.target.value)}
-              className={field}
-            >
+            <span className={labelClass}>{t("Account")}</span>
+            <select value={accountId} disabled={lockedAccount} onChange={(e) => setAccountId(e.target.value)} className={fieldClass}>
               <option value="">{t("Choose an account")}</option>
-              {active.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.displayName}
-                  {a.username ? ` (@${a.username})` : ""}
-                </option>
+              {grouped.map((g) => (
+                <optgroup key={g.network} label={NETWORK_NAME[g.network]}>
+                  {g.items.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.displayName}
+                      {a.username ? ` (@${a.username})` : ""}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
-            {active.length === 0 && <span className="text-xs text-warning">{t("Connect a TikTok account first.")}</span>}
+            {active.length === 0 && <span className="text-xs text-warning">{t("Connect an account first.")}</span>}
           </label>
 
-          {accountId && (
+          {account && network !== "TIKTOK" && (
             <div className="flex flex-wrap items-center gap-3 rounded-xl bg-surface-hover px-4 py-3">
-              {infoLoading && <span className="text-sm text-muted">{t("Loading account details...")}</span>}
-              {infoFailed && <span className="text-sm text-error">{t("Could not load the account details. Reconnect the account and try again.")}</span>}
-              {infoData && (
-                <>
-                  <Avatar url={infoData.avatarUrl} name={infoData.nickname} size={36} />
-                  <div className="min-w-[10rem] flex-1">
-                    <p className="text-xs text-muted">{t("Posting as")}</p>
-                    <p className="break-words text-sm font-semibold">
-                      {infoData.nickname}
-                      {infoData.username ? <span className="font-normal text-muted"> @{infoData.username}</span> : null}
-                    </p>
-                  </div>
-                  <p className="w-full text-xs text-muted sm:w-auto">
-                    {t("Maximum video length: {time}", {
-                      time:
-                        infoData.maxVideoPostDurationSec >= 60
-                          ? t("{n} min", { n: Math.round(infoData.maxVideoPostDurationSec / 60) })
-                          : t("{n} s", { n: infoData.maxVideoPostDurationSec }),
-                    })}
-                  </p>
-                </>
-              )}
+              <Avatar url={account.avatarUrl} name={account.displayName} size={36} />
+              <div className="min-w-[10rem] flex-1">
+                <p className="text-xs text-muted">{t("Posting as")}</p>
+                <p className="break-words text-sm font-semibold">
+                  {account.displayName}
+                  {account.username ? <span className="font-normal text-muted"> @{account.username}</span> : null}
+                </p>
+              </div>
+              <BrandIcon brand={account.platform} size={28} />
             </div>
           )}
-          {tooLong && infoData && (
-            <p role="alert" className="rounded-xl bg-error/10 px-4 py-2.5 text-sm text-error">
-              {t("This video has {n} s and this account accepts up to {max} s. Choose a shorter video.", {
-                n: Math.round(durationSec ?? 0),
-                max: infoData.maxVideoPostDurationSec,
-              })}
+          {lacksYouTubeUpload && (
+            <p role="alert" className="rounded-xl bg-warning/10 px-4 py-2.5 text-sm text-warning">
+              {t("This YouTube channel did not allow uploads. Connect it again and accept every permission.")}
             </p>
           )}
 
+          {network === "TIKTOK" && <TikTokTop accountId={accountId} info={infoData} loading={infoLoading} failed={infoFailed} durationSec={durationSec} />}
+          {network === "YOUTUBE" && <YouTubeTop form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} />}
+          {network === "FACEBOOK" && <FacebookTop form={facebook} onChange={(n) => setFacebook((f) => ({ ...f, ...n }))} />}
+
           <label className="flex flex-col gap-2 text-sm">
-            <span className={label}>{t("Caption")}</span>
+            <span className={labelClass}>{isYouTube ? t("Description") : t("Caption")}</span>
             <textarea
               value={caption}
-              maxLength={CAPTION_MAX}
+              maxLength={captionMax}
               rows={4}
               onChange={(e) => setCaption(e.target.value)}
-              placeholder={t("Write the caption of the video")}
-              className={field}
+              placeholder={isYouTube ? t("Write the description of the video") : t("Write the caption of the video")}
+              className={fieldClass}
             />
             <span className="self-end text-xs text-muted">
-              {caption.length}/{CAPTION_MAX}
+              {caption.length}/{captionMax}
             </span>
           </label>
 
-          <div className="flex flex-col gap-2 text-sm">
-            <label htmlFor="tt-privacy" className={label}>
-              {t("Who can see this video")}
-            </label>
-            <select
-              id="tt-privacy"
-              value={settings.privacyLevel}
-              disabled={!infoData}
-              onChange={(e) => patch({ privacyLevel: e.target.value })}
-              className={field}
-            >
-              <option value="">{t("Choose who can see it")}</option>
-              {privacyOptions.map((o) => (
-                <option key={o} value={o} disabled={!allowedPrivacy.includes(o)}>
-                  {t(PRIVACY_LABELS[o] ?? o)}
-                </option>
-              ))}
-            </select>
-            {c.enabled && c.brandedContent && privacyOptions.includes("SELF_ONLY") && (
-              <span className="text-xs text-warning">{t("Branded content can't be private, so Only me is not available.")}</span>
-            )}
-            <span className="text-xs text-muted">{t("Accounts not yet audited by TikTok can only post as Only me.")}</span>
-          </div>
+          {network === "TIKTOK" && <TikTokFields settings={tiktok} info={infoData} patch={patchTikTok} />}
+          {network === "YOUTUBE" && <YouTubeFields form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} />}
+          {network === "INSTAGRAM" && <InstagramFields form={instagram} onChange={(n) => setInstagram((f) => ({ ...f, ...n }))} />}
 
           <fieldset className="space-y-2">
-            <legend className={label}>{t("Allow people to")}</legend>
-            {(
-              [
-                ["allowComment", "Comment", infoData?.commentDisabled],
-                ["allowDuet", "Duet", infoData?.duetDisabled],
-                ["allowStitch", "Stitch", infoData?.stitchDisabled],
-              ] as const
-            ).map(([key, name, off]) => (
-              <label key={key} className={`flex items-start gap-3 text-sm ${off ? "opacity-60" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={settings[key]}
-                  disabled={Boolean(off)}
-                  onChange={(e) => patch({ [key]: e.target.checked })}
-                  className="mt-0.5 h-4 w-4 accent-accent"
-                />
-                <span>
-                  {t(name)}
-                  {off && <span className="block text-xs text-muted">{t("Turned off in your TikTok settings.")}</span>}
-                </span>
-              </label>
-            ))}
-          </fieldset>
-
-          <div className="space-y-2">
-            <label className="flex items-start gap-3 text-sm">
-              <input
-                type="checkbox"
-                checked={c.enabled}
-                onChange={(e) => patch({ commercial: { enabled: e.target.checked, yourBrand: false, brandedContent: false } })}
-                className="mt-0.5 h-4 w-4 accent-accent"
-              />
-              <span>
-                <span className="font-semibold">{t("Disclose commercial content")}</span>
-                <span className="block text-xs text-muted">{t("Turn on if this video promotes a brand, product or service.")}</span>
-              </span>
-            </label>
-            {c.enabled && (
-              <div className="ml-7 space-y-2 rounded-xl border border-border p-3">
-                <label className="flex items-start gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={c.yourBrand}
-                    onChange={(e) => patch({ commercial: { ...c, yourBrand: e.target.checked } })}
-                    className="mt-0.5 h-4 w-4 accent-accent"
-                  />
-                  <span>
-                    {t("Your brand")}
-                    <span className="block text-xs text-muted">{t("You are promoting yourself or your own business.")}</span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={c.brandedContent}
-                    onChange={(e) => patch({ commercial: { ...c, brandedContent: e.target.checked } })}
-                    className="mt-0.5 h-4 w-4 accent-accent"
-                  />
-                  <span>
-                    {t("Branded content")}
-                    <span className="block text-xs text-muted">{t("You are promoting another brand or a third party.")}</span>
-                  </span>
-                </label>
-                {!c.yourBrand && !c.brandedContent && (
-                  <p className="text-xs text-warning">{t("Pick at least one option to continue.")}</p>
-                )}
-              </div>
-            )}
-          </div>
-
-          <label className="flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              checked={settings.isAigc}
-              onChange={(e) => patch({ isAigc: e.target.checked })}
-              className="mt-0.5 h-4 w-4 accent-accent"
-            />
-            <span>
-              <span className="font-semibold">{t("AI-generated content")}</span>
-              <span className="block text-xs text-muted">{t("Turn on if the video was made or changed with AI.")}</span>
-            </span>
-          </label>
-
-          <fieldset className="space-y-2">
-            <legend className={label}>{t("When")}</legend>
+            <legend className={labelClass}>{t("When")}</legend>
             <div className="flex flex-wrap gap-4 text-sm">
               <label className="flex items-center gap-2">
-                <input type="radio" name="tt-when" checked={mode === "now"} onChange={() => setMode("now")} className="h-4 w-4 accent-accent" />
+                <input type="radio" name="post-when" checked={mode === "now"} onChange={() => setMode("now")} className="h-4 w-4 accent-accent" />
                 {t("Publish now")}
               </label>
               <label className="flex items-center gap-2">
-                <input type="radio" name="tt-when" checked={mode === "schedule"} onChange={() => setMode("schedule")} className="h-4 w-4 accent-accent" />
+                <input type="radio" name="post-when" checked={mode === "schedule"} onChange={() => setMode("schedule")} className="h-4 w-4 accent-accent" />
                 {t("Schedule")}
               </label>
             </div>
             {mode === "schedule" && (
               <label className="flex max-w-xs flex-col gap-1 text-sm">
-                <input
-                  type="datetime-local"
-                  value={scheduledLocal}
-                  min={nowLocal}
-                  onChange={(e) => setScheduledLocal(e.target.value)}
-                  className={field}
-                />
+                <input type="datetime-local" value={scheduledLocal} min={nowLocal} onChange={(e) => setScheduledLocal(e.target.value)} className={fieldClass} />
                 <span className="text-xs text-muted">{t("Time in Brasília")}</span>
               </label>
             )}
           </fieldset>
 
-          <p className="text-xs text-muted">
-            {t("By posting, you agree to the")}{" "}
-            {disclosure === "branded" ? (
-              <>
-                <a href={BC_POLICY} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">
-                  {t("TikTok Branded Content Policy")}
-                </a>{" "}
-                {t("and the")}{" "}
-              </>
-            ) : null}
-            <a href={MUSIC_POLICY} target="_blank" rel="noopener noreferrer" className="font-semibold text-accent hover:underline">
-              {t("TikTok Music Usage Confirmation")}
-            </a>
-          </p>
+          {network === "TIKTOK" && <TikTokFooter settings={tiktok} />}
 
           {errors.length > 0 && (
             <ul role="alert" className="space-y-1 rounded-xl bg-error/10 px-4 py-3 text-sm text-error">
