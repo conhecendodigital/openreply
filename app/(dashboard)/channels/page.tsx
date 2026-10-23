@@ -28,7 +28,7 @@ type Status = "ACTIVE" | "NEEDS_RECONNECT" | "DISCONNECTED";
 type Role = "OWNER" | "ADMIN" | "MEMBER";
 
 interface InstagramCard {
-  platform: "instagram";
+  platform: "instagram" | "facebook";
   id: string;
   instagramId: string;
   username: string;
@@ -171,9 +171,14 @@ export default function ChannelsPage() {
           </p>
         </div>
         {canManage && (
-          <a href="/api/instagram/connect" className={`${btnPrimary} shrink-0`}>
-            {instagram.length > 0 ? t("Connect another account") : t("Connect Instagram")}
-          </a>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <a href="/api/instagram/connect" className={btnPrimary}>
+              {instagram.length > 0 ? t("Connect another account") : t("Connect Instagram")}
+            </a>
+            <a href="/api/facebook/connect" className={btnSecondary}>
+              {t("Connect Facebook Page")}
+            </a>
+          </div>
         )}
       </div>
 
@@ -332,7 +337,10 @@ function InstagramChannelCard({
         <Avatar card={card} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <p className="truncate text-base font-semibold">@{card.username}</p>
+            <p className="truncate text-base font-semibold">{card.platform === "facebook" ? card.name ?? card.username : `@${card.username}`}</p>
+            {card.platform === "facebook" && (
+              <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold text-muted">{t("Facebook Page")}</span>
+            )}
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${status.tone}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
               {lang === "pt" ? status.pt : status.en}
@@ -501,7 +509,7 @@ function InstagramChannelCard({
 
         {canManage && (
           <div className="flex flex-wrap gap-2">
-            <a href="/api/instagram/connect" className={isOn ? btnSecondary : btnPrimary}>
+            <a href={card.platform === "facebook" ? "/api/facebook/connect" : "/api/instagram/connect"} className={isOn ? btnSecondary : btnPrimary}>
               {t("Reconnect")}
             </a>
             {!isOff && (

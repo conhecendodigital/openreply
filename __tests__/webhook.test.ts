@@ -445,10 +445,11 @@ describe("parseMessageEvents", () => {
     expect(parseMessageEvents(payload)).toHaveLength(0);
   });
 
+  // 23/10/2026: "page" (Facebook Page) is accepted now; anything else is not.
   it("should ignore non-instagram payloads", () => {
     expect(
       parseMessageEvents({
-        object: "page",
+        object: "whatsapp_business_account",
         entry: [
           {
             id: "ig_456",
