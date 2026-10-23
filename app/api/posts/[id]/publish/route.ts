@@ -4,8 +4,8 @@ import { fail, ok, requireContext } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db/client";
 import { humanOnly } from "@/lib/flows/api";
 import { postDto } from "@/lib/tiktok/dto";
-import { EDITABLE, findPost, readyProblem } from "@/lib/tiktok/posts-api";
-import { claimPost, runClaimedPost } from "@/lib/tiktok/publish";
+import { EDITABLE, findPost, readyProblem } from "@/lib/social/posts-api";
+import { claimPost, runClaimedPost } from "@/lib/social/publish";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -32,7 +32,7 @@ export async function POST(_request: NextRequest, { params }: RouteProps) {
     try {
       await runClaimedPost(id);
     } catch (error) {
-      console.error("[TikTok publish] unexpected", id, error instanceof Error ? error.message : error);
+      console.error("[social publish] unexpected", id, error instanceof Error ? error.message : error);
       await prisma.scheduledPost
         .update({ where: { id }, data: { status: "FAILED", lockedAt: null, lastError: "Unexpected error while publishing" } })
         .catch(() => {});

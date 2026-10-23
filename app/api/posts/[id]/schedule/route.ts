@@ -4,7 +4,7 @@ import { fail, ok, readJson, requireContext } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db/client";
 import { humanOnly } from "@/lib/flows/api";
 import { postDto } from "@/lib/tiktok/dto";
-import { EDITABLE, findPost, POST_INCLUDE, readyProblem } from "@/lib/tiktok/posts-api";
+import { EDITABLE, findPost, POST_INCLUDE, readyProblem } from "@/lib/social/posts-api";
 
 export const dynamic = "force-dynamic";
 

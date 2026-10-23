@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Posts (23/10/2026): agendamento de posts. Hoje só TikTok (Direct Post);
- * o modelo aceita outras redes depois. Contas conectadas, lista de posts por
- * status e o compositor. Publicar e agendar são sempre um clique de pessoa.
+ * Posts: agendamento de posts no TikTok (Direct Post), YouTube, Instagram (Reels) e
+ * Facebook (Página). Contas conectadas, lista de posts por status e o compositor.
+ * Publicar e agendar são sempre um clique de pessoa.
  */
 
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -12,7 +12,7 @@ import { callApi } from "@/components/posts/api";
 import { AccountsBar, btnPrimary } from "@/components/posts/accounts-bar";
 import { PostComposer } from "@/components/posts/post-composer";
 import { PostList } from "@/components/posts/post-list";
-import { TikTokConnectNotice } from "@/components/posts/tiktok-connect-notice";
+import { ConnectNotice } from "@/components/posts/connect-notice";
 import type { PostDTO, SocialAccountDTO } from "@/lib/tiktok-composer";
 
 export default function PostsPage() {
@@ -68,7 +68,7 @@ export default function PostsPage() {
       </div>
 
       <Suspense fallback={null}>
-        <TikTokConnectNotice />
+        <ConnectNotice />
       </Suspense>
 
       <AccountsBar accounts={accounts} loading={loadingAccounts} onChanged={loadAccounts} />

@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
 import { fail, ok, readJson, requireContext } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db/client";
+import { findPostableAccount } from "@/lib/social/accounts";
+import { providerFor } from "@/lib/social/providers";
+import { createPostSchema, mediaLimitsProblem, mediaUrlProblem, POST_INCLUDE, validateDraftSettings } from "@/lib/social/posts-api";
 import { postDto } from "@/lib/tiktok/dto";
-import { createPostSchema, mediaUrlProblem, POST_INCLUDE } from "@/lib/tiktok/posts-api";
-import { DEFAULT_TIKTOK_SETTINGS } from "@/lib/tiktok/settings";
 import { getApiCaller } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -37,27 +38,35 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return fail("Invalid body", 400, { code: "invalid_body", issues: parsed.error.issues });
   const data = parsed.data;
 
-  const account = await prisma.socialAccount.findFirst({
-    where: { id: data.socialAccountId, workspaceId: auth.context.workspaceId, status: { not: "DISCONNECTED" } },
-    select: { id: true, platform: true, displayName: true },
-  });
+  // A conta pode ser de TikTok/YouTube (SocialAccount) ou de Instagram/Facebook (canal).
+  const account = await findPostableAccount(auth.context.workspaceId, data.socialAccountId);
   if (!account) return fail("Account not found", 404);
+  const provider = providerFor(account.platform);
 
   const urlProblem = mediaUrlProblem(auth.context.workspaceId, data.mediaUrl);
   if (urlProblem) return fail(urlProblem, 400, { code: "invalid_media" });
+  const limits = mediaLimitsProblem(provider, data);
+  if (limits) return fail(limits, 400, { code: "invalid_media" });
+  let settings: unknown = provider.defaultSettings;
+  if (data.settings) {
+    const checked = validateDraftSettings(provider, data.settings);
+    if (!checked.ok) return fail("Invalid body", 400, { code: "invalid_body", issues: checked.issues });
+    settings = checked.data;
+  }
 
   const caller = await getApiCaller();
   const created = await prisma.scheduledPost.create({
     data: {
       workspaceId: auth.context.workspaceId,
-      socialAccountId: account.id,
+      socialAccountId: account.source === "social" ? account.id : null,
+      channelId: account.source === "channel" ? account.id : null,
       platform: account.platform,
       status: "DRAFT",
       caption: data.caption,
       mediaUrl: data.mediaUrl,
       mediaBytes: data.mediaBytes,
       mediaContentType: data.mediaContentType,
-      settings: data.settings ?? DEFAULT_TIKTOK_SETTINGS,
+      settings: settings as never,
       scheduledAt: null,
       createdVia: caller.kind === "token" ? "MCP" : "UI",
       createdBy: auth.context.userId,

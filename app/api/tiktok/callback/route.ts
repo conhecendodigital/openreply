@@ -10,7 +10,12 @@ export const dynamic = "force-dynamic";
 /** 23/10/2026: volta do TikTok. Guarda os tokens cifrados e manda pra aba Posts. */
 export async function GET(request: NextRequest) {
   const baseUrl = getBaseUrl();
-  const back = (result: string) => NextResponse.redirect(`${baseUrl}/posts?tiktok=${result}`);
+  const where = request.cookies.get("tt_return")?.value === "channels" ? "channels" : "posts";
+  const back = (result: string) => {
+    const response = NextResponse.redirect(`${baseUrl}/${where}?tiktok=${result}`);
+    response.cookies.delete({ name: "tt_return", path: "/api/tiktok" });
+    return response;
+  };
 
   const context = await getCurrentWorkspaceContext();
   if (!context) return NextResponse.redirect(`${baseUrl}/login`);
