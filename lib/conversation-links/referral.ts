@@ -46,7 +46,7 @@ export function isConversationLinkSource(source: string | undefined): boolean {
 
 export function parseReferralEvents(payload: unknown): ReferralEvent[] {
   const p = payload as Payload;
-  if (!p || p.object !== "instagram") return [];
+  if (!p || (p.object !== "instagram" && p.object !== "page")) return [];
   const out: ReferralEvent[] = [];
 
   for (const entry of p.entry ?? []) {

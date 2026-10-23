@@ -375,7 +375,6 @@ describe("Channels page data", () => {
     expect(json.data.comingSoon.map((c: { platform: string }) => c.platform)).toEqual([
       "telegram",
       "whatsapp",
-      "messenger",
       "threads",
     ]);
   });

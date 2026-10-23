@@ -273,6 +273,10 @@ model InstagramAccount {
   /// professional account id above. Filled on every connect; null on accounts
   /// connected before 2026-10-06 until they reconnect.
   appScopedId       String?
+  /// 23/10/2026: INSTAGRAM (Instagram Login) or FACEBOOK (a Facebook Page via
+  /// Facebook Login; instagramId holds the Page id, accessToken the Page token,
+  /// tokenExpiresAt null because a Page token does not expire).
+  platform          String                 @default("INSTAGRAM")
   username          String
   name              String?
   accessToken       String
