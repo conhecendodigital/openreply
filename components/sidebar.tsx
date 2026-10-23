@@ -18,6 +18,7 @@
  * pro nome do grupo quando ele está fechado. A Etapa 6 entra como grupo "Quiz".
  * 2026-10-10: Etapa 6. Grupo "Quiz" (funis interativos), logo depois de Automações.
  * 2026-10-06: grupo "WhatsApp" (Conversas, Conexões, Agentes), logo depois de Conversas.
+ * 2026-10-23: Posts (agendamento de posts, TikTok primeiro) em Automações.
  * 2026-10-06: grupo "Admin da plataforma" no fim, só pro admin da plataforma
  * (adminMenu vem do servidor, lib/platform-admin.ts). Pra qualquer outra
  * pessoa o grupo não é renderizado.
@@ -104,6 +105,9 @@ const icones: Record<string, Icone> = {
   "/admin": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><circle {...traco(ativo)} cx="8" cy="15" r="4" /><path {...traco(ativo)} d="m11 12 9-9M17 6l3 3M14.5 8.5l2 2" /></svg>
   ),
+  "/posts": ({ ativo }) => (
+    <svg viewBox="0 0 24 24" className="h-6 w-6"><rect {...traco(ativo)} x="3" y="5" width="18" height="16" rx="2.5" /><path {...traco(ativo)} d="M3 10h18M8 3v4M16 3v4M12 13.5v4M10 15.5h4" /></svg>
+  ),
   "/funis": ({ ativo }) => (
     <svg viewBox="0 0 24 24" className="h-6 w-6"><path {...traco(ativo)} d="M3 4h18l-7 8v6l-4 2v-8z" /></svg>
   ),
@@ -150,6 +154,7 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
       { label: "Campaigns", href: "/campaigns" },
       { label: "Flows", href: "/flows" },
       { label: "Broadcasts", href: "/broadcasts" },
+      { label: "Posts", href: "/posts" },
       { label: "Segments", href: "/segments" },
       { label: "Sequences", href: "/sequences" },
       { label: "Conversation links", href: "/conversation-links" },

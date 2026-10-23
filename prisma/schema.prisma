@@ -121,6 +121,8 @@ model Workspace {
   flows              Flow[]
   segments           Segment[]
   broadcasts         Broadcast[]
+  socialAccounts     SocialAccount[]
+  scheduledPosts     ScheduledPost[]
   funnels            Funnel[]
   funnelMedia        FunnelMedia[]
   metaCapi           MetaCapiSettings?
@@ -2539,4 +2541,94 @@ model WaScheduledText {
   @@index([workspaceId, status, position])
   @@index([conversationId, status, position])
   @@schema("whatsapp")
+}
+
+// ---------------------------------------------------------------------------
+// 23/10/2026: contas de redes sociais (TikTok primeiro) e posts agendados.
+// Tabelas filtradas por workspaceId no código, como as demais tabelas novas.
+// ---------------------------------------------------------------------------
+
+enum SocialAccountStatus {
+  ACTIVE
+  NEEDS_RECONNECT
+  DISCONNECTED
+
+  @@schema("public")
+}
+
+enum ScheduledPostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELED
+
+  @@schema("public")
+}
+
+/// Conta de rede social conectada por Login Kit (TikTok). Tokens cifrados
+/// (AES-256-GCM, mesma chave dos tokens do Instagram).
+model SocialAccount {
+  id               String              @id @default(cuid())
+  workspaceId      String
+  platform         String              @default("TIKTOK")
+  /// open_id do TikTok.
+  externalId       String
+  displayName      String
+  username         String?
+  avatarUrl        String?
+  accessToken      String
+  refreshToken     String?
+  tokenExpiresAt   DateTime?
+  refreshExpiresAt DateTime?
+  scopes           String[]            @default([])
+  status           SocialAccountStatus @default(ACTIVE)
+  lastError        String?
+  connectedAt      DateTime            @default(now())
+  disconnectedAt   DateTime?
+  updatedAt        DateTime            @updatedAt
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  posts     ScheduledPost[]
+
+  @@unique([platform, externalId])
+  @@index([workspaceId])
+  @@schema("public")
+}
+
+/// Post de vídeo para uma conta social. O MCP e a API só criam RASCUNHO;
+/// agendar e publicar é uma pessoa na tela.
+model ScheduledPost {
+  id               String              @id @default(cuid())
+  workspaceId      String
+  socialAccountId  String
+  platform         String              @default("TIKTOK")
+  status           ScheduledPostStatus @default(DRAFT)
+  caption          String              @default("")
+  mediaUrl         String
+  mediaBytes       Int
+  mediaContentType String
+  /// Opções do TikTok: privacyLevel, allowComment/Duet/Stitch, commercial, isAigc.
+  settings         Json
+  scheduledAt      DateTime?
+  publishedAt      DateTime?
+  /// publish_id devolvido pelo TikTok depois do envio do vídeo.
+  publishId        String?
+  /// Quem pegou o post para publicar (anti publicação dupla).
+  lockedAt         DateTime?
+  attempts         Int                 @default(0)
+  lastError        String?
+  /// UI, MCP ou API.
+  createdVia       String              @default("UI")
+  createdBy        String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([status, scheduledAt])
+  @@schema("public")
 }

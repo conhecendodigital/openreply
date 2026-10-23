@@ -49,6 +49,19 @@ export const privacyPage: LegalPage = {
       ],
     },
     {
+      heading: "TikTok",
+      paragraphs: [
+        "If the owner connects a TikTok account, {product} uses TikTok's official Login Kit and Content Posting API only to publish or schedule the videos the owner chooses. We do not read TikTok comments or direct messages, and we never ask for the TikTok password.",
+      ],
+      items: [
+        "From TikTok, with the owner's permission: the TikTok open ID, display name and profile picture, and the access token and refresh token, stored encrypted with AES-256-GCM.",
+        "What the owner sends us to publish: the video file, the caption, the privacy, comment, duet and stitch choices, the commercial content declaration, the chosen date and time, and the status of each publication.",
+        "We use this data only to publish or schedule what the owner confirmed. We do not sell it, do not use it for advertising and do not use it to train AI models. If an AI assistant is connected through our MCP, it can only create drafts: scheduling and publishing are always done by a person on the screen.",
+        "To revoke access, open TikTok, go to Settings, then Security and permissions, then Apps, and remove {product}. You can also click Disconnect on the TikTok account inside {product}. Either way, the TikTok tokens are deleted and nothing is published anymore.",
+        "We keep TikTok data while the account is connected. Videos and captions are kept until the owner deletes them or asks for deletion. See {site}/data-deletion for the step by step.",
+      ],
+    },
+    {
       heading: "How we use data",
       paragraphs: [
         "To sign you in, connect Instagram, find the keyword in comments, send the private and public replies the owner configured, show conversations in the Inbox, build the owner's contact list and reports, avoid duplicate sends, respect Meta's limits, fix errors and protect the service. We do not sell data. We do not use Instagram data for our own advertising or to train AI models.",
@@ -70,6 +83,7 @@ export const privacyPage: LegalPage = {
         "Resend, to send sign-in emails.",
         "Google, for Sign in with Google.",
         "Meta, through the Instagram API and, if the owner turns it on, the Conversions API.",
+        "TikTok, through the Login Kit and the Content Posting API, only to publish what the owner confirmed.",
         "Hotmart, to confirm purchases.",
         "The AI providers above, only for the features that use AI.",
       ],
@@ -122,9 +136,17 @@ export const termsPage: LegalPage = {
       ],
     },
     {
+      heading: "TikTok publishing",
+      paragraphs: [
+        "If you connect a TikTok account, you can upload videos and publish or schedule them from {product}. The use of TikTok stays subject to TikTok's Terms of Service, Community Guidelines, Branded Content Policy and Music Usage Confirmation, and you agree to follow them.",
+        "You are responsible for the videos, captions and music you publish, and for declaring commercial content (your own brand or a paid partnership) when it applies. {product} only publishes what you confirmed on the screen, with the privacy and interaction options you chose. We do not offer a reply to TikTok comments or direct messages.",
+        "Until TikTok approves our app for public posting, videos may be published only with the visibility Only me. This is a TikTok rule and it can change when the approval comes.",
+      ],
+    },
+    {
       heading: "Authorized use",
       paragraphs: [
-        "Only with Instagram professional accounts you own or are authorized to manage. You are responsible for the campaigns, keywords, links and messages you configure.",
+        "Only with Instagram professional accounts, Facebook Pages and TikTok accounts you own or are authorized to manage. You are responsible for the campaigns, keywords, links, messages, videos and captions you configure.",
       ],
     },
     {
@@ -185,6 +207,16 @@ export const dataDeletionPage: LegalPage = {
       paragraphs: [
         "On Instagram, open Settings, then Apps and websites, and remove Lead Engine. Meta tells us right away: first the account is disconnected and its token is deleted, and when Meta sends the data deletion request we delete all the data of that account automatically.",
         "Meta shows you a confirmation code. You can check the status of the request at {site}/data-deletion/status with that code, or type it below.",
+      ],
+    },
+    {
+      heading: "TikTok data",
+      paragraphs: [
+        "If you connected a TikTok account to {product}:",
+      ],
+      items: [
+        "Sign in, open the TikTok account in {product} and click Disconnect. The TikTok access and refresh tokens and the connection are deleted right away, and nothing is published anymore. You can also remove {product} on TikTok, in Settings, Security and permissions, Apps.",
+        "To also delete the videos, captions, drafts and scheduled posts of that account, email {email} from the address you use to sign in. We delete them within {days} days.",
       ],
     },
     {

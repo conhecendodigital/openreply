@@ -877,6 +877,94 @@ export const TOOLS: Tool[] = [
     },
   },
 
+  // ─── Posts agendados (TikTok) ─────────────────────────────────────────────
+  {
+    name: "listar_contas_sociais",
+    description:
+      "Lista as contas de redes sociais ligadas ao Lead Engine para postar (hoje: TikTok). Só leitura. Mostra id, rede, nome, status (ACTIVE / NEEDS_RECONNECT / DISCONNECTED). Nunca mostra token. Conectar e desconectar é só pela tela (aba Posts). O id serve para criar_rascunho_post.",
+    inputSchema: { type: "object", properties: {} },
+    async run(_args, call) {
+      const res = await api(call, "GET", "/api/social-accounts");
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "listar_posts_agendados",
+    description:
+      "Lista os posts da aba Posts (rascunho, agendado, publicando, publicado, falhou, cancelado). Só leitura. Filtro opcional por status.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          ...str,
+          enum: ["DRAFT", "SCHEDULED", "PUBLISHING", "PUBLISHED", "FAILED", "CANCELED"],
+          description: "Filtra por status. Sem isso, traz todos (até 200).",
+        },
+      },
+    },
+    async run(args, call) {
+      const status = typeof args.status === "string" && args.status ? args.status : null;
+      const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+      const res = await api(call, "GET", `/api/posts${qs}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "ver_post_agendado",
+    description: "Mostra um post da aba Posts (legenda, vídeo, configurações, status, horário, erro se falhou). Só leitura. O id vem de listar_posts_agendados.",
+    inputSchema: {
+      type: "object",
+      properties: { postId: { ...str, description: "ID do post" } },
+      required: ["postId"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "postId");
+      if (!id) return text("Informe o postId (listar_posts_agendados).", true);
+      const res = await api(call, "GET", `/api/posts/${encodeURIComponent(id)}`);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "criar_rascunho_post",
+    description:
+      "Cria um RASCUNHO de post para o TikTok na aba Posts. Não agenda, não publica: agendar, publicar, cancelar e apagar são só pela tela, com o dono da conta. O vídeo não sobe por aqui: precisa já estar enviado pela aba Posts, e o mediaUrl tem que ser o endereço dele no armazenamento do Lead Engine (outro endereço é recusado). Sem settings, nasce privado (SELF_ONLY) com comentário, dueto e stitch desligados; quem escolhe a privacidade final é o Matheus na tela.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        socialAccountId: { ...str, description: "ID da conta (listar_contas_sociais)" },
+        caption: { ...str, description: "Legenda do post (até 2200 caracteres)" },
+        mediaUrl: { ...str, description: "Endereço do vídeo já enviado pela aba Posts" },
+        mediaBytes: { type: "integer", description: "Tamanho do vídeo em bytes" },
+        mediaContentType: { ...str, enum: ["video/mp4", "video/quicktime", "video/webm"] },
+        settings: {
+          type: "object",
+          description:
+            "Opcional, completo: privacyLevel (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY), allowComment, allowDuet, allowStitch, isAigc e commercial {enabled, yourBrand, brandedContent}. Sem isso, usa o padrão privado.",
+        },
+      },
+      required: ["socialAccountId", "caption", "mediaUrl", "mediaBytes", "mediaContentType"],
+    },
+    async run(args, call) {
+      const accountId = requireString(args, "socialAccountId");
+      const mediaUrl = requireString(args, "mediaUrl");
+      if (!accountId) return text("Informe o socialAccountId (listar_contas_sociais).", true);
+      if (!mediaUrl) return text("Informe o mediaUrl de um vídeo já enviado pela aba Posts.", true);
+      const body: Record<string, unknown> = {
+        socialAccountId: accountId,
+        caption: typeof args.caption === "string" ? args.caption : "",
+        mediaUrl,
+        mediaBytes: args.mediaBytes,
+        mediaContentType: args.mediaContentType,
+      };
+      if (args.settings && typeof args.settings === "object") body.settings = args.settings;
+      const res = await api(call, "POST", "/api/posts", body);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
   // ─── Canais ───────────────────────────────────────────────────────────────
   {
     name: "testar_conexao_instagram",
@@ -1787,7 +1875,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo) e lê quem recebeu (ver_destinatarios_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo) e lê quem recebeu (ver_destinatarios_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. Posts do TikTok (aba Posts): pela chave você lê contas e posts (listar_contas_sociais, listar_posts_agendados, ver_post_agendado) e cria só RASCUNHO (criar_rascunho_post) com vídeo já enviado pela tela; agendar, publicar, cancelar, apagar e enviar vídeo são só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
       });
     }
     case "ping":

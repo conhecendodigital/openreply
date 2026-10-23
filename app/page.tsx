@@ -12,15 +12,18 @@ import type { TFunction } from "@/lib/i18n";
  * Página inicial (2026-10-04): visual do instagram.com (fundo #fafafa, cartões
  * brancos com borda #dbdbdb, botão azul arredondado, pilha de fonte do site),
  * em português por padrão. Conteúdo honesto: diz o que o Lead Engine faz, sem
- * prometer resultado. Nenhum logo da Meta ou do Instagram, só o nome em texto.
+ * prometer resultado. Nenhum logo da Meta, do Instagram ou do TikTok, só o nome
+ * em texto. 23/10/2026: mostra as redes conectadas (Instagram, Facebook,
+ * WhatsApp) e o TikTok só para conectar a conta e publicar/agendar vídeos, para
+ * a revisão do app do TikTok. Não promete resposta a comentário/DM do TikTok.
  */
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
   return {
-    title: t("Lead Engine: Instagram comments turned into Direct conversations"),
+    title: t("Lead Engine: Instagram, Facebook, WhatsApp and TikTok in one place"),
     description: t(
-      "Reply to comments with an automatic DM through the official Meta API, see the photos and audio people send in the Direct, and keep every contact organized."
+      "Turn comments into conversations on Instagram and Facebook, answer on WhatsApp, and publish or schedule videos on TikTok, all through official APIs."
     ),
   };
 }
@@ -101,6 +104,26 @@ const icons = {
       <path d="m8 12.2 2.7 2.7L16.2 9.4" />
     </Icon>
   ),
+  video: (
+    <Icon>
+      <rect x="3" y="5" width="18" height="14" rx="3" />
+      <path d="m10.5 9.4 4.2 2.6-4.2 2.6z" />
+    </Icon>
+  ),
+  upload: (
+    <Icon>
+      <path d="M12 16V4.5" />
+      <path d="m7.5 9 4.5-4.5L16.5 9" />
+      <path d="M4.5 15v3.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V15" />
+    </Icon>
+  ),
+  sliders: (
+    <Icon>
+      <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+      <circle cx="15" cy="7" r="2" />
+      <circle cx="9" cy="17" r="2" />
+    </Icon>
+  ),
   lock: (
     <Icon>
       <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
@@ -147,6 +170,52 @@ const features: Array<{ icon: keyof typeof icons; title: string; body: string }>
   },
 ];
 
+const networks: Array<{ icon: keyof typeof icons; name: string; body: string }> = [
+  {
+    icon: "comment",
+    name: "Instagram",
+    body: "Comment to DM, Direct inbox with photos and audio, comment moderation, flows and broadcasts.",
+  },
+  {
+    icon: "contacts",
+    name: "Facebook",
+    body: "Answer comments and Messenger messages on the Facebook Pages you manage.",
+  },
+  {
+    icon: "direct",
+    name: "WhatsApp",
+    body: "Conversations, leads and AI agents on your WhatsApp number, with a person always in control.",
+  },
+  {
+    icon: "video",
+    name: "TikTok",
+    body: "Connect your account with TikTok's official login, then publish or schedule your videos. No TikTok comments or DMs.",
+  },
+];
+
+const videoSteps: Array<{ icon: keyof typeof icons; title: string; body: string }> = [
+  {
+    icon: "lock",
+    title: "Connect your TikTok account",
+    body: "Use TikTok's official login and accept the permissions on TikTok's own screen. Lead Engine never sees your password.",
+  },
+  {
+    icon: "upload",
+    title: "Choose the video",
+    body: "Upload the video file and write the caption.",
+  },
+  {
+    icon: "sliders",
+    title: "Set privacy and interactions",
+    body: "Pick who can watch, allow or block comments, duet and stitch, and say if the video promotes a brand. TikTok's options are shown as they come from TikTok.",
+  },
+  {
+    icon: "clock",
+    title: "Publish now or schedule",
+    body: "Confirm the post and it goes out now, or on the date and time you chose. You follow the status in the same screen.",
+  },
+];
+
 const steps = [
   {
     title: "Connect",
@@ -182,6 +251,16 @@ const controls: Array<{ icon: keyof typeof icons; title: string; body: string }>
     icon: "lock",
     title: "Encrypted access",
     body: "Instagram access keys are stored encrypted and you can revoke them at any time.",
+  },
+  {
+    icon: "lock",
+    title: "Your TikTok password stays with TikTok",
+    body: "You sign in on TikTok's own page. Lead Engine only receives the access TikTok allows, stored encrypted, and you can revoke it in TikTok at any time.",
+  },
+  {
+    icon: "check",
+    title: "A person confirms every post",
+    body: "Nothing is published or scheduled by itself. An AI assistant can write a draft, but only a person confirms it on the screen.",
   },
 ];
 
@@ -291,14 +370,14 @@ export default async function Home() {
           <div className="md:order-2">
             <p className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-muted">
               <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
-              {t("Official Meta API")}
+              {t("Instagram, Facebook, WhatsApp and TikTok")}
             </p>
             <h1 className="mt-5 text-balance text-[32px] font-bold leading-[1.15] tracking-tight sm:text-[42px]">
-              {t("Every comment can start a conversation in the Direct")}
+              {t("Comments become conversations. Videos go out on schedule.")}
             </h1>
             <p className="mt-4 max-w-xl text-base leading-7 text-muted">
               {t(
-                "Someone comments your keyword on a post or reel and gets your message in the Direct right after, through the official Meta API. No shared password, no bot clicking around in a browser."
+                "Connect your Instagram professional account, your Facebook Page, WhatsApp and TikTok. Reply to comments with a message in the Direct or Messenger, talk to leads on WhatsApp, and publish or schedule your videos on TikTok. Everything goes through the official APIs, with no shared password."
               )}
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -315,10 +394,69 @@ export default async function Home() {
                 {t("See how it works")}
               </a>
             </div>
+            <ul className="mt-6 flex flex-wrap gap-2" aria-label={t("Connected networks")}>
+              {networks.map((n) => (
+                <li
+                  key={n.name}
+                  className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-foreground"
+                >
+                  {n.name}
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div className="md:order-1">
             <PhoneMock t={t} />
+          </div>
+        </section>
+
+        {/* Redes conectadas */}
+        <section id="redes" className="scroll-mt-20 border-t border-border bg-white py-14 md:py-20">
+          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("Connected networks")}</h2>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-muted">
+              {t(
+                "Each network is connected through its own official login. Here is what Lead Engine does on each one, and nothing more."
+              )}
+            </p>
+            <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {networks.map((n) => (
+                <li key={n.name} className="rounded-xl border border-border bg-white p-5">
+                  <span className="grid h-11 w-11 place-items-center rounded-full border border-border text-foreground">
+                    {icons[n.icon]}
+                  </span>
+                  <h3 className="mt-4 text-base font-semibold">{n.name}</h3>
+                  <p className="mt-1.5 text-sm leading-6 text-muted">{t(n.body)}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* Agende e publique vídeos */}
+        <section id="videos" className="scroll-mt-20 border-t border-border py-14 md:py-20">
+          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("Schedule and publish videos")}</h2>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-muted">
+              {t(
+                "From your computer to TikTok in four steps. You choose every option, and nothing goes out without your confirmation."
+              )}
+            </p>
+            <ol className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {videoSteps.map((s, i) => (
+                <li key={s.title} className="rounded-xl border border-border bg-white p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+                    {t("Step {n}", { n: i + 1 })}
+                  </p>
+                  <span className="mt-3 grid h-11 w-11 place-items-center rounded-full border border-border text-foreground">
+                    {icons[s.icon]}
+                  </span>
+                  <h3 className="mt-3 text-base font-semibold">{t(s.title)}</h3>
+                  <p className="mt-1.5 text-sm leading-6 text-muted">{t(s.body)}</p>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
 
@@ -394,7 +532,7 @@ export default async function Home() {
                 {t("Ready to look at your comments with other eyes?")}
               </h2>
               <p className="mt-2 text-sm leading-6 text-muted">
-                {t("Sign in with your email and connect your Instagram professional account.")}
+                {t("Sign in with your email and connect your Instagram, Facebook, WhatsApp or TikTok account.")}
               </p>
               <Link
                 href="/login"
@@ -415,7 +553,7 @@ export default async function Home() {
             <Link href="/data-deletion" className="hover:underline">{t("Data deletion")}</Link>
             <Link href="/templates" className="hover:underline">{t("Templates")}</Link>
           </nav>
-          <p>{t("Uses the official Meta API. Not affiliated with Meta or Instagram.")}</p>
+          <p>{t("Uses the official APIs of Meta and TikTok. Not affiliated with Meta, Instagram, Facebook, WhatsApp or TikTok.")}</p>
           <LegalCompanyLine />
         </div>
       </footer>
