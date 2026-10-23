@@ -68,6 +68,9 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   /^\/api\/reports\/export$/,
   /^\/api\/automations\/[^/]+\/ab$/,
   /^\/api\/automations\/[^/]+\/sequence$/,
+  // 2026-10-23 (TikTok): o MCP lê e cria RASCUNHO de post. Agendar, publicar, cancelar, apagar e subir vídeo ficam só na tela.
+  /^\/api\/posts$/,
+  /^\/api\/posts\/(?!upload-url$)[^/]+$/,
 ];
 
 /**
@@ -76,6 +79,8 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
  * responde 403 human_only (withPainel), então são duas travas.
  */
 export const API_KEY_GET_ONLY_ROUTES: readonly RegExp[] = [
+  // 2026-10-23: contas do TikTok conectadas (sem token).
+  /^\/api\/social-accounts$/,
   // 2026-10-16: leads do quiz só leitura (listar_leads_quiz), a pedido do Matheus. Export CSV segue só na tela.
   /^\/api\/funnels\/[^/]+\/leads$/,
   // 2026-10-14: leitura do WhatsApp pela chave (withPainelLeitura).

@@ -20,6 +20,8 @@ import { ptWaRegras } from "@/lib/i18n/pt-wa-regras";
 import { ptWaLeads } from "@/lib/i18n/pt-wa-leads";
 import { ptWaPalavra } from "@/lib/i18n/pt-wa-palavra";
 import { ptFacebook } from "@/lib/i18n/pt-facebook";
+import { ptTiktok } from "@/lib/i18n/pt-tiktok";
+import { ptTiktokSite } from "@/lib/i18n/pt-tiktok-site";
 import { ptSecoes } from "@/lib/i18n/pt-secoes";
 import { ptAbas } from "@/lib/i18n/pt-abas";
 import { ptLinks } from "@/lib/i18n/pt-links";
@@ -35,6 +37,8 @@ export const pt: Record<string, string> = {
   ...ptAbas,
   ...ptWaPalavra,
   ...ptFacebook,
+  ...ptTiktok,
+  ...ptTiktokSite,
   // 2026-10-06: regras duras, aprendizado e teste do agente (WhatsApp > Agentes), em lib/i18n/pt-wa-regras.ts.
   ...ptWaRegras,
   // 2026-10-06: WhatsApp > Leads, ficha e estágio do lead, em lib/i18n/pt-wa-leads.ts.

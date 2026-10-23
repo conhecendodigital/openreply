@@ -67,6 +67,8 @@ while true; do
         call attach-next-reel
         # Expired takeovers, drafts whose 24 h window closed, stale sequences.
         call messaging-sweep
+        # Posts do TikTok agendados que venceram + conferência dos já enviados.
+        call tiktok-publish
       fi
       ;;
   esac
