@@ -113,7 +113,10 @@ export async function POST(_request: NextRequest, { params }: RouteProps) {
         ...(webhookFields
           ? {
               webhookFields,
-              webhookSubscribed: webhookFields.includes("comments") && webhookFields.includes("messages"),
+              // 23/10/2026: a Facebook Page gets comments on "feed", not "comments".
+              webhookSubscribed:
+                (webhookFields.includes("comments") || webhookFields.includes("feed")) &&
+                webhookFields.includes("messages"),
             }
           : {}),
         lastError: null,
