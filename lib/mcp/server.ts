@@ -877,11 +877,11 @@ export const TOOLS: Tool[] = [
     },
   },
 
-  // ─── Posts agendados (TikTok) ─────────────────────────────────────────────
+  // ─── Posts agendados (TikTok, YouTube, Instagram, Facebook) ─────────────────────────────────────────────
   {
     name: "listar_contas_sociais",
     description:
-      "Lista as contas de redes sociais ligadas ao Lead Engine para postar (hoje: TikTok). Só leitura. Mostra id, rede, nome, status (ACTIVE / NEEDS_RECONNECT / DISCONNECTED). Nunca mostra token. Conectar e desconectar é só pela tela (aba Posts). O id serve para criar_rascunho_post.",
+      "Lista as contas ligadas ao Lead Engine onde dá para postar vídeo: TikTok, YouTube, Instagram (Reels) e Facebook (Página). Só leitura. Mostra id, rede (platform), nome, status (ACTIVE / NEEDS_RECONNECT). Nunca mostra token. Conectar e desconectar é só pela tela (aba Posts ou Canais). O id serve para criar_rascunho_post.",
     inputSchema: { type: "object", properties: {} },
     async run(_args, call) {
       const res = await api(call, "GET", "/api/social-accounts");
@@ -930,19 +930,19 @@ export const TOOLS: Tool[] = [
   {
     name: "criar_rascunho_post",
     description:
-      "Cria um RASCUNHO de post para o TikTok na aba Posts. Não agenda, não publica: agendar, publicar, cancelar e apagar são só pela tela, com o dono da conta. O vídeo não sobe por aqui: precisa já estar enviado pela aba Posts, e o mediaUrl tem que ser o endereço dele no armazenamento do Lead Engine (outro endereço é recusado). Sem settings, nasce privado (SELF_ONLY) com comentário, dueto e stitch desligados; quem escolhe a privacidade final é o Matheus na tela.",
+      "Cria um RASCUNHO de post na aba Posts para a rede da conta escolhida (TikTok, YouTube, Instagram Reels ou Facebook). Não agenda, não publica: agendar, publicar, cancelar e apagar são só pela tela, com o dono da conta. O vídeo não sobe por aqui: precisa já estar enviado pela aba Posts, e o mediaUrl tem que ser o endereço dele no armazenamento do Lead Engine (outro endereço é recusado). Limites de legenda: TikTok 2200, Instagram 2200, YouTube 5000 (descrição), Facebook 5000. Sem settings, nasce com o padrão mais fechado da rede (TikTok: privado; YouTube: privado). Quem finaliza as opções e escolhe a privacidade é o Matheus na tela.",
     inputSchema: {
       type: "object",
       properties: {
         socialAccountId: { ...str, description: "ID da conta (listar_contas_sociais)" },
-        caption: { ...str, description: "Legenda do post (até 2200 caracteres)" },
+        caption: { ...str, description: "Legenda/descrição do post (limite da rede: 2200 no TikTok e Instagram, 5000 no YouTube e Facebook)" },
         mediaUrl: { ...str, description: "Endereço do vídeo já enviado pela aba Posts" },
         mediaBytes: { type: "integer", description: "Tamanho do vídeo em bytes" },
         mediaContentType: { ...str, enum: ["video/mp4", "video/quicktime", "video/webm"] },
         settings: {
           type: "object",
           description:
-            "Opcional, completo: privacyLevel (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY), allowComment, allowDuet, allowStitch, isAigc e commercial {enabled, yourBrand, brandedContent}. Sem isso, usa o padrão privado.",
+            "Opcional, depende da rede da conta. TikTok: privacyLevel (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY), allowComment, allowDuet, allowStitch, isAigc e commercial {enabled, yourBrand, brandedContent}. YouTube: title (até 100), privacyStatus (private, unlisted, public), containsSyntheticMedia, tags, categoryId; selfDeclaredMadeForKids é sempre resposta da pessoa na tela. Instagram: shareToFeed (true/false). Facebook: title (até 255, opcional). Sem isso, usa o padrão fechado da rede.",
         },
       },
       required: ["socialAccountId", "caption", "mediaUrl", "mediaBytes", "mediaContentType"],
@@ -1875,7 +1875,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo) e lê quem recebeu (ver_destinatarios_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. Posts do TikTok (aba Posts): pela chave você lê contas e posts (listar_contas_sociais, listar_posts_agendados, ver_post_agendado) e cria só RASCUNHO (criar_rascunho_post) com vídeo já enviado pela tela; agendar, publicar, cancelar, apagar e enviar vídeo são só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo) e lê quem recebeu (ver_destinatarios_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. Posts em TikTok, YouTube, Instagram (Reels) e Facebook (aba Posts): pela chave você lê contas e posts (listar_contas_sociais, listar_posts_agendados, ver_post_agendado) e cria só RASCUNHO (criar_rascunho_post) com vídeo já enviado pela tela; agendar, publicar, cancelar, apagar e enviar vídeo são só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
       });
     }
     case "ping":

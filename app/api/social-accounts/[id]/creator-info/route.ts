@@ -1,7 +1,7 @@
 import { fail, ok, requireContext } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db/client";
 import { queryCreatorInfo, TikTokApiError } from "@/lib/tiktok/client";
-import { getValidAccessToken } from "@/lib/tiktok/publish";
+import { getValidAccessToken } from "@/lib/tiktok/token";
 import { TikTokAuthError } from "@/lib/tiktok/oauth";
 
 export const dynamic = "force-dynamic";

@@ -370,18 +370,20 @@ describe("Canais, Configurações e /admin em abas", () => {
         ],
       },
       "/api/channels": { instagram: [], comingSoon: [{ platform: "tiktok", name: "TikTok", requirements: [] }] },
+      "/api/social-accounts": [],
+      "/api/posts": [],
       "/api/workspace/members": { currentUserRole: "OWNER", members: [], invitations: [] },
       "/api/workspace/meta-capi": { pixelId: null, tokenSaved: false },
     };
   }
 
-  it("Canais: abas Instagram e Conexões e chaves, com os serviços como grupos", async () => {
+  it("Canais: abas Canais e Conexões e chaves, com os serviços como grupos", async () => {
     mockFetch(channelRoutes());
     const { default: Page } = await import("../app/(dashboard)/channels/page");
     await render(h(Page));
-    expect(tabLabels()).toEqual(["Instagram", "Conexões e chaves"]);
-    expect(visiblePanels()).toEqual(["instagram"]);
-    expect(document.getElementById("em-breve")!.closest("[data-aba-painel]")!.getAttribute("data-aba-painel")).toBe("instagram");
+    expect(tabLabels()).toEqual(["Canais", "Conexões e chaves"]);
+    expect(visiblePanels()).toEqual(["canais"]);
+    expect(document.getElementById("em-breve")!.closest("[data-aba-painel]")!.getAttribute("data-aba-painel")).toBe("canais");
     for (const id of ["conexoes", "conexao-uazapi", "conexao-oficial", "conexao-meta"]) {
       expect(document.getElementById(id)?.closest("[data-aba-painel]")?.getAttribute("data-aba-painel"), id).toBe("conexoes");
     }

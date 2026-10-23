@@ -502,7 +502,7 @@ export const ptPublic: Record<string, string> = {
   "Our own server, a VPS rented from Hostinger and managed with Dokploy, where the PostgreSQL database, the Redis queue and the media storage also run.":
     "Nosso próprio servidor, uma VPS contratada na Hostinger e administrada com Dokploy, onde também ficam o banco de dados PostgreSQL, a fila Redis e o armazenamento de mídias.",
   "Resend, to send sign-in emails.": "Resend, para mandar os e-mails de login.",
-  "Google, for Sign in with Google.": "Google, para o login com Google.",
+  "Google, for Sign in with Google and, through the YouTube API Services, only to publish what the owner confirmed.": "Google, para o login com Google e, pelas YouTube API Services, só para publicar o que o dono confirmou.",
   "Meta, through the Instagram API and, if the owner turns it on, the Conversions API.":
     "Meta, pela API do Instagram e, se o dono ligar, pela API de Conversões.",
   "Hotmart, to confirm purchases.": "Hotmart, para confirmar compras.",
@@ -535,8 +535,8 @@ export const ptPublic: Record<string, string> = {
   "Software that sends private replies to people who comment keywords on your Instagram professional account's posts, with an Inbox, contacts and reports, through Meta's official APIs.":
     "Software para responder por mensagem privada quem comenta palavras-chave nos posts da sua conta profissional do Instagram, com Inbox, contatos e relatórios, pelas APIs oficiais da Meta.",
   "Authorized use": "Quem pode usar",
-  "Only with Instagram professional accounts, Facebook Pages and TikTok accounts you own or are authorized to manage. You are responsible for the campaigns, keywords, links, messages, videos and captions you configure.":
-    "Só com contas profissionais do Instagram, Páginas do Facebook e contas do TikTok que são suas ou que você tem autorização para gerenciar. Você responde pelas campanhas, palavras-chave, links, mensagens, vídeos e legendas que configura.",
+  "Only with Instagram professional accounts, Facebook Pages, TikTok accounts and YouTube channels you own or are authorized to manage. You are responsible for the campaigns, keywords, links, messages, videos and captions you configure.":
+    "Só com contas profissionais do Instagram, Páginas do Facebook, contas do TikTok e canais do YouTube que são seus ou que você tem autorização para gerenciar. Você responde pelas campanhas, palavras-chave, links, mensagens, vídeos e legendas que configura.",
   "Platform rules": "Regras da plataforma",
   "You agree to follow the Meta Platform Terms, Instagram's policies, the Brazilian data protection law (LGPD) and anti-spam laws. We may limit, pause or turn off campaigns that create a risk of abuse, spam, security problems or a block by Meta.":
     "Você aceita seguir os Termos da Plataforma da Meta, as regras do Instagram, a LGPD e as leis contra spam. Podemos limitar, pausar ou desligar campanhas que gerem risco de abuso, spam, segurança ou bloqueio pela Meta.",

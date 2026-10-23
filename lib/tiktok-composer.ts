@@ -34,9 +34,13 @@ export interface TikTokSettings {
 
 export type PostStatus = "DRAFT" | "SCHEDULED" | "PUBLISHING" | "PUBLISHED" | "FAILED" | "CANCELED";
 
+export type PostNetwork = "TIKTOK" | "YOUTUBE" | "INSTAGRAM" | "FACEBOOK";
+
 export interface SocialAccountDTO {
   id: string;
-  platform: "TIKTOK";
+  /** De qual tabela vem a conta: "social" (TikTok, YouTube) ou "channel" (Instagram, Facebook). */
+  source: "social" | "channel";
+  platform: PostNetwork;
   displayName: string;
   username: string | null;
   avatarUrl: string | null;
@@ -44,6 +48,12 @@ export interface SocialAccountDTO {
   tokenExpiresAt: string | null;
   connectedAt: string;
   lastError: string | null;
+  /** Só contas "social" se desconectam pela aba Posts; Instagram e Facebook, em Canais. */
+  canDisconnect: boolean;
+  /** Permissões concedidas pela pessoa (contas "social"). */
+  scopes: string[];
+  /** YouTube: permissões pedidas que a pessoa não concedeu. */
+  missingScopes: string[];
 }
 
 export interface CreatorInfo {
@@ -59,17 +69,23 @@ export interface CreatorInfo {
 
 export interface PostDTO {
   id: string;
-  platform: "TIKTOK";
-  socialAccountId: string;
+  platform: PostNetwork;
+  /** Id da conta, venha da tabela que vier. */
+  accountId: string;
+  socialAccountId: string | null;
+  channelId: string | null;
   accountName: string;
   status: PostStatus;
   caption: string;
   mediaUrl: string;
   mediaBytes: number;
   mediaContentType: string;
-  settings: TikTokSettings;
+  /** Opções da rede do post (TikTokSettings, YouTube, Instagram ou Facebook). */
+  settings: Record<string, unknown>;
   scheduledAt: string | null;
   publishedAt: string | null;
+  /** Endereço do post no ar, quando a rede dá um (YouTube, Facebook). */
+  externalUrl: string | null;
   lastError: string | null;
   createdVia: "UI" | "MCP" | "API";
   createdAt: string;

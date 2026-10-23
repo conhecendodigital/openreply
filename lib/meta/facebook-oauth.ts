@@ -18,6 +18,8 @@ export const FACEBOOK_PAGE_SCOPES = [
   "pages_manage_engagement",
 ];
 
+export const FACEBOOK_PUBLISH_SCOPE = "pages_manage_posts";
+
 const FACEBOOK_OAUTH_ENV = [
   "FACEBOOK_APP_ID",
   "FACEBOOK_APP_SECRET",
@@ -39,7 +41,10 @@ export function facebookScopes(): string[] {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  return custom.length > 0 ? custom : FACEBOOK_PAGE_SCOPES;
+  if (custom.length > 0) return custom;
+  // Publicar vídeo na Página (aba Posts) pede pages_manage_posts, que a Meta só libera
+  // depois da revisão do app: fica desligado até FACEBOOK_PUBLISH_ENABLED=1.
+  return process.env.FACEBOOK_PUBLISH_ENABLED === "1" ? [...FACEBOOK_PAGE_SCOPES, FACEBOOK_PUBLISH_SCOPE] : FACEBOOK_PAGE_SCOPES;
 }
 
 function graph() {

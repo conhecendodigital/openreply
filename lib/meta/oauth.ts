@@ -74,12 +74,19 @@ export function verifyOAuthState(state: string | null): OAuthStatePayload | null
   }
 }
 
+export const INSTAGRAM_PUBLISH_SCOPE = "instagram_business_content_publish";
+
+const INSTAGRAM_SCOPES =
+  "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_manage_insights";
+
 export function getAuthorizationUrl(redirectUri: string, state: string): string {
+  // Publicar Reels (aba Posts) pede instagram_business_content_publish, que a Meta só
+  // libera depois da revisão do app: fica desligado até INSTAGRAM_PUBLISH_ENABLED=1.
+  const scope = process.env.INSTAGRAM_PUBLISH_ENABLED === "1" ? `${INSTAGRAM_SCOPES},${INSTAGRAM_PUBLISH_SCOPE}` : INSTAGRAM_SCOPES;
   const params = new URLSearchParams({
     client_id: requireEnv("INSTAGRAM_APP_ID"),
     redirect_uri: redirectUri,
-    scope:
-      "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_manage_insights",
+    scope,
     response_type: "code",
     state,
   });

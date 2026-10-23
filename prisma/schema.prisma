@@ -319,6 +319,7 @@ model InstagramAccount {
   conversationLinks  ConversationLink[]
   flows              Flow[]
   broadcasts         Broadcast[]
+  scheduledPosts     ScheduledPost[]
 
   @@index([workspaceId])
   @@index([workspaceId, status])
@@ -2602,18 +2603,24 @@ model SocialAccount {
 model ScheduledPost {
   id               String              @id @default(cuid())
   workspaceId      String
-  socialAccountId  String
+  /// Conta de TikTok/YouTube (SocialAccount). Nulo quando o post é de Instagram
+  /// ou Facebook: nesse caso vale channelId. Exatamente um dos dois é preenchido.
+  socialAccountId  String?
+  /// Conta de Instagram/Facebook (InstagramAccount), sem duplicar token.
+  channelId        String?
   platform         String              @default("TIKTOK")
   status           ScheduledPostStatus @default(DRAFT)
   caption          String              @default("")
   mediaUrl         String
   mediaBytes       Int
   mediaContentType String
-  /// Opções do TikTok: privacyLevel, allowComment/Duet/Stitch, commercial, isAigc.
+  /// Opções da rede (TikTok: privacyLevel, commercial, isAigc; YouTube: title,
+  /// privacyStatus, madeForKids; Instagram: shareToFeed; Facebook: title).
   settings         Json
   scheduledAt      DateTime?
   publishedAt      DateTime?
-  /// publish_id devolvido pelo TikTok depois do envio do vídeo.
+  /// TikTok: publish_id. YouTube: id do vídeo. Instagram: id do container até
+  /// publicar, depois o id da mídia. Facebook: id do vídeo.
   publishId        String?
   /// Quem pegou o post para publicar (anti publicação dupla).
   lockedAt         DateTime?
@@ -2626,9 +2633,11 @@ model ScheduledPost {
   updatedAt        DateTime            @updatedAt
 
   workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount?    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  channel       InstagramAccount? @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, status])
   @@index([status, scheduledAt])
+  @@index([channelId])
   @@schema("public")
 }

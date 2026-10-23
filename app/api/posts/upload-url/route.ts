@@ -5,7 +5,7 @@ import { humanOnly } from "@/lib/flows/api";
 import { MEDIA_UPLOAD_LIMIT, readFunnelJson, TOO_LARGE } from "@/lib/funnels/limits";
 import { hitRateLimit } from "@/lib/http-rate-limit";
 import { buildObjectKey, presignPut, readMediaStorageConfig } from "@/lib/media/s3";
-import { VIDEO_MAX_BYTES, VIDEO_TYPES } from "@/lib/tiktok/settings";
+import { UPLOAD_MAX_BYTES, UPLOAD_VIDEO_TYPES } from "@/lib/social/limits";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +13,8 @@ const EXT: Record<string, string> = { "video/mp4": "mp4", "video/quicktime": "mo
 
 const bodySchema = z
   .object({
-    contentType: z.enum(VIDEO_TYPES),
-    size: z.number().int().positive().max(VIDEO_MAX_BYTES),
+    contentType: z.enum(UPLOAD_VIDEO_TYPES),
+    size: z.number().int().positive().max(UPLOAD_MAX_BYTES),
     name: z.string().trim().max(120).optional(),
   })
   .strict();

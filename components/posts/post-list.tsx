@@ -6,6 +6,8 @@ import { useState } from "react";
 import { useLang, useT } from "@/components/lang-provider";
 import { callApi } from "@/components/posts/api";
 import { btnDanger, btnPrimary, btnSecondary } from "@/components/posts/accounts-bar";
+import { BrandIcon } from "@/components/social/brand-icon";
+import { NETWORK_NAME, YOUTUBE_PRIVACY_LABELS } from "@/lib/social-composer";
 import { PRIVACY_LABELS, type PostDTO, type PostStatus } from "@/lib/tiktok-composer";
 
 const GROUPS: { status: PostStatus; title: string; tone: string }[] = [
@@ -18,6 +20,19 @@ const GROUPS: { status: PostStatus; title: string; tone: string }[] = [
 ];
 
 const small = "px-3 py-1.5 text-xs";
+
+/** Privacidade que aparece ao lado da rede: TikTok e YouTube têm; Instagram e Facebook não. */
+function privacyText(p: PostDTO): string | null {
+  if (p.platform === "TIKTOK") {
+    const level = p.settings?.privacyLevel;
+    return typeof level === "string" && PRIVACY_LABELS[level] ? PRIVACY_LABELS[level] : null;
+  }
+  if (p.platform === "YOUTUBE") {
+    const level = p.settings?.privacyStatus;
+    return typeof level === "string" && level in YOUTUBE_PRIVACY_LABELS ? YOUTUBE_PRIVACY_LABELS[level as keyof typeof YOUTUBE_PRIVACY_LABELS] : null;
+  }
+  return null;
+}
 
 export function PostList({
   posts,
@@ -73,7 +88,7 @@ export function PostList({
       <div className="panel rounded-xl border border-border p-6">
         <p className="text-sm font-semibold">{t("No posts yet")}</p>
         <ol className="mt-3 space-y-2 text-sm text-muted">
-          <li>1. {t("Connect your TikTok account.")}</li>
+          <li>1. {t("Connect an account.")}</li>
           <li>2. {t("Click New post and add your video.")}</li>
           <li>3. {t("Schedule it or publish now.")}</li>
         </ol>
@@ -118,18 +133,24 @@ export function PostList({
                       <p className="line-clamp-2 break-words text-sm font-medium">
                         {p.caption || <span className="text-muted">{t("No caption")}</span>}
                       </p>
-                      <p className="text-xs text-muted">
-                        TikTok · {p.accountName}
-                        {p.settings?.privacyLevel && PRIVACY_LABELS[p.settings.privacyLevel]
-                          ? ` · ${t(PRIVACY_LABELS[p.settings.privacyLevel])}`
-                          : ""}
-                        {dateText ? ` · ${dateText}` : ""}
+                      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted">
+                        <BrandIcon brand={p.platform} size={16} />
+                        <span>
+                          {NETWORK_NAME[p.platform]} · {p.accountName}
+                          {privacyText(p) ? ` · ${t(privacyText(p)!)}` : ""}
+                          {dateText ? ` · ${dateText}` : ""}
+                        </span>
                       </p>
+                      {p.status === "PUBLISHED" && p.externalUrl && (
+                        <a href={p.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-semibold text-accent hover:underline">
+                          {t("View post")}
+                        </a>
+                      )}
                       {p.createdVia !== "UI" && (
                         <p className="text-xs text-muted">{t("Created by the assistant. Review it before scheduling.")}</p>
                       )}
                       {p.lastError && p.status === "FAILED" && (
-                        <p className="break-words text-xs text-error">{p.lastError}</p>
+                        <p className="break-words text-xs text-error">{t(p.lastError)}</p>
                       )}
                     </div>
                     <div className="flex flex-wrap items-start gap-2">
