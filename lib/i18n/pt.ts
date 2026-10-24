@@ -877,6 +877,8 @@ export const pt: Record<string, string> = {
   Home: "Painel",
   Automations: "Automações",
   "Channels and account": "Canais e conta",
+  // 24/10/2026: seção do menu pra publicar nas redes (nome pedido pelo Matheus)
+  "Social Media": "Social Media",
   // 2026-10-06: contato sem @ (entrou pelo Direct, só com o ID)
   "Direct person ···{id}": "Pessoa do Direct ···{id}",
   "Direct person": "Pessoa do Direct",

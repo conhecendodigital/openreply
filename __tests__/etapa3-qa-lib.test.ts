@@ -71,8 +71,8 @@ describe("QA sidebar sections", () => {
   const titles = [...block.matchAll(/title: "([^"]+)"/g)].map((m) => m[1]);
   const items = [...block.matchAll(/\{ label: "([^"]+)", href: "([^"]+)" \}/g)].map((m) => ({ label: m[1], href: m[2] }));
 
-  it("has the 6 sections, each with a title (Quiz since Etapa 6, WhatsApp since 06/10)", () => {
-    expect(titles).toEqual(["Home", "Conversations", "WhatsApp", "Automations", "Quiz", "Channels and account"]);
+  it("has the 7 sections, each with a title (Quiz since Etapa 6, WhatsApp since 06/10, Social Media since 24/10)", () => {
+    expect(titles).toEqual(["Home", "Conversations", "WhatsApp", "Automations", "Social Media", "Quiz", "Channels and account"]);
   });
 
   it("lists every top-level dashboard screen once (and only screens that exist)", () => {

@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { alternarGrupo, grupoAberto, lerGrupos } from "@/lib/menu-grupos";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
@@ -154,13 +155,17 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
       { label: "Campaigns", href: "/campaigns" },
       { label: "Flows", href: "/flows" },
       { label: "Broadcasts", href: "/broadcasts" },
-      { label: "Posts", href: "/posts" },
       { label: "Segments", href: "/segments" },
       { label: "Sequences", href: "/sequences" },
       { label: "Conversation links", href: "/conversation-links" },
       { label: "Moderation", href: "/moderation" },
       { label: "DM Logs", href: "/logs" },
     ],
+  },
+  {
+    // 24/10/2026: publicar e agendar nas redes ganhou seção própria (pedido do Matheus).
+    title: "Social Media",
+    items: [{ label: "Posts", href: "/posts" }],
   },
   {
     title: "Quiz",
@@ -178,12 +183,14 @@ const navSections: { title: string; items: { label: string; href: string }[] }[]
 
 const isActiveHref = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
 
-/** Which groups the owner left open or closed. Browser only; empty is fine. */
-const OPEN_GROUPS_KEY = "lead-engine:menu-grupos";
+/** Which groups the owner left open or closed on this page. Browser only; empty is fine.
+ * v2 (24/10/2026): the choice belongs to the page (lib/menu-grupos.ts). The old key
+ * kept every group ever opened, so the menu ended up all open. */
+const OPEN_GROUPS_KEY = "lead-engine:menu-grupos-v2";
 const OPEN_GROUPS_EVENT = "lead-engine:menu-grupos";
 // Fallback when the browser blocks storage (private window): the menu still
 // opens and closes, it just forgets on reload.
-let groupsInMemory = "{}";
+let groupsInMemory = "";
 const readGroups = () => {
   try {
     return window.localStorage.getItem(OPEN_GROUPS_KEY) ?? groupsInMemory;
@@ -302,18 +309,11 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
     };
   }, [pathname]);
 
-  // Groups the owner opened or closed by hand. A group never touched follows
-  // the page: open when it holds the current page, closed otherwise.
-  const savedGroups = useSyncExternalStore(subscribeGroups, readGroups, () => "{}");
-  const openGroups = useMemo<Record<string, boolean>>(() => {
-    try {
-      const parsed = JSON.parse(savedGroups);
-      return parsed && typeof parsed === "object" ? parsed : {};
-    } catch {
-      return {};
-    }
-  }, [savedGroups]);
-  const toggleGroup = (title: string, open: boolean) => writeGroups(JSON.stringify({ ...openGroups, [title]: !open }));
+  // Every group starts closed except the one holding the current page. A click
+  // opens or closes it; the choice holds on this page only (lib/menu-grupos.ts).
+  const savedRaw = useSyncExternalStore(subscribeGroups, readGroups, () => "");
+  const saved = useMemo(() => lerGrupos(savedRaw), [savedRaw]);
+  const toggleGroup = (title: string, open: boolean) => writeGroups(JSON.stringify(alternarGrupo(saved, pathname, title, open)));
 
   return (
     <>
@@ -338,7 +338,7 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
         <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label={t("Menu")}>
           {[...navSections, ...(adminMenu ? [adminSection(adminMenu)!] : [])].map((section: NavSection, i) => {
             const hasActive = section.items.some((item) => isActiveHref(pathname, item.href));
-            const open = openGroups[section.title] ?? hasActive;
+            const open = grupoAberto(saved, pathname, section.title, hasActive);
             const groupId = `menu-grupo-${i}`;
             const drafts = section.items.some((item) => item.href === "/approvals") ? pendingDrafts : 0;
             const channelAlert = channelsNeedAttention && section.items.some((item) => item.href === "/channels");
@@ -368,13 +368,21 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
                   <svg
                     viewBox="0 0 24 24"
                     aria-hidden="true"
-                    className={`h-4 w-4 text-muted transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+                    className={`h-4 w-4 text-muted transition-transform duration-200 ease-out motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
                   >
                     <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-                {open && (
-                  <ul id={groupId} className="mb-2 space-y-0.5 pl-2">
+                {/* Always in the page so it can slide; closed = height 0, no focus, hidden from readers. */}
+                <div
+                  id={groupId}
+                  inert={!open}
+                  aria-hidden={!open}
+                  className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${
+                    open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                  }`}
+                >
+                  <ul className="min-h-0 space-y-0.5 overflow-hidden pb-2 pl-2">
                     {section.items.map((item) => {
                       const isActive = isActiveHref(pathname, item.href);
                       const Icon = icones[item.icon ?? item.href];
@@ -407,7 +415,7 @@ export default function Sidebar({ isOpen, onClose, workspaceName, channelsNeedAt
                     })}
                     {section.notice && <li className="px-3 pb-1 text-xs text-warning">{t(section.notice)}</li>}
                   </ul>
-                )}
+                </div>
               </div>
             );
           })}
