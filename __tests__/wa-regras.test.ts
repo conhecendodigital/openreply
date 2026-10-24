@@ -894,6 +894,11 @@ describe("trocas do Testar o agente", () => {
 
 describe("raio de atendimento e recusa que encerra (07/10)", () => {
   const comRaio = (km: number) => lerRegras({ ...obraBoa(), raioKm: km, mensagemForaDaArea: "" });
+  it("material que também é nome de cidade (granito, pedreira, prata) não vira local", () => {
+    for (const msg of ["quero um orçamento pra granito", "preciso de granito na cozinha", "trabalho em pedreira", "troca de telha"]) {
+      expect(detectarLocal(obraBoa(), [cliente(msg)]).cidade, msg).toBeNull();
+    }
+  });
   it("cidade perto conta como atendida; longe é fora; a lista de não atendidas ganha do raio", () => {
     const r = comRaio(30);
     expect(detectarLocal(r, [cliente("quero reformar minha casa em Sumaré/SP")]).status).toBe("atendida");
