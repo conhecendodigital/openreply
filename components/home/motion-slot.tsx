@@ -11,7 +11,7 @@ import { MOTION_SLOTS, type MotionSlotName } from "@/lib/home/motion-slots";
 // No celular a largura é pequena e o aspecto cortaria a ilustração: piso de altura só até md.
 const MOBILE_MIN: Record<MotionSlotName, string> = {
   hero: "min-h-[470px] md:min-h-0",
-  "comentario-dm": "min-h-[340px] md:min-h-0",
+  "comentario-dm": "min-h-[400px] md:min-h-0",
   fluxo: "min-h-[300px] md:min-h-0",
   publicar: "min-h-[330px] md:min-h-0",
 };

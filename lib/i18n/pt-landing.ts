@@ -24,4 +24,6 @@ export const ptLanding: Record<string, string> = {
   "Wait": "Esperar",
   "Condition": "Condição",
   "Message": "Mensagem",
+  "Commented QUERO on your reel": "Comentou QUERO no seu reel",
+  "Do you deliver on Saturday?": "Vocês entregam no sábado?",
 };
