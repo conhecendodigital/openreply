@@ -328,6 +328,7 @@ describe("login do YouTube", () => {
     expect(url.searchParams.get("scope")!.split(" ")).toEqual([...YOUTUBE_SCOPES]);
     expect(url.searchParams.get("access_type")).toBe("offline");
     expect(url.searchParams.get("prompt")).toBe("consent");
+    expect(url.searchParams.get("include_granted_scopes")).toBeNull();
     expect(url.searchParams.get("client_id")).toBe("g_id");
     expect(url.searchParams.get("state")).toBe("st_1");
     expect(YOUTUBE_SCOPES).toContain(YOUTUBE_UPLOAD_SCOPE);

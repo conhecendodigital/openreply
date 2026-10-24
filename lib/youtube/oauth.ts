@@ -58,7 +58,9 @@ export function getYouTubeAuthorizationUrl(redirectUri: string, state: string): 
     access_type: "offline",
     // Sem consent o Google só entrega refresh token na primeira vez.
     prompt: "consent",
-    include_granted_scopes: "true",
+    // Sem include_granted_scopes: com ele o Google soma ao pedido tudo que a conta já
+    // liberou antes para este app (ex.: drive.file) e recusa o conjunto com
+    // "invalid_request: scopes that cannot be requested together".
     state,
   });
   return `${AUTHORIZE_URL}?${params.toString()}`;
