@@ -16,7 +16,7 @@ export function CommentDmVisual({ t }: { t: TFunction }) {
               <p className="text-[11px] text-[#6e6e73]">{t("Comment")}</p>
             </div>
           </div>
-          <p className="mt-3 text-[15px] font-medium tracking-tight">FLOWERS</p>
+          <p className="mt-3 text-[15px] font-medium tracking-tight">QUERO</p>
         </div>
         <svg viewBox="0 0 24 40" className="mx-auto my-1 h-9 w-6 text-accent" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 3v30" />
