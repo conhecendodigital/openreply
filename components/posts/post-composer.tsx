@@ -324,7 +324,7 @@ export function PostComposer({
           <fieldset className="space-y-2" disabled={lockedAccount}>
             <legend className={labelClass}>{post ? t("Account") : t("Channels")}</legend>
             {!post && <p className="text-xs text-muted">{t("Mark every channel that should get this video. Each one becomes its own post.")}</p>}
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               {allChannels
                 .filter((c) => !post || c.key === picked[0])
                 .map((c) => {
@@ -339,16 +339,16 @@ export function PostComposer({
                       aria-checked={on}
                       disabled={lockedAccount}
                       onClick={() => setPicked((p) => toggleChannel(p, c.key))}
-                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-sm transition-colors disabled:cursor-default ${
+                      className={`flex min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-sm transition-colors disabled:cursor-default ${
                         on ? "border-accent bg-accent/10" : "border-border bg-surface hover:bg-surface-hover"
                       }`}
                     >
-                      <span className={on ? "" : "opacity-60 grayscale"}>
+                      <span className={`shrink-0 ${on ? "" : "opacity-60 grayscale"}`}>
                         <BrandIcon brand={c.platform} size={30} />
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-xs font-semibold">{label}</span>
-                        <span className="block max-w-[11rem] truncate text-xs text-muted">{a?.displayName}</span>
+                        <span className="block truncate text-xs font-semibold">{label}</span>
+                        <span className="block truncate text-xs text-muted sm:max-w-[11rem]">{a?.displayName}</span>
                       </span>
                     </button>
                   );
@@ -421,9 +421,10 @@ export function PostComposer({
             </div>
           ))}
 
-          <fieldset className="space-y-2 border-t border-border pt-5">
-            <legend className={`${labelClass} float-left mb-2 w-full`}>{t("When")}</legend>
-            <div className="flex flex-wrap gap-4 text-sm">
+          <fieldset className="min-w-0 border-t border-border pt-5">
+            <legend className="sr-only">{t("When")}</legend>
+            <p aria-hidden className={`${labelClass} mb-2`}>{t("When")}</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
               <label className="flex items-center gap-2">
                 <input type="radio" name="post-when" checked={mode === "now"} onChange={() => setMode("now")} className="h-4 w-4 accent-accent" />
                 {t("Publish now")}
@@ -434,7 +435,7 @@ export function PostComposer({
               </label>
             </div>
             {mode === "schedule" && (
-              <label className="flex max-w-xs flex-col gap-1 text-sm">
+              <label className="mt-2 flex w-full max-w-xs flex-col gap-1 text-sm">
                 <input type="datetime-local" value={scheduledLocal} min={nowLocal} onChange={(e) => setScheduledLocal(e.target.value)} className={fieldClass} />
                 <span className="text-xs text-muted">{t("Time in Brasília")}</span>
               </label>
@@ -451,7 +452,7 @@ export function PostComposer({
             </ul>
           )}
 
-          <div className="flex flex-wrap gap-3">
+          <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap gap-3 border-t border-border bg-surface px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 [&>button]:flex-1 sm:[&>button]:flex-none">
             {post?.status !== "SCHEDULED" && (
               <button type="button" disabled={saving !== null || uploading} onClick={() => void submit("draft")} className={btnSecondary}>
                 {saving === "draft" ? t("Saving...") : t("Save draft")}

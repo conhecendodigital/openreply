@@ -41,7 +41,7 @@ export function VideoPicker({
   return (
     <div className="space-y-3">
       <span className={labelClass}>{t("Video")}</span>
-      <div className="mx-auto w-full max-w-[260px] overflow-hidden rounded-xl border border-border bg-surface-hover">
+      <div className="mx-auto w-full max-w-[180px] overflow-hidden sm:max-w-[220px] lg:max-w-[260px] rounded-xl border border-border bg-surface-hover">
         {media.preview ? (
           <video
             key={media.preview}

@@ -133,9 +133,9 @@ export function PostList({
                       <p className="line-clamp-2 break-words text-sm font-medium">
                         {p.caption || <span className="text-muted">{t("No caption")}</span>}
                       </p>
-                      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted">
-                        <BrandIcon brand={p.platform} size={16} />
-                        <span>
+                      <p className="flex items-start gap-1.5 text-xs text-muted">
+                        <span className="mt-px shrink-0"><BrandIcon brand={p.platform} size={16} /></span>
+                        <span className="min-w-0">
                           {NETWORK_NAME[p.platform]} · {p.accountName}
                           {privacyText(p) ? ` · ${t(privacyText(p)!)}` : ""}
                           {dateText ? ` · ${dateText}` : ""}
@@ -153,7 +153,7 @@ export function PostList({
                         <p className="break-words text-xs text-error">{t(p.lastError)}</p>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-start gap-2">
+                    <div className="flex basis-full flex-wrap items-start gap-2 sm:pl-[70px] xl:basis-auto xl:pl-0">
                       {asking === "publish" ? (
                         <>
                           <button
