@@ -23,7 +23,6 @@ import {
   channelKey,
   channelsFor,
   formatFromSettings,
-  minCaptionMax,
   pickedChannels,
   shortProblem,
   toggleChannel,
@@ -243,29 +242,34 @@ export function PostComposer({
   }
 
   async function submit(action: ComposerAction) {
-    const errs: string[] = [];
-    if (!chosen.length) errs.push("Pick the account.");
+    const global: string[] = [];
+    if (!chosen.length) global.push("Pick the account.");
+    if (upload && !upload.error) global.push("Wait for the upload to finish.");
+    // Cada canal é conferido sozinho: o que está certo segue, o que não está é avisado pelo nome.
+    const problems: string[] = [];
+    const ready: Channel[] = [];
     for (const c of chosen) {
-      for (const e of channelErrors(c, action)) errs.push(multi ? `${channelName(c)}: ${t(e)}` : e);
+      const errs = channelErrors(c, action);
+      if (errs.length === 0) ready.push(c);
+      else for (const e of errs) problems.push(multi ? `${channelName(c)}: ${t(e)}` : e);
     }
-    if (upload && !upload.error) errs.push("Wait for the upload to finish.");
-    setErrors(errs);
-    if (errs.length) return;
+    setErrors([...global, ...problems]);
+    if (global.length || ready.length === 0) return;
 
     setSaving(action);
     // Um post por canal; o vídeo já foi enviado uma vez só. Um canal que falha não derruba os outros.
     const failed: string[] = [];
     const done: string[] = [];
-    for (const c of chosen) {
+    for (const c of ready) {
       const result = await saveOne(c, action, chosen.length === 1 ? postId : null);
       if (result.ok) done.push(c.key);
       else failed.push(`${channelName(c)}: ${t(result.stage === "save" ? "Could not save the post. Check the fields and try again." : "The post was saved as a draft, but it could not be published.")}`);
     }
     setSaving(null);
-    if (failed.length) {
+    if (failed.length || problems.length) {
       // Quem deu certo sai da seleção para não ser criado de novo ao tentar outra vez.
       setPicked((p) => p.filter((k) => !done.includes(k)));
-      setErrors(failed);
+      setErrors([...problems, ...failed]);
       await onSaved();
       return;
     }
@@ -275,7 +279,7 @@ export function PostComposer({
 
   const nowLocal = isoToBrasiliaLocal(new Date().toISOString());
   const uploading = Boolean(upload && !upload.error);
-  const captionMax = chosen.length ? minCaptionMax(chosen.map((c) => NETWORK_LIMITS[c.platform].captionMax)) : NETWORK_LIMITS.TIKTOK.captionMax;
+  const captionMax = chosen.length ? Math.max(...chosen.map((c) => NETWORK_LIMITS[c.platform].captionMax)) : NETWORK_LIMITS.TIKTOK.captionMax;
   const isYouTube = networksChosen.has("YOUTUBE");
   const lockedAccount = Boolean(post?.status === "SCHEDULED" || postId);
   const hasTikTok = networksChosen.has("TIKTOK");

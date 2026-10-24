@@ -7,6 +7,7 @@ vi.mock("@/lib/media/s3", async (importOriginal) => ({
 }));
 
 import { channelKey, channelsFor, formatFromSettings, pickedChannels, shortProblem, shortSettingsProblem, toggleChannel, withYouTubeFormat } from "@/lib/social/channels";
+import { emptyFacebookForm, emptyYouTubeForm, validateSocialComposer } from "@/lib/social-composer";
 import { youtubeProvider } from "@/lib/social/providers/youtube";
 
 describe("canais do compositor", () => {
@@ -69,5 +70,26 @@ describe("servidor confere o Short", () => {
     expect(await check({ ...settings, format: "short", mediaWidth: 1920, mediaHeight: 1080, mediaSeconds: 30 })).toMatchObject({ code: "invalid_settings" });
     expect(await check({ ...settings, format: "short", mediaWidth: 1080, mediaHeight: 1920, mediaSeconds: 30 })).toBeNull();
     expect(await check({ ...settings, format: "video" })).toBeNull();
+  });
+});
+
+describe("um vídeo vertical 9:16 para Instagram, TikTok e YouTube Shorts", () => {
+  const base = { accountId: "a", mediaUrl: "https://x/v.mp4", mediaBytes: 50 * 1024 * 1024, mediaContentType: "video/mp4", youtube: { ...emptyYouTubeForm(), title: "t", madeForKids: false }, facebook: emptyFacebookForm() };
+
+  it("a validação de cada rede aceita o mesmo MP4 vertical", () => {
+    expect(validateSocialComposer({ ...base, network: "INSTAGRAM", caption: "oi" }, "publish")).toEqual([]);
+    expect(validateSocialComposer({ ...base, network: "YOUTUBE", caption: "oi" }, "publish")).toEqual([]);
+    expect(shortProblem({ width: 1080, height: 1920, durationSec: 45 })).toBeNull();
+  });
+
+  it("a legenda é conferida por canal: estoura no Instagram, passa no YouTube", () => {
+    const long = "a".repeat(3000);
+    expect(validateSocialComposer({ ...base, network: "INSTAGRAM", caption: long }, "draft")).toContain("The caption is too long.");
+    expect(validateSocialComposer({ ...base, network: "YOUTUBE", caption: long }, "draft")).toEqual([]);
+  });
+
+  it("o canal Shorts grava format short no post", () => {
+    const s = withYouTubeFormat({ title: "t" }, "short", { width: 1080, height: 1920, durationSec: 44.2 });
+    expect(s).toMatchObject({ format: "short", mediaWidth: 1080, mediaHeight: 1920, mediaSeconds: 45 });
   });
 });

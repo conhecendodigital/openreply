@@ -83,8 +83,3 @@ export function shortSettingsProblem(settings: { format?: string; mediaWidth?: n
   if (settings.format !== "short") return null;
   return shortProblem({ width: settings.mediaWidth ?? null, height: settings.mediaHeight ?? null, durationSec: settings.mediaSeconds ?? null });
 }
-
-/** Menor limite de legenda entre os canais escolhidos. */
-export function minCaptionMax(limits: number[]): number {
-  return limits.length ? Math.min(...limits) : 0;
-}
