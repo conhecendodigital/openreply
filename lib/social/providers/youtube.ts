@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { commonMediaProblem } from "@/lib/social/common";
+import { shortSettingsProblem } from "@/lib/social/channels";
 import { NETWORK_LIMITS, YOUTUBE_TITLE_MAX } from "@/lib/social/limits";
 import type { ProviderPost, PublishResult, ReadyProblem, SocialProvider } from "@/lib/social/types";
 import { getYouTubeAccessToken, uploadYouTubeVideo } from "@/lib/youtube/client";
@@ -25,6 +26,11 @@ const base = {
   containsSyntheticMedia: z.boolean(),
   tags: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
   categoryId: z.string().regex(/^\d{1,3}$/).optional(),
+  /** "short" = YouTube Shorts (a API é a mesma; o YouTube classifica pelo vídeo). */
+  format: z.enum(["video", "short"]).optional(),
+  mediaWidth: z.number().int().positive().max(20000).optional(),
+  mediaHeight: z.number().int().positive().max(20000).optional(),
+  mediaSeconds: z.number().int().positive().max(86400).optional(),
 };
 
 /** Completo: sem valor padrão para "feito para crianças" (o criador precisa responder na tela). */
@@ -39,6 +45,10 @@ export const youtubeDraftSettingsSchema = z
     containsSyntheticMedia: base.containsSyntheticMedia.optional(),
     tags: base.tags,
     categoryId: base.categoryId,
+    format: base.format,
+    mediaWidth: base.mediaWidth,
+    mediaHeight: base.mediaHeight,
+    mediaSeconds: base.mediaSeconds,
     selfDeclaredMadeForKids: z.boolean().optional(),
   })
   .strict();
@@ -69,6 +79,8 @@ export const youtubeProvider: SocialProvider = {
       if (missingKids) return { message: "Say whether the video is made for kids", code: "invalid_settings" };
       return { message: "Finish the YouTube options (title and visibility)", code: "invalid_settings" };
     }
+    const short = shortSettingsProblem(parsed.data);
+    if (short) return { message: short, code: "invalid_settings" };
     return null;
   },
 

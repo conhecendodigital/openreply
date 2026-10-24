@@ -23,12 +23,15 @@ export function VideoPicker({
   accept,
   onPick,
   onDuration,
+  onDimensions,
 }: {
   media: MediaState;
   upload: UploadState;
   accept: string;
   onPick: (file: File | undefined) => void;
   onDuration: (seconds: number) => void;
+  /** Largura e altura do vídeo, para conferir as regras do YouTube Shorts. */
+  onDimensions?: (width: number, height: number) => void;
 }) {
   const t = useT();
   const uploading = Boolean(upload && !upload.error);
@@ -43,7 +46,10 @@ export function VideoPicker({
             controls
             playsInline
             preload="metadata"
-            onLoadedMetadata={(e) => onDuration(e.currentTarget.duration)}
+            onLoadedMetadata={(e) => {
+              onDuration(e.currentTarget.duration);
+              onDimensions?.(e.currentTarget.videoWidth, e.currentTarget.videoHeight);
+            }}
             className="aspect-[9/16] w-full bg-black object-contain"
           />
         ) : (

@@ -33,6 +33,13 @@ export const ptSocial: Record<string, string> = {
   "Pick the account.": "Escolha a conta.",
   "View post": "Ver post",
 
+  // Compositor com vários canais
+  "Channels": "Canais",
+  "Mark every channel that should get this video. Each one becomes its own post.": "Marque cada canal que deve receber este vídeo. Cada um vira um post separado.",
+  "Wait for the video to load so we can check the Shorts rules.": "Espere o vídeo carregar para conferirmos as regras do Shorts.",
+  "A YouTube Short must be vertical or square.": "Um Short do YouTube precisa ser vertical ou quadrado.",
+  "A YouTube Short can be at most 3 minutes long.": "Um Short do YouTube pode ter no máximo 3 minutos.",
+
   // Compositor
   "Use an MP4 or MOV video.": "Use um vídeo MP4 ou MOV.",
   "This YouTube channel did not allow uploads. Connect it again and accept every permission.": "Este canal do YouTube não liberou o envio de vídeos. Conecte de novo e aceite todas as permissões.",
