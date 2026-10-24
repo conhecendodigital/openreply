@@ -128,6 +128,11 @@ const PERGUNTA_DE: Partial<Record<CampoFichaDef["tipo"], RegExp>> = {
   imovel: /\b(tipo de imovel|casa ou (apartamento|apto)|(apartamento|apto) ou casa|e casa|e apartamento|e comercial)\b/,
 };
 
+function perguntaDoCampo(d: CampoFichaDef, pergunta: string): boolean {
+  const re = PERGUNTA_DE[d.tipo];
+  return re ? re.test(pergunta) : d.tipo === "outro" && d.palavras.some((w) => contemTermo(pergunta, w));
+}
+
 function confirmouCidade(texto: string, cidade: string): boolean {
   const c = normalizarTexto(cidade.split("/")[0] ?? "");
   if (c.length < 3) return false;
@@ -262,8 +267,9 @@ export function verificarResposta(e: EntradaVerificacao): Verificacao {
     const v = e.ficha.campos[d.chave];
     // Nome do contato do WhatsApp conta como sabido: não pergunta o nome de quem já tem nome salvo (14/10).
     if (!v || (v.origem === "inferido" && d.tipo !== "nome")) continue;
-    const re = PERGUNTA_DE[d.tipo];
-    const repetiu = perguntas.some((p) => (re ? re.test(p) : d.tipo === "outro" && d.palavras.some((w) => contemTermo(p, w))));
+    // 19/10: "tem projeto pra reforma?" acusava repetir "necessidade" só por citar "reforma". Pergunta que
+    // também é a de um campo AINDA em aberto é a pergunta certa da vez, não repetição.
+    const repetiu = perguntas.some((p) => perguntaDoCampo(d, p) && !e.defs.some((o) => o !== d && !e.ficha.campos[o.chave] && perguntaDoCampo(o, p)));
     if (repetiu) {
       violacoes.push({
         regra: "perguntou_de_novo",
