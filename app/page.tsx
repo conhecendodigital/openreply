@@ -158,8 +158,9 @@ const btnSecondary =
 
 export default async function Home() {
   const t = await getT();
-  const lead = features.slice(0, 2);
-  const rest = features.slice(2);
+  // Os dois recursos com ilustração própria: Comentário vira DM e Fluxos visuais.
+  const lead = [features[0], features.find((f) => f.icon === "flow")!];
+  const rest = features.filter((f) => !lead.includes(f));
   return (
     <div className="home min-h-screen">
       <DemoNotice variant="banner" />

@@ -27,7 +27,7 @@ export default function HeroStage({ t }: { t: TFunction }) {
               <p className="text-[11px] text-[#6e6e73]">{t("Comment")}</p>
             </div>
           </div>
-          <p className="mt-3 text-[15px] font-medium tracking-tight">FLOWERS</p>
+          <p className="mt-3 text-[15px] font-medium tracking-tight">QUERO</p>
         </div>
 
         {/* Celular */}
@@ -53,7 +53,7 @@ export default function HeroStage({ t }: { t: TFunction }) {
             </div>
             <div className="space-y-2 px-3 pb-4 pt-3 text-[13px] leading-snug">
               <p className="home-pop text-center text-[11px] text-[#6e6e73]" style={{ ["--d" as string]: "900ms" }}>
-                {t("Commented FLOWERS on your reel")}
+                {t("Commented QUERO on your reel")}
               </p>
               <div
                 className="home-pop ml-auto max-w-[82%] rounded-[18px] bg-accent px-3.5 py-2 text-white"
@@ -69,7 +69,7 @@ export default function HeroStage({ t }: { t: TFunction }) {
               </div>
               <div className="home-pop flex items-end gap-2" style={{ ["--d" as string]: "2500ms" }}>
                 <span className="h-6 w-6 shrink-0 rounded-full bg-[#e9e9ee]" />
-                <div className="rounded-[18px] bg-[#efeff4] px-3.5 py-2">{t("I do! Do you deliver on Saturday?")}</div>
+                <div className="rounded-[18px] bg-[#efeff4] px-3.5 py-2">{t("Do you deliver on Saturday?")}</div>
               </div>
               <div className="home-pop flex items-end gap-2" style={{ ["--d" as string]: "3100ms" }}>
                 <span className="h-6 w-6 shrink-0" />
