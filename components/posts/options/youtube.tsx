@@ -1,29 +1,72 @@
 "use client";
 
-/** Opções do YouTube: título, visibilidade, "feito para crianças" (sem valor padrão) e conteúdo com IA. */
+/** Opções do YouTube: título, descrição, tags, visibilidade, "feito para crianças" (sem valor padrão) e conteúdo com IA. */
 
 import { useT } from "@/components/lang-provider";
 import { fieldClass, labelClass } from "@/components/posts/styles";
-import { YOUTUBE_TITLE_MAX } from "@/lib/social/limits";
+import { ChipsInput } from "@/components/posts/chips-input";
+import { NETWORK_LIMITS, YOUTUBE_TITLE_MAX } from "@/lib/social/limits";
+import { cleanYouTubeTag, YOUTUBE_TAGS_TOTAL_MAX, youtubeTagsLength } from "@/lib/social/text-fields";
 import { YOUTUBE_PRIVACY_LABELS, type YouTubeForm, type YouTubePrivacy } from "@/lib/social-composer";
 
-export function YouTubeTop({ form, onChange }: { form: YouTubeForm; onChange: (next: Partial<YouTubeForm>) => void }) {
+const YOUTUBE_DESCRIPTION_LIMIT = NETWORK_LIMITS.YOUTUBE.captionMax;
+
+export function YouTubeTop({
+  form,
+  onChange,
+  hasShort,
+}: {
+  form: YouTubeForm;
+  onChange: (next: Partial<YouTubeForm>) => void;
+  hasShort: boolean;
+}) {
   const t = useT();
+  const tagsLength = youtubeTagsLength(form.tags);
   return (
-    <label className="flex flex-col gap-2 text-sm">
-      <span className={labelClass}>{t("Video title")}</span>
-      <input
-        type="text"
-        value={form.title}
-        maxLength={YOUTUBE_TITLE_MAX}
-        onChange={(e) => onChange({ title: e.target.value })}
-        placeholder={t("Write the title of the video")}
-        className={fieldClass}
+    <>
+      <label className="flex flex-col gap-2 text-sm">
+        <span className={labelClass}>{t("Video title")}</span>
+        <input
+          type="text"
+          value={form.title}
+          maxLength={YOUTUBE_TITLE_MAX}
+          onChange={(e) => onChange({ title: e.target.value })}
+          placeholder={t("Write the title of the video")}
+          className={fieldClass}
+        />
+        <span className="self-end text-xs text-muted">
+          {form.title.length}/{YOUTUBE_TITLE_MAX}
+        </span>
+      </label>
+
+      <label className="flex flex-col gap-2 text-sm">
+        <span className={labelClass}>{t("Description")}</span>
+        <textarea
+          value={form.description}
+          maxLength={YOUTUBE_DESCRIPTION_LIMIT}
+          rows={4}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder={t("Write the description of the video")}
+          className={fieldClass}
+        />
+        <span className="flex items-start justify-between gap-3 text-xs text-muted">
+          <span>{hasShort ? t("Shorts: vertical video up to 3 minutes. #Shorts in the description is optional.") : ""}</span>
+          <span className="shrink-0">
+            {form.description.length}/{YOUTUBE_DESCRIPTION_LIMIT}
+          </span>
+        </span>
+      </label>
+
+      <ChipsInput
+        label={t("YouTube tags")}
+        values={form.tags}
+        onChange={(tags) => onChange({ tags })}
+        clean={cleanYouTubeTag}
+        placeholder={t("Type a tag and press Enter")}
+        counter={{ value: tagsLength, max: YOUTUBE_TAGS_TOTAL_MAX }}
+        hint={t("Words people search for. No # here: YouTube tags are separate from the description.")}
       />
-      <span className="self-end text-xs text-muted">
-        {form.title.length}/{YOUTUBE_TITLE_MAX}
-      </span>
-    </label>
+    </>
   );
 }
 

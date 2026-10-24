@@ -270,6 +270,29 @@ describe("publish do YouTube", () => {
   });
 });
 
+describe("tags do YouTube (24/10)", () => {
+  it("várias tags chegam no videos.insert separadas da descrição", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.startsWith("https://www.googleapis.com/upload/youtube/v3/videos")) return json({}, 200, { location: "https://u.example.com/s" });
+      if (url === GOOD_URL) return new Response(new Uint8Array(5 * MB), { status: 206 });
+      if (url === "https://u.example.com/s") return json({ id: "vid_10" });
+      throw new Error(`fetch inesperado: ${url}`);
+    });
+    const tags = ["comandos do gemini", "gemini", "inteligência artificial"];
+    await youtubeProvider.publish(post({ caption: "Descrição do vídeo #Shorts", settings: { ...goodSettings, tags } }), { savePublishId: vi.fn(async () => {}) });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.snippet.tags).toEqual(tags);
+    expect(body.snippet.description).toBe("Descrição do vídeo #Shorts");
+  });
+
+  it("recusa tags acima de 500 caracteres no total e com < >", () => {
+    const longas = Array.from({ length: 11 }, (_, i) => `${"a".repeat(48)}${i}`);
+    expect(youtubeSettingsSchema.safeParse({ ...goodSettings, tags: longas }).success).toBe(false);
+    expect(youtubeSettingsSchema.safeParse({ ...goodSettings, tags: ["<script>"] }).success).toBe(false);
+    expect(youtubeSettingsSchema.safeParse({ ...goodSettings, tags: ["ia", "gemini"] }).success).toBe(true);
+  });
+});
+
 describe("youtubeFetch", () => {
   it("chama a API com o token do canal e devolve o JSON", async () => {
     fetchMock.mockResolvedValue(json({ items: [{ id: "UC1" }] }));

@@ -89,7 +89,7 @@ describe("formulário do compositor", () => {
   });
 
   it("converte entre o formulário e as opções gravadas", () => {
-    const form = { title: " Meu vídeo ", privacyStatus: "unlisted" as const, madeForKids: false, containsSyntheticMedia: true };
+    const form = { title: " Meu vídeo ", description: "", tags: [] as string[], privacyStatus: "unlisted" as const, madeForKids: false, containsSyntheticMedia: true };
     const payload = youTubeSettingsPayload(form);
     expect(payload).toMatchObject({ title: "Meu vídeo", privacyStatus: "unlisted", selfDeclaredMadeForKids: false, containsSyntheticMedia: true });
     expect(youTubeFormFromSettings(payload)).toMatchObject({ title: "Meu vídeo", privacyStatus: "unlisted", madeForKids: false });

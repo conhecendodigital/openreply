@@ -159,4 +159,15 @@ export const ptSocial: Record<string, string> = {
     "Entre, abra o canal do YouTube no {product} e clique em Desconectar. Os tokens de acesso e de renovação do YouTube e a conexão são apagados na hora, e nada mais é publicado. Você também pode remover o {product} em myaccount.google.com/permissions.",
   "To also delete the videos, titles, descriptions, drafts and scheduled posts of that channel, email {email} from the address you use to sign in. We delete them within {days} days.":
     "Para apagar também os vídeos, títulos, descrições, rascunhos e posts agendados desse canal, escreva para {email} pelo e-mail que você usa para entrar. Apagamos em até {days} dias.",
+  // 24/10/2026: campos por rede (legenda + hashtags; YouTube com descrição e tags).
+  Hashtags: "Hashtags",
+  "Type a hashtag and press Enter": "Digite uma hashtag e aperte Enter",
+  "They go at the end of the caption, after a blank line.": "Elas vão no fim da legenda, depois de uma linha em branco.",
+  "Type a tag and press Enter": "Digite uma tag e aperte Enter",
+  "Words people search for. No # here: YouTube tags are separate from the description.":
+    "Palavras que as pessoas buscam. Sem # aqui: as tags do YouTube ficam separadas da descrição.",
+  "Shorts: vertical video up to 3 minutes. #Shorts in the description is optional.": "Shorts: vídeo vertical de até 3 minutos. #Shorts na descrição é opcional.",
+  "The tags are too long.": "As tags passaram do limite.",
+  "Instagram accepts up to 30 hashtags.": "O Instagram aceita até 30 hashtags.",
+  "YouTube tags": "Tags do YouTube",
 };
