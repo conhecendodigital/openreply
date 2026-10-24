@@ -6,6 +6,7 @@
 import { brasiliaLocalToIso } from "@/lib/tiktok-composer";
 import { FACEBOOK_TITLE_MAX, NETWORK_LIMITS, YOUTUBE_TITLE_MAX } from "@/lib/social/limits";
 import type { SocialPlatform } from "@/lib/social/types";
+import { countHashtags, INSTAGRAM_HASHTAG_MAX, YOUTUBE_TAGS_TOTAL_MAX, youtubeTagsLength } from "@/lib/social/text-fields";
 
 export type { SocialPlatform };
 export type ComposerAction = "draft" | "schedule" | "publish";
@@ -26,6 +27,10 @@ export const YOUTUBE_PRIVACY_LABELS: Record<YouTubePrivacy, string> = {
 
 export interface YouTubeForm {
   title: string;
+  /** Descrição do vídeo: é a "legenda" do post do YouTube, separada da legenda das outras redes. */
+  description: string;
+  /** Tags do YouTube, sem "#". */
+  tags: string[];
   privacyStatus: YouTubePrivacy;
   /** null = a pessoa ainda não respondeu. Sem valor padrão: a regra do YouTube exige a resposta dela. */
   madeForKids: boolean | null;
@@ -41,7 +46,7 @@ export interface FacebookForm {
 }
 
 export function emptyYouTubeForm(): YouTubeForm {
-  return { title: "", privacyStatus: "private", madeForKids: null, containsSyntheticMedia: false };
+  return { title: "", description: "", tags: [], privacyStatus: "private", madeForKids: null, containsSyntheticMedia: false };
 }
 
 export function emptyInstagramForm(): InstagramForm {
@@ -52,11 +57,13 @@ export function emptyFacebookForm(): FacebookForm {
   return { title: "" };
 }
 
-export function youTubeFormFromSettings(settings: Record<string, unknown> | null | undefined): YouTubeForm {
+export function youTubeFormFromSettings(settings: Record<string, unknown> | null | undefined, description = ""): YouTubeForm {
   const s = settings ?? {};
   const privacy = s.privacyStatus;
   return {
     title: typeof s.title === "string" ? s.title : "",
+    description,
+    tags: Array.isArray(s.tags) ? s.tags.filter((x): x is string => typeof x === "string") : [],
     privacyStatus: privacy === "public" || privacy === "unlisted" || privacy === "private" ? privacy : "private",
     madeForKids: typeof s.selfDeclaredMadeForKids === "boolean" ? s.selfDeclaredMadeForKids : null,
     containsSyntheticMedia: s.containsSyntheticMedia === true,
@@ -79,6 +86,7 @@ export function youTubeSettingsPayload(form: YouTubeForm): Record<string, unknow
     containsSyntheticMedia: form.containsSyntheticMedia,
   };
   if (form.madeForKids !== null) out.selfDeclaredMadeForKids = form.madeForKids;
+  if (form.tags.length > 0) out.tags = form.tags;
   return out;
 }
 
@@ -108,6 +116,8 @@ export function validateSocialComposer(input: SocialComposerInput, action: Compo
   if (!input.mediaUrl) errors.push("Add the video.");
   if (input.caption.length > limits.captionMax) errors.push("The caption is too long.");
   if (input.network === "YOUTUBE" && input.youtube.title.length > YOUTUBE_TITLE_MAX) errors.push("The title is too long.");
+  if (input.network === "YOUTUBE" && youtubeTagsLength(input.youtube.tags) > YOUTUBE_TAGS_TOTAL_MAX) errors.push("The tags are too long.");
+  if (input.network === "INSTAGRAM" && countHashtags(input.caption) > INSTAGRAM_HASHTAG_MAX) errors.push("Instagram accepts up to 30 hashtags.");
   if (input.network === "FACEBOOK" && input.facebook.title.length > FACEBOOK_TITLE_MAX) errors.push("The title is too long.");
   if (input.mediaUrl && input.mediaContentType && !limits.videoTypes.includes(input.mediaContentType)) {
     errors.push(`${name} does not accept this video format. Use an MP4 or MOV video.`);

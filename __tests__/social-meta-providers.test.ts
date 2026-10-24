@@ -148,6 +148,20 @@ describe("Instagram Reels", () => {
   });
 });
 
+describe("hashtags no Instagram (24/10)", () => {
+  it("até 30 hashtags passa; 31 é barrado antes de chamar a Meta", async () => {
+    const tags = (n: number) => Array.from({ length: n }, (_, i) => `#tag${i}`).join(" ");
+    expect(await instagramProvider.readyProblem(post("INSTAGRAM", { caption: `legenda\n\n${tags(30)}` }), { checkRemote: false })).toBeNull();
+    expect(await instagramProvider.readyProblem(post("INSTAGRAM", { caption: `legenda\n\n${tags(31)}` }), { checkRemote: false })).toMatchObject({ code: "invalid_settings" });
+  });
+
+  it("a legenda com as hashtags no fim é a que vai para a Meta", async () => {
+    fetchMock.mockResolvedValueOnce(json({ id: "cont_1" }));
+    await instagramProvider.publish(post("INSTAGRAM", { caption: "Comandos do Gemini\n\n#gemini #ia" }), { savePublishId: vi.fn(async () => {}) });
+    expect(form(fetchMock.mock.calls[0]).get("caption")).toBe("Comandos do Gemini\n\n#gemini #ia");
+  });
+});
+
 describe("Página do Facebook", () => {
   it("passa com Página ativa e opções completas; título até 255", async () => {
     expect(await facebookProvider.readyProblem(post("FACEBOOK"), { checkRemote: false })).toBeNull();

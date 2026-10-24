@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { commonMediaProblem } from "@/lib/social/common";
 import { shortSettingsProblem } from "@/lib/social/channels";
+import { YOUTUBE_TAG_MAX, YOUTUBE_TAGS_TOTAL_MAX, youtubeTagsLength } from "@/lib/social/text-fields";
 import { NETWORK_LIMITS, YOUTUBE_TITLE_MAX } from "@/lib/social/limits";
 import type { ProviderPost, PublishResult, ReadyProblem, SocialProvider } from "@/lib/social/types";
 import { getYouTubeAccessToken, uploadYouTubeVideo } from "@/lib/youtube/client";
@@ -24,7 +25,11 @@ const base = {
   title: z.string().trim().min(1).max(YOUTUBE_TITLE_MAX),
   privacyStatus: z.enum(YOUTUBE_PRIVACY),
   containsSyntheticMedia: z.boolean(),
-  tags: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+  tags: z
+    .array(z.string().trim().min(1).max(YOUTUBE_TAG_MAX).refine((t) => !/[<>]/.test(t), "Tags cannot have < or >"))
+    .max(30)
+    .refine((tags) => youtubeTagsLength(tags) <= YOUTUBE_TAGS_TOTAL_MAX, `The tags go over the YouTube limit of ${YOUTUBE_TAGS_TOTAL_MAX} characters`)
+    .optional(),
   categoryId: z.string().regex(/^\d{1,3}$/).optional(),
   /** "short" = YouTube Shorts (a API é a mesma; o YouTube classifica pelo vídeo). */
   format: z.enum(["video", "short"]).optional(),

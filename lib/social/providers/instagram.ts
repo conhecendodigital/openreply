@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/client";
 import { PermissionError } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
 import { commonMediaProblem } from "@/lib/social/common";
+import { countHashtags, INSTAGRAM_HASHTAG_MAX } from "@/lib/social/text-fields";
 import { NETWORK_LIMITS } from "@/lib/social/limits";
 import { explainMetaError, graphCall } from "@/lib/social/meta-graph";
 import type { CheckResult, ProviderPost, PublishResult, ReadyProblem, SocialProvider } from "@/lib/social/types";
@@ -45,6 +46,9 @@ export const instagramProvider: SocialProvider = {
     const media = commonMediaProblem(this, post);
     if (media) return media;
     if (!instagramSettingsSchema.safeParse(post.settings).success) return { message: "Finish the Reels options", code: "invalid_settings" };
+    if (countHashtags(post.caption ?? "") > INSTAGRAM_HASHTAG_MAX) {
+      return { message: "Instagram accepts up to 30 hashtags.", code: "invalid_settings" };
+    }
     return null;
   },
 

@@ -18,6 +18,8 @@ import { YouTubeFields, YouTubeTop } from "@/components/posts/options/youtube";
 import { fieldClass, labelClass } from "@/components/posts/styles";
 import { VideoPicker, type MediaState, type UploadState } from "@/components/posts/video-picker";
 import { BrandIcon } from "@/components/social/brand-icon";
+import { ChipsInput } from "@/components/posts/chips-input";
+import { cleanHashtag, countHashtags, INSTAGRAM_HASHTAG_MAX, joinCaptionHashtags, splitCaptionHashtags } from "@/lib/social/text-fields";
 import { NETWORK_LIMITS } from "@/lib/social/limits";
 import {
   channelKey,
@@ -90,9 +92,12 @@ export function PostComposer({
   const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
 
   const [info, setInfo] = useState<{ id: string; data: CreatorInfo | null } | null>(null);
-  const [caption, setCaption] = useState(post?.caption ?? "");
+  // Legenda + hashtags (Instagram, TikTok, Facebook). O YouTube tem descrição e tags próprias.
+  const initialText = post && post.platform !== "YOUTUBE" ? splitCaptionHashtags(post.caption ?? "") : { caption: "", hashtags: [] as string[] };
+  const [caption, setCaption] = useState(initialText.caption);
+  const [hashtags, setHashtags] = useState<string[]>(initialText.hashtags);
   const [tiktok, setTiktok] = useState<TikTokSettings>(post?.platform === "TIKTOK" ? (post.settings as unknown as TikTokSettings) : emptySettings());
-  const [youtube, setYoutube] = useState<YouTubeForm>(post?.platform === "YOUTUBE" ? youTubeFormFromSettings(post.settings) : emptyYouTubeForm());
+  const [youtube, setYoutube] = useState<YouTubeForm>(post?.platform === "YOUTUBE" ? youTubeFormFromSettings(post.settings, post.caption ?? "") : emptyYouTubeForm());
   const [instagram, setInstagram] = useState<InstagramForm>(post?.platform === "INSTAGRAM" ? instagramFormFromSettings(post.settings) : emptyInstagramForm());
   const [facebook, setFacebook] = useState<FacebookForm>(post?.platform === "FACEBOOK" ? facebookFormFromSettings(post.settings) : emptyFacebookForm());
   const [media, setMedia] = useState<MediaState>({
@@ -195,6 +200,11 @@ export function PostComposer({
     return { ...tiktok };
   }
 
+  /** Texto que vai para a rede: YouTube = descrição; as outras = legenda com as hashtags no fim. */
+  function textFor(c: Channel): string {
+    return c.platform === "YOUTUBE" ? youtube.description : joinCaptionHashtags(caption, hashtags);
+  }
+
   function channelName(c: Channel): string {
     const a = accounts.find((x) => x.id === c.accountId);
     const net = c.platform === "YOUTUBE" && c.format === "short" ? "YouTube Shorts" : NETWORK_NAME[c.platform];
@@ -206,10 +216,10 @@ export function PostComposer({
     const errs =
       c.platform !== "TIKTOK"
         ? validateSocialComposer(
-            { network: c.platform, accountId: c.accountId, caption, mediaUrl: media.url, mediaBytes: media.bytes, mediaContentType: media.type, youtube, facebook, scheduledLocal },
+            { network: c.platform, accountId: c.accountId, caption: textFor(c), mediaUrl: media.url, mediaBytes: media.bytes, mediaContentType: media.type, youtube, facebook, scheduledLocal },
             action
           )
-        : validateComposer({ accountId: c.accountId, caption, mediaUrl: media.url, mediaContentType: media.type, durationSec, settings: tiktok, scheduledLocal }, infoData, action);
+        : validateComposer({ accountId: c.accountId, caption: textFor(c), mediaUrl: media.url, mediaContentType: media.type, durationSec, settings: tiktok, scheduledLocal }, infoData, action);
     if (c.platform === "YOUTUBE" && c.format === "short" && media.url) {
       const problem = shortProblem({ width: videoSize?.width ?? null, height: videoSize?.height ?? null, durationSec });
       if (problem) errs.push(problem);
@@ -220,7 +230,7 @@ export function PostComposer({
   async function saveOne(c: Channel, action: ComposerAction, existingId: string | null): Promise<{ ok: boolean; stage: "save" | "action" }> {
     const body = {
       socialAccountId: c.accountId,
-      caption,
+      caption: textFor(c),
       mediaUrl: media.url,
       mediaBytes: media.bytes,
       mediaContentType: media.type,
@@ -279,8 +289,14 @@ export function PostComposer({
 
   const nowLocal = isoToBrasiliaLocal(new Date().toISOString());
   const uploading = Boolean(upload && !upload.error);
-  const captionMax = chosen.length ? Math.max(...chosen.map((c) => NETWORK_LIMITS[c.platform].captionMax)) : NETWORK_LIMITS.TIKTOK.captionMax;
   const isYouTube = networksChosen.has("YOUTUBE");
+  const captionChannels = chosen.filter((c) => c.platform !== "YOUTUBE");
+  // Sem canal marcado a tela mostra a legenda; com só YouTube, só os campos dele.
+  const showCaption = captionChannels.length > 0 || chosen.length === 0;
+  const captionMax = captionChannels.length ? Math.min(...captionChannels.map((c) => NETWORK_LIMITS[c.platform].captionMax)) : NETWORK_LIMITS.TIKTOK.captionMax;
+  const fullCaption = joinCaptionHashtags(caption, hashtags);
+  const hasShort = chosen.some((c) => c.platform === "YOUTUBE" && c.format === "short");
+  const captionNetworks = Array.from(new Set(captionChannels.map((c) => c.platform)));
   const lockedAccount = Boolean(post?.status === "SCHEDULED" || postId);
   const hasTikTok = networksChosen.has("TIKTOK");
   const lacksYouTubeUpload = chosen.some((c) => {
@@ -345,23 +361,56 @@ export function PostComposer({
           )}
 
           {hasTikTok && <TikTokTop accountId={accountId} info={infoData} loading={infoLoading} failed={infoFailed} durationSec={durationSec} />}
-          {isYouTube && <YouTubeTop form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} />}
           {networksChosen.has("FACEBOOK") && <FacebookTop form={facebook} onChange={(n) => setFacebook((f) => ({ ...f, ...n }))} />}
 
-          <label className="flex flex-col gap-2 text-sm">
-            <span className={labelClass}>{isYouTube ? t("Description") : t("Caption")}</span>
-            <textarea
-              value={caption}
-              maxLength={captionMax}
-              rows={4}
-              onChange={(e) => setCaption(e.target.value)}
-              placeholder={isYouTube ? t("Write the description of the video") : t("Write the caption of the video")}
-              className={fieldClass}
-            />
-            <span className="self-end text-xs text-muted">
-              {caption.length}/{captionMax}
-            </span>
-          </label>
+          {showCaption && (
+            <div className="space-y-4">
+              {isYouTube && captionNetworks.length > 0 && (
+                <p className="flex items-center gap-2 text-xs font-semibold text-muted">
+                  {captionNetworks.map((n) => (
+                    <BrandIcon key={n} brand={n} size={18} />
+                  ))}
+                  {captionNetworks.map((n) => NETWORK_NAME[n]).join(", ")}
+                </p>
+              )}
+              <label className="flex flex-col gap-2 text-sm">
+                <span className={labelClass}>{t("Caption")}</span>
+                <textarea
+                  value={caption}
+                  maxLength={captionMax}
+                  rows={4}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder={t("Write the caption of the video")}
+                  className={fieldClass}
+                />
+                <span className={`self-end text-xs ${fullCaption.length > captionMax ? "text-error" : "text-muted"}`}>
+                  {fullCaption.length}/{captionMax}
+                </span>
+              </label>
+              <ChipsInput
+                label={t("Hashtags")}
+                values={hashtags}
+                onChange={setHashtags}
+                clean={cleanHashtag}
+                prefix="#"
+                placeholder={t("Type a hashtag and press Enter")}
+                counter={networksChosen.has("INSTAGRAM") ? { value: countHashtags(fullCaption), max: INSTAGRAM_HASHTAG_MAX } : undefined}
+                hint={t("They go at the end of the caption, after a blank line.")}
+              />
+            </div>
+          )}
+
+          {isYouTube && (
+            <div className="space-y-4">
+              {showCaption && (
+                <p className="flex items-center gap-2 text-xs font-semibold text-muted">
+                  <BrandIcon brand="YOUTUBE" size={18} />
+                  YouTube
+                </p>
+              )}
+              <YouTubeTop form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} hasShort={hasShort} />
+            </div>
+          )}
 
           {hasTikTok && <TikTokFields settings={tiktok} info={infoData} patch={patchTikTok} />}
           {isYouTube && <YouTubeFields form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} />}
