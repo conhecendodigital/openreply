@@ -99,33 +99,35 @@ export function AccountsBar({
         {accounts.map((a) => {
           const st = STATUS[a.status];
           return (
-            <div key={a.id} className="panel flex flex-wrap items-center gap-3 rounded-xl border border-border p-4">
-              <div className="relative">
-                <Avatar url={a.avatarUrl} name={a.displayName} />
-                <span className="absolute -bottom-1 -right-1 rounded-full ring-2 ring-[var(--surface,transparent)]">
-                  <BrandIcon brand={a.platform} size={18} />
-                </span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{a.displayName}</p>
-                <p className="truncate text-xs text-muted">
-                  {NETWORK_NAME[a.platform]}
-                  {a.username ? ` · @${a.username}` : ""}
-                </p>
-                <span className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${st.tone}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
-                  {t(st.label)}
-                </span>
-                {a.missingScopes.length > 0 && (
-                  <p className="mt-1 break-words text-xs text-warning">
-                    {t("Missing")}: {a.missingScopes.join(", ")}
+            <div key={a.id} className="panel flex flex-col gap-3 rounded-xl border border-border p-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="relative">
+                  <Avatar url={a.avatarUrl} name={a.displayName} />
+                  <span className="absolute -bottom-1 -right-1 rounded-full ring-2 ring-[var(--surface,transparent)]">
+                    <BrandIcon brand={a.platform} size={18} />
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{a.displayName}</p>
+                  <p className="truncate text-xs text-muted">
+                    {NETWORK_NAME[a.platform]}
+                    {a.username ? ` · @${a.username}` : ""}
                   </p>
-                )}
-                {a.lastError && a.status !== "ACTIVE" && (
-                  <p className="mt-1 break-words text-xs text-error">{t(a.lastError)}</p>
-                )}
+                  <span className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${st.tone}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                    {t(st.label)}
+                  </span>
+                  {a.missingScopes.length > 0 && (
+                    <p className="mt-1 break-words text-xs text-warning">
+                      {t("Missing")}: {a.missingScopes.join(", ")}
+                    </p>
+                  )}
+                  {a.lastError && a.status !== "ACTIVE" && (
+                    <p className="mt-1 break-words text-xs text-error">{t(a.lastError)}</p>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 sm:justify-end">
                 {a.status === "NEEDS_RECONNECT" && (
                   <a href={CONNECT_HREF[a.platform]} className={btnSecondary}>
                     {t("Reconnect")}
