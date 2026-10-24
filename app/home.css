@@ -1,0 +1,108 @@
+/* Página inicial (24/10/2026): estilo Apple, só com transform e opacity nas animações. */
+.home {
+  --home-ink: #1d1d1f;
+  --home-muted: #6e6e73;
+  --home-soft: #f5f5f7;
+  --home-line: rgba(0, 0, 0, 0.08);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --spring: cubic-bezier(0.23, 1, 0.32, 1);
+  color: var(--home-ink);
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+@supports (animation-timing-function: linear(0, 1)) {
+  .home {
+    --spring: linear(0, 0.18 5%, 0.62 12%, 0.95 19%, 1.05 26%, 1.04 33%, 1 45%, 0.995 60%, 1);
+  }
+}
+
+.home .home-muted {
+  color: var(--home-muted);
+}
+.home .home-display {
+  letter-spacing: -0.035em;
+  line-height: 1.03;
+}
+.home .home-title {
+  letter-spacing: -0.028em;
+  line-height: 1.08;
+}
+
+/* Botões: respondem ao toque na hora (escala no :active). */
+.home-btn {
+  transition: transform 160ms var(--ease-out), background-color 160ms ease, color 160ms ease;
+}
+.home-btn:active {
+  transform: scale(0.97);
+}
+
+/* Entrada ao rolar (ver components/home/reveal.tsx). Sem o atributo, tudo aparece normal. */
+.home-reveal {
+  transition: opacity 640ms var(--ease-out), transform 640ms var(--ease-out);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.home-reveal[data-reveal="hidden"] {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.home-reveal[data-reveal="shown"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Cena do topo: uma sequência só, na carga da página. */
+@keyframes home-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+@keyframes home-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+}
+.home-rise {
+  animation: home-rise 700ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+.home-pop {
+  animation: home-pop 560ms var(--spring) both;
+  animation-delay: var(--d, 0ms);
+  transform-origin: var(--origin, 0% 100%);
+}
+@keyframes home-draw {
+  from {
+    stroke-dashoffset: var(--len, 120);
+  }
+}
+.home-draw {
+  stroke-dasharray: var(--len, 120);
+  animation: home-draw 900ms var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .home-lift {
+    transition: transform 320ms var(--ease-out);
+  }
+  .home-lift:hover {
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-rise,
+  .home-pop,
+  .home-draw {
+    animation: none;
+  }
+  .home-reveal {
+    transition: none;
+  }
+  .home-lift:hover {
+    transform: none;
+  }
+}

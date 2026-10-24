@@ -9,6 +9,7 @@ import { ptFunnels } from "@/lib/i18n/pt-funnels";
 import { ptFunnelsApi } from "@/lib/i18n/pt-funnels-api";
 import { ptFunnelsPopups } from "@/lib/i18n/pt-funnels-popups";
 import { ptSite } from "@/lib/i18n/pt-site";
+import { ptLanding } from "@/lib/i18n/pt-landing";
 import { ptPublic } from "@/lib/i18n/pt-public";
 import { ptCapi } from "@/lib/i18n/pt-capi";
 import { ptAuth } from "@/lib/i18n/pt-auth";
@@ -68,6 +69,7 @@ export const pt: Record<string, string> = {
   ...ptCapi,
   // 2026-10-04: site público (página inicial, cabeçalho, login) em lib/i18n/pt-site.ts.
   ...ptSite,
+  ...ptLanding,
   // 2026-10-04: páginas públicas fora do painel (modelos, SEO, legais,
   // relatório público, convite) em lib/i18n/pt-public.ts.
   ...ptPublic,
