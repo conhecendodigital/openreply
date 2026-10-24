@@ -21,6 +21,7 @@ import { ingestDepsFor } from "@/lib/whatsapp/cerebro/service";
 import { WA_AGENT_QUEUE, type WaAgentJob } from "@/lib/whatsapp/queue";
 import { purgeOldWebhookEvents, RETENTION_INTERVAL_MS } from "@/lib/whatsapp/retencao";
 import { ensureWhatsAppRuntime, getWaRepository } from "@/lib/whatsapp/setup";
+import { responderGatilho } from "@/lib/whatsapp/gatilhos";
 import { createWaWorkers } from "@/lib/whatsapp/worker";
 
 const runtime = ensureWhatsAppRuntime();
@@ -37,9 +38,21 @@ const lerMidia = async (job: WaAgentJob) => {
   if (lidas.length) console.log(`[WA Midia] ${job.conversationId} ${lidas.map((l) => `${l.kind}:${l.status}`).join(" ")}`);
 };
 
+// Gatilho por frase (ex.: "Quero a aula do workshop" no número Automação) roda antes do agente.
+const ingestHooks = agentIngestHooks(repo);
 const workers = createWaWorkers({
   runtime,
-  hooks: agentIngestHooks(repo),
+  hooks: {
+    ...ingestHooks,
+    onInboundMessage: async (info) => {
+      const r = await responderGatilho(info, deps).catch((e: unknown) => {
+        console.error(`[WA Gatilho] falhou ${info.conversationId}: ${(e instanceof Error ? e.message : "").slice(0, 160)}`);
+        return null;
+      });
+      if (r) console.log(`[WA Gatilho] ${r.gatilho} ${info.conversationId} ${r.result.status}`);
+      await ingestHooks.onInboundMessage?.(info);
+    },
+  },
   sendHooks: agentSendHooks(deps),
 });
 
