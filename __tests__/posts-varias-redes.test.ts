@@ -66,7 +66,7 @@ describe("servidor confere o Short", () => {
   });
   it("Short horizontal é barrado; Short vertical e vídeo normal passam", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const check = (s: Record<string, unknown>) => youtubeProvider.readyProblem(post(s) as any);
+    const check = (s: Record<string, unknown>) => youtubeProvider.readyProblem(post(s) as any, { checkRemote: false });
     expect(await check({ ...settings, format: "short", mediaWidth: 1920, mediaHeight: 1080, mediaSeconds: 30 })).toMatchObject({ code: "invalid_settings" });
     expect(await check({ ...settings, format: "short", mediaWidth: 1080, mediaHeight: 1920, mediaSeconds: 30 })).toBeNull();
     expect(await check({ ...settings, format: "video" })).toBeNull();
