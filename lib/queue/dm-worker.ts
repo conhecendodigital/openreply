@@ -39,6 +39,7 @@ import {
   type SendOptions,
 } from "@/lib/meta/client";
 import { sendTracked, type OutboundOrigin } from "@/lib/meta/send";
+import { isFacebookPageToken } from "@/lib/meta/platform";
 import { assertAccountActive, isChannelOffError, noteMetaError } from "@/lib/channels/status";
 import { checkAutomation } from "@/lib/messaging/guard";
 import { handleCrmDm } from "@/lib/messaging/crm-dm";
@@ -799,7 +800,8 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     // status at comment time: confirmed followers get the link now, everyone
     // else gets the "follow me first" prompt (re-verified on tap).
     let sendFollowPrompt = false;
-    if (automation.requireFollow && !useOpeningDm) {
+    // A Facebook Page has no follow check: "pedir pra seguir" is skipped there.
+    if (automation.requireFollow && !useOpeningDm && !isFacebookPageToken(accessToken)) {
       const alreadyFollows = await getUserFollowStatus(accessToken, commenterId);
       noteFollowStatus(automation.instagramAccountId, commenterId, alreadyFollows);
       sendFollowPrompt = alreadyFollows !== true;
@@ -1586,7 +1588,7 @@ async function deliverCampaignToDm(input: {
   // the user has already claimed to follow; here it would hand the link to
   // anyone whose status the API happens not to resolve.
   let sendFollowPrompt = false;
-  if (automation.requireFollow) {
+  if (automation.requireFollow && !isFacebookPageToken(accessToken)) {
     const follows = await getUserFollowStatus(accessToken, senderId);
     noteFollowStatus(automation.instagramAccountId, senderId, follows);
     sendFollowPrompt = follows !== true;

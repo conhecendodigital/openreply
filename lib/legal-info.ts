@@ -39,8 +39,8 @@ export const LEGAL_INFO: LegalInfo = {
   /** E-mail de contato, privacidade e exclusão de dados. */
   email: "suporte@cloudmatheus.com.br",
   /** Data da última revisão dos textos legais (a mesma nas três páginas). */
-  updatedEn: "October 6, 2026",
-  updatedPt: "6 de outubro de 2026",
+  updatedEn: "October 23, 2026",
+  updatedPt: "23 de outubro de 2026",
   /** Prazo de exclusão citado na política. */
   deletionDays: 30,
 };

@@ -13,6 +13,7 @@
  *   só a pessoa liga, nesta tela.
  * - O navegador nunca fala com o gateway: só este código, com a chave do servidor.
  */
+import { lerRespostasPalavra, type RespostaPalavra } from "@/lib/whatsapp/agentes/resposta-palavra";
 import { randomBytes } from "node:crypto";
 import { Prisma, type PrismaClient } from "@/app/generated/prisma/client";
 import { getPrisma } from "@/lib/db/client";
@@ -834,6 +835,8 @@ export type AgentsView = {
   stages: Record<Estagio, ConfigEstagio>;
   /** Mandar o resumo do lead qualificado pro WhatsApp do responsável (desligado por padrão). */
   notifyOwner: { ligado: boolean; telefone: string };
+  /** Respostas fixas por palavra (sem IA): valem mesmo com os agentes desligados. */
+  keywordReplies: RespostaPalavra[];
 };
 
 const DEFAULT_PROFILE: AgentsView["profile"] = {
@@ -870,6 +873,7 @@ export async function getAgents(ctx: RlsContext, sessionId: string | null, deps:
         rules: regrasVazias(),
         stages: lerConfigEstagios(null),
         notifyOwner: { ligado: false, telefone: "" },
+        keywordReplies: [],
       };
     }
     const [profile, configs] = await Promise.all([
@@ -900,6 +904,7 @@ export async function getAgents(ctx: RlsContext, sessionId: string | null, deps:
       rules: lerRegras(profile?.regrasNegocio ?? null),
       stages: lerConfigEstagios(profile?.estagiosLead ?? null),
       notifyOwner: notifyOf(profile?.avisarResponsavel),
+      keywordReplies: lerRespostasPalavra(profile?.respostasPalavra ?? null),
     };
   });
 }
@@ -928,6 +933,8 @@ export async function saveAgents(ctx: RlsContext, input: Record<string, unknown>
   const rules = input.rules && typeof input.rules === "object" ? (lerRegras(input.rules) as unknown as Prisma.InputJsonValue) : undefined;
   const stagesIn = input.stages && typeof input.stages === "object" ? (lerConfigEstagios(input.stages) as unknown as Prisma.InputJsonValue) : undefined;
   const notify = input.notifyOwner && typeof input.notifyOwner === "object" ? (notifyOf(input.notifyOwner) as unknown as Prisma.InputJsonValue) : undefined;
+  // Sem o campo, as respostas por palavra ficam como estão.
+  const keywordReplies = Array.isArray(input.keywordReplies) ? (lerRespostasPalavra(input.keywordReplies) as unknown as Prisma.InputJsonValue) : undefined;
   const profileData = {
     baseCommand,
     quietHours: quietStart && quietEnd ? { start: quietStart, end: quietEnd } : undefined,
@@ -939,6 +946,7 @@ export async function saveAgents(ctx: RlsContext, input: Record<string, unknown>
     ...(rules !== undefined ? { regrasNegocio: rules } : {}),
     ...(stagesIn !== undefined ? { estagiosLead: stagesIn } : {}),
     ...(notify !== undefined ? { avisarResponsavel: notify } : {}),
+    ...(keywordReplies !== undefined ? { respostasPalavra: keywordReplies } : {}),
   };
   const numberMode = input.numberMode === "DRAFT" || input.numberMode === "AUTO" ? input.numberMode : "OFF";
   const agentsIn = Array.isArray(input.agents) ? (input.agents as Array<Record<string, unknown>>) : [];

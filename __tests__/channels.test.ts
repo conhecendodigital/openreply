@@ -283,6 +283,24 @@ describe("token rejected by Meta -> NEEDS_RECONNECT, nothing deleted", () => {
     expect(data).toMatchObject({ profilePictureUrl: "https://cdn/p.jpg", lastError: null });
     expect(data).not.toHaveProperty("status");
   });
+
+  it("'Test connection' on a Facebook Page counts feed + messages as subscribed (23/10/2026)", async () => {
+    h.prisma.instagramAccount.findFirst.mockResolvedValue({ ...ACCOUNT, instagramId: "page_1" });
+    h.mockUserInfo.mockResolvedValue({ id: "page_1", user_id: "page_1", username: "Geek Digital" });
+    h.mockFields.mockResolvedValue(["feed", "messages", "messaging_postbacks"]);
+    h.prisma.instagramAccount.update.mockResolvedValue({
+      status: "ACTIVE",
+      webhookSubscribed: true,
+      webhookFields: ["feed", "messages", "messaging_postbacks"],
+      profilePictureUrl: null,
+      username: "Geek Digital",
+    });
+    await testRoute.POST(post("/api/channels/instagram/acc_A/test", {}), {
+      params: Promise.resolve({ id: "acc_A" }),
+    });
+    const data = h.prisma.instagramAccount.update.mock.calls[0][0].data;
+    expect(data).toMatchObject({ webhookSubscribed: true });
+  });
 });
 
 describe("nothing goes out through a channel that is off", () => {
@@ -375,7 +393,6 @@ describe("Channels page data", () => {
     expect(json.data.comingSoon.map((c: { platform: string }) => c.platform)).toEqual([
       "telegram",
       "whatsapp",
-      "messenger",
       "threads",
     ]);
   });

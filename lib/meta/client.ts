@@ -1,6 +1,7 @@
 import { getMetaGraphApiVersion, requireEnv } from "@/lib/env";
 import type { RawMessageMediaFields } from "@/lib/meta/message-media";
 import { WEBHOOK_SUBSCRIBED_FIELDS } from "@/lib/meta/webhook-fields";
+import { isFacebookPageToken } from "@/lib/meta/platform";
 
 function instagramGraphBase() {
   return `https://graph.instagram.com/${getMetaGraphApiVersion()}`;
@@ -9,6 +10,23 @@ function instagramGraphBase() {
 function facebookGraphBase() {
   return `https://graph.facebook.com/${getMetaGraphApiVersion()}`;
 }
+
+// 23/10/2026: Page token (EAA...) -> graph.facebook.com (lib/meta/platform.ts).
+export { isFacebookPageToken };
+
+function graphBaseFor(accessToken: string) {
+  return isFacebookPageToken(accessToken) ? facebookGraphBase() : instagramGraphBase();
+}
+
+/** Webhook fields a Facebook Page subscribes to (POST /<PAGE_ID>/subscribed_apps). */
+export const FACEBOOK_PAGE_WEBHOOK_FIELDS = [
+  "feed",
+  "messages",
+  "messaging_postbacks",
+  "messaging_referrals",
+  "message_reads",
+  "message_echoes",
+];
 
 export class MetaApiError extends Error {
   constructor(
@@ -78,6 +96,35 @@ export interface InstagramComment {
   // the account owner has already replied to this comment.
   replies?: {
     data?: { id: string; from?: { id: string; username?: string } }[];
+  };
+}
+
+/** A comment as the Pages API returns it (message/created_time, from.name). */
+interface FacebookComment {
+  id: string;
+  message?: string;
+  created_time?: string;
+  from?: { id: string; name?: string };
+  comments?: { data?: { id: string; from?: { id: string; name?: string } }[] };
+}
+
+/** Same shape as an Instagram comment, so callers stay unchanged. */
+function toInstagramComment(c: FacebookComment): InstagramComment {
+  return {
+    id: c.id,
+    text: c.message ?? "",
+    timestamp: c.created_time ?? "",
+    ...(c.from ? { from: { id: c.from.id, username: c.from.name } } : {}),
+    ...(c.comments
+      ? {
+          replies: {
+            data: (c.comments.data ?? []).map((r) => ({
+              id: r.id,
+              ...(r.from ? { from: { id: r.from.id, username: r.from.name } } : {}),
+            })),
+          },
+        }
+      : {}),
   };
 }
 
@@ -182,7 +229,7 @@ async function postMessage(
 ): Promise<{ recipient_id: string; message_id: string }> {
   const send = async (withMetadata: boolean) => {
     const response = await fetch(
-      `${instagramGraphBase()}/${instagramAccountId}/messages`,
+      `${graphBaseFor(accessToken)}/${instagramAccountId}/messages`,
       {
         method: "POST",
         headers: {
@@ -297,6 +344,8 @@ export async function getUserFollowStatus(
   accessToken: string,
   recipientId: string
 ): Promise<boolean | null> {
+  // A Page has no "follows" check in Messenger: unverifiable.
+  if (isFacebookPageToken(accessToken)) return null;
   const url = new URL(`${instagramGraphBase()}/${recipientId}`);
   url.searchParams.set("fields", "is_user_follow_business");
 
@@ -332,6 +381,17 @@ export async function getUserProfile(
   accessToken: string,
   igsid: string
 ): Promise<InstagramUserProfile> {
+  const clean = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  if (isFacebookPageToken(accessToken)) {
+    // Messenger User Profile API (PSID): no username, first/last name instead.
+    const fbUrl = new URL(`${facebookGraphBase()}/${encodeURIComponent(igsid)}`);
+    fbUrl.searchParams.set("fields", "first_name,last_name,profile_pic");
+    const fb = await handleResponse<{ first_name?: string; last_name?: string; profile_pic?: string }>(
+      await fetch(fbUrl.toString(), { headers: { Authorization: `Bearer ${accessToken}` } })
+    );
+    const name = [clean(fb?.first_name), clean(fb?.last_name)].filter(Boolean).join(" ");
+    return { username: null, name: name || null, profilePic: clean(fb?.profile_pic) };
+  }
   const url = new URL(`${instagramGraphBase()}/${encodeURIComponent(igsid)}`);
   url.searchParams.set("fields", "username,name,profile_pic");
   const response = await fetch(url.toString(), {
@@ -339,7 +399,6 @@ export async function getUserProfile(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const data = await handleResponse<{ username?: string; name?: string; profile_pic?: string }>(response);
-  const clean = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
   return {
     username: clean(data?.username),
     name: clean(data?.name),
@@ -365,6 +424,8 @@ export async function getStories(
   accessToken: string,
   instagramAccountId: string
 ): Promise<InstagramStory[]> {
+  // Page stories are not exposed to the Messenger/Pages API.
+  if (isFacebookPageToken(accessToken)) return [];
   const url = new URL(`${instagramGraphBase()}/${encodeURIComponent(instagramAccountId)}/stories`);
   url.searchParams.set("fields", "id,media_type,media_url,thumbnail_url,permalink,timestamp");
   const response = await fetch(url.toString(), {
@@ -511,8 +572,10 @@ export async function sendCommentReply(
   commentId: string,
   message: string
 ): Promise<{ id: string }> {
+  // Facebook: a reply to a comment is POST /<comment-id>/comments.
+  const edge = isFacebookPageToken(accessToken) ? "comments" : "replies";
   const response = await fetch(
-    `${instagramGraphBase()}/${commentId}/replies`,
+    `${graphBaseFor(accessToken)}/${commentId}/${edge}`,
     {
       method: "POST",
       headers: {
@@ -538,8 +601,9 @@ export async function hideComment(
   commentId: string,
   hidden: boolean
 ): Promise<{ success: boolean }> {
-  const url = new URL(`${instagramGraphBase()}/${encodeURIComponent(commentId)}`);
-  url.searchParams.set("hide", String(hidden));
+  const url = new URL(`${graphBaseFor(accessToken)}/${encodeURIComponent(commentId)}`);
+  // Facebook Page comments use is_hidden; Instagram uses hide.
+  url.searchParams.set(isFacebookPageToken(accessToken) ? "is_hidden" : "hide", String(hidden));
   const response = await fetch(url.toString(), {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -554,6 +618,23 @@ export async function getComment(
   commentId: string,
   fields = "id,hidden,text,username,timestamp"
 ): Promise<{ id: string; hidden?: boolean; text?: string; username?: string; timestamp?: string }> {
+  if (isFacebookPageToken(accessToken)) {
+    const fbUrl = new URL(`${facebookGraphBase()}/${encodeURIComponent(commentId)}`);
+    fbUrl.searchParams.set("fields", "id,is_hidden,message,from,created_time");
+    const c = await handleResponse<FacebookComment & { is_hidden?: boolean }>(
+      await fetch(fbUrl.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(15_000),
+      })
+    );
+    return {
+      id: c.id,
+      hidden: c.is_hidden,
+      text: c.message,
+      username: c.from?.name,
+      timestamp: c.created_time,
+    };
+  }
   const url = new URL(`${instagramGraphBase()}/${encodeURIComponent(commentId)}`);
   url.searchParams.set("fields", fields);
   const response = await fetch(url.toString(), {
@@ -567,6 +648,13 @@ export async function getMediaComments(
   accessToken: string,
   mediaId: string
 ): Promise<InstagramComment[]> {
+  if (isFacebookPageToken(accessToken)) {
+    const fbUrl = new URL(`${facebookGraphBase()}/${mediaId}/comments`);
+    fbUrl.searchParams.set("fields", "id,message,from,created_time");
+    fbUrl.searchParams.set("access_token", accessToken);
+    const fb = await handleResponse<{ data: FacebookComment[] }>(await fetch(fbUrl.toString()));
+    return (fb.data ?? []).map(toInstagramComment);
+  }
   const url = new URL(`${instagramGraphBase()}/${mediaId}/comments`);
   url.searchParams.set("fields", "id,text,from,timestamp");
   url.searchParams.set("access_token", accessToken);
@@ -595,8 +683,12 @@ export async function getRecentMediaComments(
 ): Promise<InstagramComment[]> {
   const results: InstagramComment[] = [];
 
-  const first = new URL(`${instagramGraphBase()}/${mediaId}/comments`);
-  first.searchParams.set("fields", "id,text,timestamp,from,replies{from}");
+  const facebook = isFacebookPageToken(accessToken);
+  const first = new URL(`${graphBaseFor(accessToken)}/${mediaId}/comments`);
+  first.searchParams.set(
+    "fields",
+    facebook ? "id,message,created_time,from,comments{from}" : "id,text,timestamp,from,replies{from}"
+  );
   first.searchParams.set("order", "reverse_chronological");
   first.searchParams.set("limit", "50");
   first.searchParams.set("access_token", accessToken);
@@ -606,10 +698,12 @@ export async function getRecentMediaComments(
   while (nextUrl !== null && results.length < max) {
     const response: Response = await fetch(nextUrl);
     const page = await handleResponse<{
-      data: InstagramComment[];
+      data: (InstagramComment | FacebookComment)[];
       paging?: { next?: string };
     }>(response);
-    const data = page.data ?? [];
+    const data = (page.data ?? []).map((c) =>
+      facebook ? toInstagramComment(c as FacebookComment) : (c as InstagramComment)
+    );
     results.push(...data);
 
     // Newest-first, so once the last item on a page predates the window there
@@ -675,8 +769,8 @@ export async function getConversations(
 ): Promise<InstagramConversation[]> {
   const data = await fetchWithMediaFallback<{ data: InstagramConversation[] }>(
     (withMedia) => {
-      const url = new URL(`${instagramGraphBase()}/${igUserId}/conversations`);
-      url.searchParams.set("platform", "instagram");
+      const url = new URL(`${graphBaseFor(accessToken)}/${igUserId}/conversations`);
+      url.searchParams.set("platform", isFacebookPageToken(accessToken) ? "messenger" : "instagram");
       url.searchParams.set(
         "fields",
         `participants,updated_time,messages.limit(1){message,from,created_time${withMedia ? `,${MESSAGE_MEDIA_FIELDS}` : ""}}`
@@ -699,7 +793,7 @@ export async function getConversationMessages(
 ): Promise<InstagramMessage[]> {
   const data = await fetchWithMediaFallback<{ messages?: { data: InstagramMessage[] } }>(
     (withMedia) => {
-      const url = new URL(`${instagramGraphBase()}/${conversationId}`);
+      const url = new URL(`${graphBaseFor(accessToken)}/${conversationId}`);
       url.searchParams.set(
         "fields",
         `messages{id,created_time,from,to,message${withMedia ? `,${MESSAGE_MEDIA_FIELDS}` : ""}}`
@@ -712,6 +806,28 @@ export async function getConversationMessages(
 }
 
 export async function getUserInfo(accessToken: string): Promise<InstagramUser> {
+  if (isFacebookPageToken(accessToken)) {
+    // With a Page token, /me is the Page.
+    const fbUrl = new URL(`${facebookGraphBase()}/me`);
+    fbUrl.searchParams.set("fields", "id,name,username,picture{url},followers_count,fan_count");
+    fbUrl.searchParams.set("access_token", accessToken);
+    const page = await handleResponse<{
+      id: string;
+      name?: string;
+      username?: string;
+      picture?: { data?: { url?: string } };
+      followers_count?: number;
+      fan_count?: number;
+    }>(await fetch(fbUrl.toString()));
+    return {
+      id: page.id,
+      user_id: page.id,
+      username: page.username || page.name || page.id,
+      name: page.name,
+      profile_picture_url: page.picture?.data?.url,
+      followers_count: page.followers_count ?? page.fan_count,
+    };
+  }
   const url = new URL(`${instagramGraphBase()}/me`);
   url.searchParams.set(
     "fields",
@@ -726,6 +842,36 @@ export async function getUserInfo(accessToken: string): Promise<InstagramUser> {
 const MEDIA_FIELDS =
   "id,caption,media_type,media_product_type,media_url,thumbnail_url,timestamp,permalink,like_count,comments_count";
 
+// Page posts (GET /<PAGE_ID>/posts), mapped to the Instagram media shape so
+// the campaign post picker and reports keep working.
+const FACEBOOK_POST_FIELDS =
+  "id,message,created_time,permalink_url,full_picture,comments.summary(true).limit(0),reactions.summary(true).limit(0)";
+
+interface FacebookPost {
+  id: string;
+  message?: string;
+  created_time: string;
+  permalink_url?: string;
+  full_picture?: string;
+  comments?: { summary?: { total_count?: number } };
+  reactions?: { summary?: { total_count?: number } };
+}
+
+function fromFacebookPost(p: FacebookPost): InstagramMedia {
+  return {
+    id: p.id,
+    caption: p.message,
+    media_type: p.full_picture ? "IMAGE" : "TEXT",
+    media_product_type: "FACEBOOK_POST",
+    media_url: p.full_picture,
+    thumbnail_url: p.full_picture,
+    timestamp: p.created_time,
+    permalink: p.permalink_url,
+    like_count: p.reactions?.summary?.total_count,
+    comments_count: p.comments?.summary?.total_count,
+  };
+}
+
 // Instagram caps a single media page at 100 items.
 const MEDIA_PAGE_SIZE = 100;
 
@@ -733,6 +879,7 @@ export async function getUserMedia(
   accessToken: string,
   limit = 25
 ): Promise<InstagramMedia[]> {
+  if (isFacebookPageToken(accessToken)) return getAllUserMedia(accessToken, limit);
   const url = new URL(`${instagramGraphBase()}/me/media`);
   url.searchParams.set("fields", MEDIA_FIELDS);
   url.searchParams.set("limit", limit.toString());
@@ -754,10 +901,11 @@ export async function getAllUserMedia(
   max = 500
 ): Promise<InstagramMedia[]> {
   const results: InstagramMedia[] = [];
+  const facebook = isFacebookPageToken(accessToken);
 
-  const first = new URL(`${instagramGraphBase()}/me/media`);
-  first.searchParams.set("fields", MEDIA_FIELDS);
-  first.searchParams.set("limit", String(Math.min(MEDIA_PAGE_SIZE, max)));
+  const first = new URL(`${graphBaseFor(accessToken)}/me/${facebook ? "posts" : "media"}`);
+  first.searchParams.set("fields", facebook ? FACEBOOK_POST_FIELDS : MEDIA_FIELDS);
+  first.searchParams.set("limit", String(Math.min(facebook ? 100 : MEDIA_PAGE_SIZE, max)));
   first.searchParams.set("access_token", accessToken);
 
   let nextUrl: string | null = first.toString();
@@ -765,10 +913,12 @@ export async function getAllUserMedia(
   while (nextUrl !== null && results.length < max) {
     const response: Response = await fetch(nextUrl);
     const page = await handleResponse<{
-      data: InstagramMedia[];
+      data: (InstagramMedia | FacebookPost)[];
       paging?: { next?: string };
     }>(response);
-    results.push(...page.data);
+    results.push(
+      ...(page.data ?? []).map((m) => (facebook ? fromFacebookPost(m as FacebookPost) : (m as InstagramMedia)))
+    );
     nextUrl = page.paging?.next ?? null;
   }
 
@@ -788,6 +938,8 @@ export async function getMediaInsights(
   mediaId: string,
   metrics: string[]
 ): Promise<InstagramMediaInsights> {
+  // Page post insights use other metric names: not mapped yet.
+  if (isFacebookPageToken(accessToken)) return {};
   const url = new URL(`${instagramGraphBase()}/${mediaId}/insights`);
   url.searchParams.set("metric", metrics.join(","));
   url.searchParams.set("access_token", accessToken);
@@ -834,6 +986,7 @@ export async function getFollowerCountSeries(
   instagramAccountId: string,
   days: number = FOLLOWER_INSIGHT_MAX_DAYS
 ): Promise<FollowerCountPoint[] | null> {
+  if (isFacebookPageToken(accessToken)) return null;
   const span = Math.min(Math.max(days, 1), FOLLOWER_INSIGHT_MAX_DAYS);
   const until = Math.floor(Date.now() / 1000);
   const since = until - (span - 1) * 86_400;
@@ -915,7 +1068,7 @@ export async function subscribeInstagramAccountToWebhooks(
   accessToken: string
 ): Promise<{ success: boolean }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/subscribed_apps`,
+    `${graphBaseFor(accessToken)}/${instagramAccountId}/subscribed_apps`,
     {
       method: "POST",
       headers: {
@@ -923,7 +1076,9 @@ export async function subscribeInstagramAccountToWebhooks(
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        subscribed_fields: WEBHOOK_SUBSCRIBED_FIELDS,
+        subscribed_fields: isFacebookPageToken(accessToken)
+          ? FACEBOOK_PAGE_WEBHOOK_FIELDS
+          : WEBHOOK_SUBSCRIBED_FIELDS,
       }),
     }
   );
@@ -940,7 +1095,7 @@ export async function unsubscribeInstagramAccountFromWebhooks(
   accessToken: string
 ): Promise<{ success: boolean }> {
   const response = await fetch(
-    `${instagramGraphBase()}/${instagramAccountId}/subscribed_apps`,
+    `${graphBaseFor(accessToken)}/${instagramAccountId}/subscribed_apps`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -957,7 +1112,7 @@ export async function getSubscribedWebhookFields(
   instagramAccountId: string,
   accessToken: string
 ): Promise<string[]> {
-  const url = new URL(`${instagramGraphBase()}/${instagramAccountId}/subscribed_apps`);
+  const url = new URL(`${graphBaseFor(accessToken)}/${instagramAccountId}/subscribed_apps`);
   const response = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
   });

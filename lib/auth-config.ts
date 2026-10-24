@@ -164,6 +164,10 @@ export function createAuth(deps: AuthDeps) {
             clientId: google.clientId,
             clientSecret: google.clientSecret,
             prompt: "select_account",
+            // O login só precisa de e-mail e perfil. Sem isto o Google soma ao pedido tudo que a
+            // conta já liberou ao app (YouTube, Drive) e recusa com "invalid_request: scopes that
+            // cannot be requested together".
+            includeGrantedScopes: false,
             ...(google.verifyIdToken ? { verifyIdToken: google.verifyIdToken } : {}),
             ...(google.getUserInfo ? { getUserInfo: google.getUserInfo } : {}),
           },

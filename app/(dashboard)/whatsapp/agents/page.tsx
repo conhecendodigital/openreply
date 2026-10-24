@@ -25,6 +25,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useT } from "@/components/lang-provider";
+import { KeywordRepliesPanel } from "@/components/whatsapp/respostas-palavra";
+import type { RespostaPalavra } from "@/lib/whatsapp/agentes/resposta-palavra";
 import { FromDocBadge, ReviewPanel, TRAIN_ACCEPT, TrainPanel, type ReviewLink } from "@/components/whatsapp/treinar";
 import { CollapsibleSection, SectionsProvider } from "@/components/ui/collapsible-section";
 import { checkFieldsInTabs, TabPanel, Tabs, type TabItem } from "@/components/ui/tabs";
@@ -54,6 +56,7 @@ type AgentsView = {
   rules: RegrasNegocio;
   stages: Record<Estagio, ConfigEstagio>;
   notifyOwner: { ligado: boolean; telefone: string };
+  keywordReplies: RespostaPalavra[];
 };
 type Doc = {
   id: string;
@@ -178,7 +181,7 @@ export default function WhatsAppAgentsPage() {
     setSaved(null);
     setDirty(true);
   }
-  function patchView(p: Partial<Pick<AgentsView, "rules" | "stages" | "notifyOwner">>) {
+  function patchView(p: Partial<Pick<AgentsView, "rules" | "stages" | "notifyOwner" | "keywordReplies">>) {
     setView((cur) => (cur ? { ...cur, ...p } : cur));
     setSaved(null);
     setDirty(true);
@@ -208,6 +211,7 @@ export default function WhatsAppAgentsPage() {
         rules: rulesText ? textToRules(rulesText, view.rules) : view.rules,
         stages: view.stages,
         notifyOwner: view.notifyOwner,
+        keywordReplies: (view.keywordReplies ?? []).map((r) => ({ ...r, palavras: r.palavras.map((p) => p.trim()).filter(Boolean) })),
       }),
     });
     setSaving(false);
@@ -281,6 +285,11 @@ export default function WhatsAppAgentsPage() {
               : { text: String(onCount), tone: onCount > 0 ? "success" : "default", label: onCount === 1 ? t("1 agent on") : t("{n} agents on", { n: onCount }) },
         },
         { id: "leads", label: t("Leads"), aliases: ["estagios"] },
+        {
+          id: "palavras",
+          label: t("Keyword replies"),
+          badge: (view.keywordReplies ?? []).filter((r) => r.ativo).length ? { text: String((view.keywordReplies ?? []).filter((r) => r.ativo).length), tone: "success" } : null,
+        },
         { id: "ritmo", label: t("Rhythm"), badge: rhythmFromDoc ? fromDocBadge : null },
         { id: "testar", label: t("Test") },
         { id: "aprendizado", label: t("Learning"), aliases: ["aprendeu"] },
@@ -443,6 +452,10 @@ export default function WhatsAppAgentsPage() {
 
           <TabPanel id="leads">
           <StagesPanel stages={view.stages} onStages={(stages) => patchView({ stages })} notify={view.notifyOwner} onNotify={(notifyOwner) => patchView({ notifyOwner })} />
+          </TabPanel>
+
+          <TabPanel id="palavras">
+          <KeywordRepliesPanel value={view.keywordReplies ?? []} onChange={(keywordReplies) => patchView({ keywordReplies })} />
           </TabPanel>
 
           <TabPanel id="ritmo">

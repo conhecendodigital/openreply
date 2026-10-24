@@ -96,7 +96,7 @@ function template(a: Attachment): ParsedTemplate | null {
 
 export function parseDirectMessages(payload: unknown): ParsedDirectMessage[] {
   const p = payload as Payload;
-  if (!p || p.object !== "instagram") return [];
+  if (!p || (p.object !== "instagram" && p.object !== "page")) return [];
   const out: ParsedDirectMessage[] = [];
 
   for (const entry of p.entry ?? []) {

@@ -30,6 +30,9 @@ import * as conversationLinksRoute from "@/app/api/conversation-links/route";
 import * as conversationLinkRoute from "@/app/api/conversation-links/[id]/route";
 // Etapa 3 (fluxos): the flow tools existed but these routes were missing here,
 // so listar_fluxos & co. answered 404 "No route".
+import * as socialAccountsRoute from "@/app/api/social-accounts/route";
+import * as socialPostsRoute from "@/app/api/posts/route";
+import * as socialPostRoute from "@/app/api/posts/[id]/route";
 import * as flowsRoute from "@/app/api/flows/route";
 import * as flowRoute from "@/app/api/flows/[id]/route";
 import * as flowReportRoute from "@/app/api/flows/[id]/report/route";
@@ -109,6 +112,10 @@ export function resolveHandler(
     [/^\/api\/inbox\/unanswered$/, unansweredRoute],
     [/^\/api\/conversation-links$/, conversationLinksRoute],
     [/^\/api\/conversation-links\/([^/]+)$/, conversationLinkRoute],
+    // Agendamento de posts (TikTok, YouTube, Instagram, Facebook): leitura e rascunho. Schedule/publish/cancel não entram aqui.
+    [/^\/api\/social-accounts$/, socialAccountsRoute],
+    [/^\/api\/posts$/, socialPostsRoute],
+    [/^\/api\/posts\/([^/]+)$/, socialPostRoute],
     // Etapa 3: flows. Static paths before the [id] patterns.
     [/^\/api\/flows$/, flowsRoute],
     [/^\/api\/flows\/from-campaign\/([^/]+)$/, flowFromCampaignRoute, "automationId"],

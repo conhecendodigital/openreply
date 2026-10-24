@@ -38,9 +38,9 @@ export const ptPublic: Record<string, string> = {
     "Caixa do Direct com fotos, vídeos e áudios, e um CRM de contatos.",
   "Open source code under the MIT license, running on your own server.":
     "Código aberto com licença MIT, rodando no seu próprio servidor.",
-  "Instagram only": "Só Instagram",
-  "Lead Engine does not try to cover every channel. Everything in it is built around comments, the Direct and the contacts of your Instagram professional account.":
-    "O Lead Engine não tenta cobrir todos os canais. Tudo nele gira em torno dos comentários, do Direct e dos contatos da sua conta profissional do Instagram.",
+  "Built around Instagram": "Feito em torno do Instagram",
+  "Lead Engine started on Instagram and is still built around comments, the Direct and the contacts of your professional account. It also connects Facebook Pages and WhatsApp, and publishes videos to TikTok.":
+    "O Lead Engine nasceu no Instagram e continua girando em torno dos comentários, do Direct e dos contatos da sua conta profissional. Também conecta Páginas do Facebook e WhatsApp, e publica vídeos no TikTok.",
   "Proof for the client": "Prova pro cliente",
   "Each campaign can have a public read only report link with sends, skips, failures, clicks and keywords, so you can show what happened after the comment.":
     "Cada campanha pode ter um link público de relatório, só de leitura, com envios, pulos, falhas, cliques e palavras-chave, pra você mostrar o que aconteceu depois do comentário.",
@@ -50,7 +50,7 @@ export const ptPublic: Record<string, string> = {
   "Lead Engine and ManyChat side by side": "Lead Engine e ManyChat lado a lado",
   ManyChat: "ManyChat",
   Channels: "Canais",
-  "Instagram only, through the official Meta API.": "Só Instagram, pela API oficial da Meta.",
+  "Instagram and Facebook Pages through the official Meta API, WhatsApp, and video publishing on TikTok.": "Instagram e Páginas do Facebook pela API oficial da Meta, WhatsApp e publicação de vídeos no TikTok.",
   "Several channels, such as Instagram, Messenger and WhatsApp.":
     "Vários canais, como Instagram, Messenger e WhatsApp.",
   "Where it runs": "Onde roda",
@@ -502,7 +502,7 @@ export const ptPublic: Record<string, string> = {
   "Our own server, a VPS rented from Hostinger and managed with Dokploy, where the PostgreSQL database, the Redis queue and the media storage also run.":
     "Nosso próprio servidor, uma VPS contratada na Hostinger e administrada com Dokploy, onde também ficam o banco de dados PostgreSQL, a fila Redis e o armazenamento de mídias.",
   "Resend, to send sign-in emails.": "Resend, para mandar os e-mails de login.",
-  "Google, for Sign in with Google.": "Google, para o login com Google.",
+  "Google, for Sign in with Google and, through the YouTube API Services, only to publish what the owner confirmed.": "Google, para o login com Google e, pelas YouTube API Services, só para publicar o que o dono confirmou.",
   "Meta, through the Instagram API and, if the owner turns it on, the Conversions API.":
     "Meta, pela API do Instagram e, se o dono ligar, pela API de Conversões.",
   "Hotmart, to confirm purchases.": "Hotmart, para confirmar compras.",
@@ -535,8 +535,8 @@ export const ptPublic: Record<string, string> = {
   "Software that sends private replies to people who comment keywords on your Instagram professional account's posts, with an Inbox, contacts and reports, through Meta's official APIs.":
     "Software para responder por mensagem privada quem comenta palavras-chave nos posts da sua conta profissional do Instagram, com Inbox, contatos e relatórios, pelas APIs oficiais da Meta.",
   "Authorized use": "Quem pode usar",
-  "Only with Instagram professional accounts you own or are authorized to manage. You are responsible for the campaigns, keywords, links and messages you configure.":
-    "Só quem é dono ou tem autorização para gerenciar a conta do Instagram que conecta. Você responde pelas campanhas, palavras-chave, links e mensagens que configura.",
+  "Only with Instagram professional accounts, Facebook Pages, TikTok accounts and YouTube channels you own or are authorized to manage. You are responsible for the campaigns, keywords, links, messages, videos and captions you configure.":
+    "Só com contas profissionais do Instagram, Páginas do Facebook, contas do TikTok e canais do YouTube que são seus ou que você tem autorização para gerenciar. Você responde pelas campanhas, palavras-chave, links, mensagens, vídeos e legendas que configura.",
   "Platform rules": "Regras da plataforma",
   "You agree to follow the Meta Platform Terms, Instagram's policies, the Brazilian data protection law (LGPD) and anti-spam laws. We may limit, pause or turn off campaigns that create a risk of abuse, spam, security problems or a block by Meta.":
     "Você aceita seguir os Termos da Plataforma da Meta, as regras do Instagram, a LGPD e as leis contra spam. Podemos limitar, pausar ou desligar campanhas que gerem risco de abuso, spam, segurança ou bloqueio pela Meta.",
