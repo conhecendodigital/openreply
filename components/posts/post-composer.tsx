@@ -44,6 +44,7 @@ import {
   youTubeFormFromSettings,
   youTubeSettingsPayload,
   type FacebookForm,
+  type SocialPlatform,
   type InstagramForm,
   type YouTubeForm,
 } from "@/lib/social-composer";
@@ -297,6 +298,8 @@ export function PostComposer({
   const fullCaption = joinCaptionHashtags(caption, hashtags);
   const hasShort = chosen.some((c) => c.platform === "YOUTUBE" && c.format === "short");
   const captionNetworks = Array.from(new Set(captionChannels.map((c) => c.platform)));
+  // Opções por rede, na ordem dos canais marcados (YouTube e Shorts dividem o mesmo grupo). Facebook só tem o título.
+  const optionNetworks = Array.from(new Set(chosen.map((c) => c.platform))).filter((n) => n !== "FACEBOOK");
   const lockedAccount = Boolean(post?.status === "SCHEDULED" || postId);
   const hasTikTok = networksChosen.has("TIKTOK");
   const lacksYouTubeUpload = chosen.some((c) => {
@@ -403,21 +406,23 @@ export function PostComposer({
           {isYouTube && (
             <div className="space-y-4">
               {showCaption && (
-                <p className="flex items-center gap-2 text-xs font-semibold text-muted">
-                  <BrandIcon brand="YOUTUBE" size={18} />
-                  YouTube
-                </p>
+                <NetworkHeading network="YOUTUBE" />
               )}
               <YouTubeTop form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} hasShort={hasShort} />
             </div>
           )}
 
-          {hasTikTok && <TikTokFields settings={tiktok} info={infoData} patch={patchTikTok} />}
-          {isYouTube && <YouTubeFields form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} />}
-          {networksChosen.has("INSTAGRAM") && <InstagramFields form={instagram} onChange={(n) => setInstagram((f) => ({ ...f, ...n }))} />}
+          {optionNetworks.map((n, i) => (
+            <div key={n} className={`space-y-4 ${i > 0 || optionNetworks.length > 1 ? "border-t border-border pt-5" : ""}`}>
+              {optionNetworks.length > 1 && <NetworkHeading network={n} />}
+              {n === "TIKTOK" && <TikTokFields settings={tiktok} info={infoData} patch={patchTikTok} />}
+              {n === "YOUTUBE" && <YouTubeFields form={youtube} onChange={(f2) => setYoutube((f) => ({ ...f, ...f2 }))} />}
+              {n === "INSTAGRAM" && <InstagramFields form={instagram} onChange={(f2) => setInstagram((f) => ({ ...f, ...f2 }))} />}
+            </div>
+          ))}
 
-          <fieldset className="space-y-2">
-            <legend className={labelClass}>{t("When")}</legend>
+          <fieldset className="space-y-2 border-t border-border pt-5">
+            <legend className={`${labelClass} float-left mb-2 w-full`}>{t("When")}</legend>
             <div className="flex flex-wrap gap-4 text-sm">
               <label className="flex items-center gap-2">
                 <input type="radio" name="post-when" checked={mode === "now"} onChange={() => setMode("now")} className="h-4 w-4 accent-accent" />
@@ -465,5 +470,15 @@ export function PostComposer({
         </div>
       </div>
     </section>
+  );
+}
+
+/** Cabeçalho de grupo: ícone + nome da rede, para saber de qual rede é cada opção. */
+function NetworkHeading({ network }: { network: SocialPlatform }) {
+  return (
+    <p className="flex items-center gap-2 text-xs font-semibold text-muted">
+      <BrandIcon brand={network} size={18} />
+      {NETWORK_NAME[network]}
+    </p>
   );
 }
