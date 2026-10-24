@@ -6,6 +6,9 @@
 import { ehSaudacao } from "../lib/whatsapp/regras/prompt";
 import { blocoRitmo } from "../lib/whatsapp/agentes/comando";
 import { describe, expect, it, vi } from "vitest";
+import { acharRespostaPalavra, bolhasDaResposta, lerRespostasPalavra } from "@/lib/whatsapp/agentes/resposta-palavra";
+import { triagemLocal as triagemLocalR } from "@/lib/whatsapp/agentes/triagem";
+import { conversaDoDono, ehNumeroDoResponsavel } from "@/lib/whatsapp/agentes/pessoal";
 import { encryptToken } from "@/lib/meta/oauth";
 import { StoreRegras } from "./helpers/wa-regras-store";
 import { AGORA, cliente, contextoComRegras, lojaOnline, modeloFalso, nos, obraBoa, respostaAgente, salao } from "./helpers/regras-fixtures";
@@ -891,6 +894,11 @@ describe("trocas do Testar o agente", () => {
 
 describe("raio de atendimento e recusa que encerra (07/10)", () => {
   const comRaio = (km: number) => lerRegras({ ...obraBoa(), raioKm: km, mensagemForaDaArea: "" });
+  it("material que também é nome de cidade (granito, pedreira, prata) não vira local", () => {
+    for (const msg of ["quero um orçamento pra granito", "preciso de granito na cozinha", "trabalho em pedreira", "troca de telha"]) {
+      expect(detectarLocal(obraBoa(), [cliente(msg)]).cidade, msg).toBeNull();
+    }
+  });
   it("cidade perto conta como atendida; longe é fora; a lista de não atendidas ganha do raio", () => {
     const r = comRaio(30);
     expect(detectarLocal(r, [cliente("quero reformar minha casa em Sumaré/SP")]).status).toBe("atendida");
@@ -976,5 +984,125 @@ describe("arquivo de lugares: cidade, estado e bairro (07/10)", () => {
   });
   it("Campo Grande continua região com cuidado", () => {
     expect(st("casa de médio porte no Campo Grande")).toBe("cuidado");
+  });
+});
+
+/* ============================== 19/10: conversas do Robério ============================== */
+
+describe("19/10 (Robério): agente sem cidade inventada, sem conversa pessoal, fecho uma vez", () => {
+  it("cidade que não existe ('trinco' da foto de fechadura) não vira local da obra", () => {
+    const h = [cliente("[foto] fechadura com trinco lateral na porta")];
+    const sinais = { ...SINAIS_VAZIOS, localObra: { cidade: "Trinco", uf: "MA", bairro: "" } };
+    expect(detectarLocal(obraBoa(), h, sinais).status).toBe("desconhecida");
+    // Município de verdade dito pelo cliente continua valendo.
+    const sumare = detectarLocal(obraBoa(), [cliente("a obra é em sumaré")], { ...SINAIS_VAZIOS, localObra: { cidade: "Sumaré", uf: "SP", bairro: "" } });
+    expect(sumare.status).toBe("fora");
+    expect(sumare.cidade).toContain("Sumaré");
+  });
+
+  it("recado pessoal não é respondido; pedido com palavra de família é", () => {
+    expect(triagemLocalR("Bom dia, filho. Parabéns, que Deus te abençoe. Jesus te ama. Sumiu, hein?")?.acao).toBe("nao_precisa");
+    expect(triagemLocalR("Oi papisssss, feliz aniversário, te amo")?.acao).toBe("nao_precisa");
+    expect(triagemLocalR("quero reformar o quarto do meu filho")).toBeNull();
+    expect(triagemLocalR("bom dia")?.acao).toBe("responder");
+  });
+
+  it("número do responsável: com ou sem 55 e o 9", () => {
+    expect(ehNumeroDoResponsavel("+5519981320365", "(19) 98132-0365")).toBe(true);
+    expect(ehNumeroDoResponsavel("+551981320365", "(19) 98132-0365")).toBe(true);
+    expect(ehNumeroDoResponsavel("+5519998040719", "(19) 98132-0365")).toBe(false);
+    expect(ehNumeroDoResponsavel("+5519998040719", "")).toBe(false);
+  });
+
+  it("conversa em que o dono escreveu à mão é dele, até alguém escolher o modo na tela", () => {
+    const dono: WaMessageLite = { id: "d1", fromMe: true, sentBy: "USER_PHONE", type: "text", body: "Posso ir umas 16:00", sentAt: AGORA };
+    const agente: WaMessageLite = { id: "g1", fromMe: true, sentBy: "AGENT", type: "text", body: "Em qual cidade é a obra?", sentAt: AGORA };
+    expect(conversaDoDono([cliente("Esquecemos de comprar o livro"), dono], "INHERIT")).toBe(true);
+    expect(conversaDoDono([cliente("a obra é em Campinas"), agente, dono], "INHERIT")).toBe(true);
+    expect(conversaDoDono([cliente("a obra é em Campinas"), agente], "INHERIT")).toBe(false);
+    expect(conversaDoDono([cliente("a obra é em Campinas"), dono], "AUTO")).toBe(false);
+  });
+
+  it("motor: conversa em que o dono escreveu não gasta modelo", async () => {
+    const h: WaMessageLite[] = [cliente("oi", 5), { id: "d2", fromMe: true, sentBy: "USER_PHONE", type: "text", body: "Oi! Tudo bem?", sentAt: new Date(AGORA.getTime() - 4 * 60_000) }, cliente("quero reformar meu apartamento em Campinas", 1)];
+    const { store, ctx } = preparar(h);
+    const m = modeloFalso([respostaAgente({ bolhas: ["Show! Qual seu nome?"] })]);
+    const r = await processarMensagem(deps(store, m.chamar), { conversationId: ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
+    expect(r.acao).toBe("ignorado");
+    expect(m.doAgente()).toHaveLength(0);
+  });
+
+  it("motor: o responsável escrevendo pro número não gasta modelo nem recebe resposta", async () => {
+    const h = [cliente("Oi, quero reformar meu apartamento em Campinas")];
+    const { store, ctx } = preparar(h);
+    ctx.contact.phoneE164 = "+5519900003333";
+    const m = modeloFalso([respostaAgente({ bolhas: ["Show! Qual seu nome?"] })]);
+    const r = await processarMensagem(deps(store, m.chamar), { conversationId: ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
+    expect(r.acao).toBe("ignorado");
+    expect(m.doAgente()).toHaveLength(0);
+  });
+
+  it("recusa já fechada uma vez: a próxima não é obrigada a repetir o fecho", () => {
+    const h = [cliente("quero reformar meu apartamento em Sumaré/SP", 5), nos(`Poxa, Sumaré fica fora da nossa área. ${FECHO_RECUSA}`, 4), cliente("mas é pertinho", 1)];
+    const v = verificar(h, saida({ bolhas: ["Entendo, mas por enquanto Sumaré fica fora mesmo."] }));
+    expect(v.violacoes.map((x) => x.regra)).not.toContain("recusa_sem_fecho");
+  });
+});
+
+/* ============================== 20/10: resposta por palavra ============================== */
+
+describe("20/10: resposta automática por palavra (aula do workshop)", () => {
+  const AULA = { id: "r1", palavras: ["Quero a aula do workshop"], texto: "Aqui está a aula: https://exemplo.com/aula\n\nGostou? O Chat Sem Frescura: https://exemplo.com/csf", ativo: true };
+
+  it("acha a frase sem ligar pra maiúscula, acento e pontuação; não acha pedaço de palavra", () => {
+    expect(acharRespostaPalavra([AULA], "quero a AULA do workshop!!")?.id).toBe("r1");
+    expect(acharRespostaPalavra([AULA], "Oi! Quero a aula do workshop, por favor")?.id).toBe("r1");
+    expect(acharRespostaPalavra([AULA], "quero a aula")).toBeNull();
+    expect(acharRespostaPalavra([{ ...AULA, ativo: false }], "Quero a aula do workshop")).toBeNull();
+    expect(acharRespostaPalavra([{ ...AULA, palavras: ["aula"] }], "aulas de violão")).toBeNull();
+  });
+
+  it("linha em branco separa as mensagens (até 3) e lê só o que é válido", () => {
+    expect(bolhasDaResposta(AULA)).toEqual(["Aqui está a aula: https://exemplo.com/aula", "Gostou? O Chat Sem Frescura: https://exemplo.com/csf"]);
+    expect(bolhasDaResposta({ ...AULA, texto: "a\n\nb\n\nc\n\nd" })).toEqual(["a", "b", "c\n\nd"]);
+    expect(lerRespostasPalavra([{ palavras: [" "], texto: "x" }, { palavras: ["oi"], texto: "" }, AULA, "lixo"])).toHaveLength(1);
+  });
+
+  it("motor: número com agentes desligados responde a frase com o texto fixo, sem modelo", async () => {
+    const h = [cliente("Quero a aula do workshop")];
+    const { store, ctx } = preparar(h);
+    ctx.session.agentMode = "OFF";
+    ctx.profile!.respostasPalavra = [AULA];
+    const m = modeloFalso([respostaAgente({ bolhas: ["não devia sair"] })]);
+    const r = await processarMensagem(deps(store, m.chamar), { conversationId: ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
+    expect(r.acao).toBe("ignorado");
+    expect(m.doAgente()).toHaveLength(0);
+    expect(store.envios).toHaveLength(1);
+    expect(store.envios[0].envios.map((e: { texto: string }) => e.texto)).toEqual(bolhasDaResposta(AULA));
+  });
+
+  it("motor: não repete pra mesma pessoa, respeita Assumir e não responde sem a frase", async () => {
+    const jaMandou = [cliente("Quero a aula do workshop", 9), nos("Aqui está a aula: https://exemplo.com/aula", 8), cliente("Quero a aula do workshop", 1)];
+    const a = preparar(jaMandou);
+    a.ctx.session.agentMode = "OFF";
+    a.ctx.profile!.respostasPalavra = [AULA];
+    await processarMensagem(deps(a.store, modeloFalso([]).chamar), { conversationId: a.ctx.conversation.id, triggerMsgId: ultimoId(jaMandou), now: AGORA });
+    expect(a.store.envios).toHaveLength(0);
+
+    const h = [cliente("Quero a aula do workshop")];
+    const b = preparar(h);
+    b.ctx.session.agentMode = "OFF";
+    b.ctx.profile!.respostasPalavra = [AULA];
+    b.ctx.conversation.humanTakeoverUntil = new Date(AGORA.getTime() + 3600_000);
+    await processarMensagem(deps(b.store, modeloFalso([]).chamar), { conversationId: b.ctx.conversation.id, triggerMsgId: ultimoId(h), now: AGORA });
+    expect(b.store.envios).toHaveLength(0);
+
+    const outra = [cliente("Oi, tudo bem?")];
+    const c = preparar(outra);
+    c.ctx.session.agentMode = "OFF";
+    c.ctx.profile!.respostasPalavra = [AULA];
+    const r = await processarMensagem(deps(c.store, modeloFalso([]).chamar), { conversationId: c.ctx.conversation.id, triggerMsgId: ultimoId(outra), now: AGORA });
+    expect(r.acao).toBe("ignorado");
+    expect(c.store.envios).toHaveLength(0);
   });
 });

@@ -43,10 +43,75 @@ const MESSAGES: Record<string, { tone: Tone; title: string; detail: string }> = 
   },
 };
 
+const FACEBOOK_MESSAGES: Record<string, { tone: Tone; title: string; detail: string }> = {
+  denied: {
+    tone: "warning",
+    title: "Facebook connection cancelled",
+    detail: "You declined the permission prompt on Facebook. Start again and accept all requested permissions.",
+  },
+  invalid: {
+    tone: "error",
+    title: "Facebook connection expired",
+    detail: "The login link was missing or older than 10 minutes. Click Connect Facebook Page to try again.",
+  },
+  forbidden: {
+    tone: "error",
+    title: "Not permitted",
+    detail: "Only workspace owners and admins can connect a Facebook Page.",
+  },
+  no_pages: {
+    tone: "warning",
+    title: "No Page selected",
+    detail: "Facebook returned no Page. Connect again and tick the Page in the Facebook window.",
+  },
+  already_connected: {
+    tone: "warning",
+    title: "Page already connected",
+    detail: "That Page belongs to another workspace (even if it is disconnected there).",
+  },
+};
+
 export function InstagramConnectNotice() {
   const t = useT();
   const searchParams = useSearchParams();
   const status = searchParams.get("instagram");
+  const facebook = searchParams.get("facebook");
+
+  // 23/10/2026: Facebook Page connect (app/api/facebook/callback).
+  if (facebook) {
+    const known = FACEBOOK_MESSAGES[facebook];
+    if (facebook === "connected") {
+      return (
+        <Notice tone="success" title={t("Facebook Page connected")}>
+          <p>{t("{n} Page(s) on. Campaigns can now answer comments and Messenger messages on them.", { n: searchParams.get("pages") ?? "1" })}</p>
+        </Notice>
+      );
+    }
+    if (facebook === "misconfigured") {
+      return (
+        <Notice tone="error" title={t("Facebook app not configured")}>
+          <p>{t("Set these environment variables and restart the server:")}</p>
+          <p className="mt-2 font-mono text-xs">{(searchParams.get("missing") ?? "").split(",").filter(Boolean).join(", ")}</p>
+        </Notice>
+      );
+    }
+    if (facebook === "failed") {
+      return (
+        <Notice tone="error" title={t("Facebook Page connection failed")}>
+          <p>{t("Facebook accepted the login but the Page could not be connected. Usually a missing permission or a redirect URI not added in the Meta app.")}</p>
+          {searchParams.get("reason") && (
+            <p className="mt-2 font-mono text-xs break-words opacity-80">{searchParams.get("reason")}</p>
+          )}
+        </Notice>
+      );
+    }
+    if (!known) return null;
+    return (
+      <Notice tone={known.tone} title={t(known.title)}>
+        <p>{t(known.detail)}</p>
+      </Notice>
+    );
+  }
 
   if (!status && searchParams.get("connected") === "true") {
     return (

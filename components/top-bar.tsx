@@ -38,6 +38,7 @@ const pageTitles: Record<string, string> = {
   "/broadcasts": "Broadcasts",
   "/broadcasts/new": "New broadcast",
   "/segments": "Segments",
+  "/posts": "Posts",
   // Etapa 6
   "/quizzes": "Quizzes",
   "/quizzes/new": "New quiz",

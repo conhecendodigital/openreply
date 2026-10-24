@@ -13,6 +13,7 @@
  */
 
 /** Igual ao enum AgentMode do plano. */
+import type { RespostaPalavra } from "./resposta-palavra";
 import type { ExemploAprendido } from "@/lib/whatsapp/regras/exemplos";
 import type { RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
 import type { FichaLead } from "@/lib/whatsapp/regras/ficha";
@@ -65,6 +66,8 @@ export interface ConversaContexto {
     /** Nome salvo e pushName, usados só pra tirar o nome da pessoa dos exemplos de tom. */
     name: string | null;
     pushName: string | null;
+    /** Número do contato (19/10: o número do responsável não é atendido pelo agente). */
+    phoneE164?: string | null;
   };
   /** WaAgentProfile do número. */
   profile: AgentProfile | null;
@@ -92,6 +95,8 @@ export interface AgentProfile {
   regras?: RegrasNegocio | null;
   /** Mandar o resumo do lead qualificado pro WhatsApp do responsável (desligado por padrão). */
   avisarResponsavel?: { ligado: boolean; telefone: string } | null;
+  /** Respostas fixas por palavra (sem IA), valem mesmo com os agentes desligados. */
+  respostasPalavra?: RespostaPalavra[];
 }
 
 export interface ExemploTom {

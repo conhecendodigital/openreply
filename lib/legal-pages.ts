@@ -49,6 +49,39 @@ export const privacyPage: LegalPage = {
       ],
     },
     {
+      heading: "TikTok",
+      paragraphs: [
+        "If the owner connects a TikTok account, {product} uses TikTok's official Login Kit and Content Posting API only to publish or schedule the videos the owner chooses. We do not read TikTok comments or direct messages, and we never ask for the TikTok password.",
+      ],
+      items: [
+        "From TikTok, with the owner's permission: the TikTok open ID, display name and profile picture, and the access token and refresh token, stored encrypted with AES-256-GCM.",
+        "What the owner sends us to publish: the video file, the caption, the privacy, comment, duet and stitch choices, the commercial content declaration, the chosen date and time, and the status of each publication.",
+        "We use this data only to publish or schedule what the owner confirmed. We do not sell it, do not use it for advertising and do not use it to train AI models. If an AI assistant is connected through our MCP, it can only create drafts: scheduling and publishing are always done by a person on the screen.",
+        "To revoke access, open TikTok, go to Settings, then Security and permissions, then Apps, and remove {product}. You can also click Disconnect on the TikTok account inside {product}. Either way, the TikTok tokens are deleted and nothing is published anymore.",
+        "We keep TikTok data while the account is connected. Videos and captions are kept until the owner deletes them or asks for deletion. See {site}/data-deletion for the step by step.",
+      ],
+    },
+    {
+      heading: "YouTube and Google APIs",
+      paragraphs: [
+        "If the owner connects a YouTube channel, {product} uses Google's OAuth and the YouTube API Services only to upload and publish the videos the owner chooses, and to show the connected channel. We never ask for the Google password.",
+        "Lead Engine's use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.",
+      ],
+      items: [
+        "From Google, with the owner's permission: the YouTube channel ID, title and picture, the granted permissions, and the access token and refresh token, stored encrypted with AES-256-GCM.",
+        "What the owner sends us to publish: the video file, the title, description, visibility, the made for kids answer, the AI content declaration, the chosen date and time, and the status of each upload.",
+        "We use YouTube data only to publish what the owner confirmed and to show the channel inside {product}. We do not sell it, do not use it for advertising, do not transfer it to others except to run the service or when the law requires it, and do not use it to train AI models.",
+        "To revoke access, open myaccount.google.com/permissions, pick {product} and remove access. You can also click Disconnect on the YouTube channel in {product}. Either way, the YouTube tokens are deleted and nothing is published anymore.",
+        "We keep YouTube data while the channel is connected. Videos and descriptions are kept until the owner deletes them or asks for deletion. See {site}/data-deletion for the step by step.",
+      ],
+    },
+    {
+      heading: "Publishing to Instagram and Facebook",
+      paragraphs: [
+        "If the owner turns on publishing, {product} can post Reels on the connected Instagram professional account and videos on the connected Facebook Page, through Meta's official APIs, only what the owner confirmed on the screen. The same account tokens are used, stored encrypted, and disconnecting the channel deletes them.",
+      ],
+    },
+    {
       heading: "How we use data",
       paragraphs: [
         "To sign you in, connect Instagram, find the keyword in comments, send the private and public replies the owner configured, show conversations in the Inbox, build the owner's contact list and reports, avoid duplicate sends, respect Meta's limits, fix errors and protect the service. We do not sell data. We do not use Instagram data for our own advertising or to train AI models.",
@@ -68,8 +101,9 @@ export const privacyPage: LegalPage = {
       items: [
         "Our own server, a VPS rented from Hostinger and managed with Dokploy, where the PostgreSQL database, the Redis queue and the media storage also run.",
         "Resend, to send sign-in emails.",
-        "Google, for Sign in with Google.",
+        "Google, for Sign in with Google and, through the YouTube API Services, only to publish what the owner confirmed.",
         "Meta, through the Instagram API and, if the owner turns it on, the Conversions API.",
+        "TikTok, through the Login Kit and the Content Posting API, only to publish what the owner confirmed.",
         "Hotmart, to confirm purchases.",
         "The AI providers above, only for the features that use AI.",
       ],
@@ -122,9 +156,25 @@ export const termsPage: LegalPage = {
       ],
     },
     {
+      heading: "TikTok publishing",
+      paragraphs: [
+        "If you connect a TikTok account, you can upload videos and publish or schedule them from {product}. The use of TikTok stays subject to TikTok's Terms of Service, Community Guidelines, Branded Content Policy and Music Usage Confirmation, and you agree to follow them.",
+        "You are responsible for the videos, captions and music you publish, and for declaring commercial content (your own brand or a paid partnership) when it applies. {product} only publishes what you confirmed on the screen, with the privacy and interaction options you chose. We do not offer a reply to TikTok comments or direct messages.",
+        "Until TikTok approves our app for public posting, videos may be published only with the visibility Only me. This is a TikTok rule and it can change when the approval comes.",
+      ],
+    },
+    {
+      heading: "YouTube, Instagram and Facebook publishing",
+      paragraphs: [
+        "If you connect a YouTube channel, an Instagram professional account or a Facebook Page, you can upload videos and publish or schedule them from {product}. Each network stays subject to its own rules: the YouTube Terms of Service and Community Guidelines (and the Google Privacy Policy), and Meta's terms and policies for Instagram and Facebook. You agree to follow them.",
+        "You are responsible for the videos, titles and descriptions you publish, for the answer about content made for kids, and for saying when a video has realistic scenes made or changed with AI. {product} only publishes what you confirmed on the screen.",
+        "While the Google app is not verified, YouTube may keep every upload as Private. This is a Google rule and it changes when the verification comes.",
+      ],
+    },
+    {
       heading: "Authorized use",
       paragraphs: [
-        "Only with Instagram professional accounts you own or are authorized to manage. You are responsible for the campaigns, keywords, links and messages you configure.",
+        "Only with Instagram professional accounts, Facebook Pages, TikTok accounts and YouTube channels you own or are authorized to manage. You are responsible for the campaigns, keywords, links, messages, videos and captions you configure.",
       ],
     },
     {
@@ -185,6 +235,26 @@ export const dataDeletionPage: LegalPage = {
       paragraphs: [
         "On Instagram, open Settings, then Apps and websites, and remove Lead Engine. Meta tells us right away: first the account is disconnected and its token is deleted, and when Meta sends the data deletion request we delete all the data of that account automatically.",
         "Meta shows you a confirmation code. You can check the status of the request at {site}/data-deletion/status with that code, or type it below.",
+      ],
+    },
+    {
+      heading: "TikTok data",
+      paragraphs: [
+        "If you connected a TikTok account to {product}:",
+      ],
+      items: [
+        "Sign in, open the TikTok account in {product} and click Disconnect. The TikTok access and refresh tokens and the connection are deleted right away, and nothing is published anymore. You can also remove {product} on TikTok, in Settings, Security and permissions, Apps.",
+        "To also delete the videos, captions, drafts and scheduled posts of that account, email {email} from the address you use to sign in. We delete them within {days} days.",
+      ],
+    },
+    {
+      heading: "YouTube data",
+      paragraphs: [
+        "If you connected a YouTube channel to {product}:",
+      ],
+      items: [
+        "Sign in, open the YouTube channel in {product} and click Disconnect. The YouTube access and refresh tokens and the connection are deleted right away, and nothing is published anymore. You can also remove {product} at myaccount.google.com/permissions.",
+        "To also delete the videos, titles, descriptions, drafts and scheduled posts of that channel, email {email} from the address you use to sign in. We delete them within {days} days.",
       ],
     },
     {

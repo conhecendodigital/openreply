@@ -13,6 +13,8 @@
  * O envio de verdade é do conector: ele chama podeEnviar() antes de cada bolha,
  * então "Assumir" segura até um envio que já estava na fila.
  */
+import { acharRespostaPalavra, bolhasDaResposta, jaRespondida } from "./resposta-palavra";
+import { conversaDoDono, ehNumeroDoResponsavel } from "./pessoal";
 import { createHash } from "node:crypto";
 import { temRegras, type RegrasNegocio } from "@/lib/whatsapp/regras/esquema";
 import { detectarServico } from "@/lib/whatsapp/regras/detectar";
@@ -126,6 +128,46 @@ export async function processarMensagem(
   if (ultima.id !== input.triggerMsgId) return { acao: "ignorado", motivo: "chegou mensagem mais nova; ela vai ser tratada no lugar" };
   if (!janelaAberta(ultima.sentAt, now)) return { acao: "ignorado", motivo: "fora da janela de 24h da última mensagem do contato" };
 
+  // 0b. 20/10 (Matheus: "o agente não está enviando automático a aula do workshop"): resposta fixa
+  // por palavra, sem IA. Vale mesmo com os agentes desligados no número; respeita "Assumir" e a
+  // conversa desligada; sai uma vez por pessoa.
+  const lidaPalavra = ultima.type === "text" || ultima.mediaTextKind === "audio" ? textoPlano(ultima) : "";
+  const respPalavra = lidaPalavra ? acharRespostaPalavra(ctx.profile?.respostasPalavra, lidaPalavra) : null;
+  if (respPalavra && !takeoverAtivo(ctx.conversation.humanTakeoverUntil, now) && ctx.conversation.agentMode !== "OFF") {
+    if (jaRespondida(ctx.historico, respPalavra)) return { acao: "ignorado", motivo: "resposta por palavra já mandada nessa conversa" };
+    const motivoPalavra = `resposta automática por palavra: "${respPalavra.palavras[0]}"`;
+    await agendarAvisoFixo(
+      deps,
+      ctx,
+      {
+        ownerUserId: ctx.ownerUserId,
+        workspaceId: ctx.workspaceId,
+        sessionId: ctx.session.id,
+        conversationId: ctx.conversation.id,
+        triggerMsgId: ultima.id,
+        agente: null,
+        mode: "AUTO",
+        output: null,
+        blockedReason: null,
+        provider: null,
+        model: null,
+        tokensIn: 0,
+        tokensOut: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        custoUsdMicro: 0,
+        triagem: null,
+        createdAt: now,
+      },
+      ultima.sentAt,
+      now,
+      bolhasDaResposta(respPalavra),
+      `sistema:palavra:${respPalavra.id}`,
+      motivoPalavra
+    );
+    return { acao: "ignorado", motivo: motivoPalavra };
+  }
+
   const modo = resolverModo(ctx, now);
   if (modo.modo === "OFF") return { acao: "ignorado", motivo: modo.motivo };
 
@@ -161,6 +203,18 @@ export async function processarMensagem(
     }
     return store.registrarRun({ ...base, ...extra, status });
   };
+
+  // 0a. 19/10 (Robério): o responsável e as conversas pessoais do dono ficam fora do agente (sem modelo).
+  const regrasDoNumero = ctx.profile?.regras ?? null;
+  if (ehNumeroDoResponsavel(ctx.contact.phoneE164, regrasDoNumero?.responsavel?.telefone)) {
+    const runId = await registrar("skipped", { blockedReason: "é o número do responsável" });
+    return { acao: "ignorado", motivo: "é o número do responsável", runId };
+  }
+  if (conversaDoDono(ctx.historico, ctx.conversation.agentMode)) {
+    const motivo = "conversa do dono: ele já escreveu à mão nessa conversa";
+    const runId = await registrar("skipped", { blockedReason: motivo });
+    return { acao: "ignorado", motivo, runId };
+  }
 
   // 0. Pediu pra parar: o agente sai da conversa e não responde nada (sem modelo).
   if (ultima.type === "text" || ultima.mediaTextKind === "audio") {

@@ -12,7 +12,7 @@ import type { WaMessageLite } from "@/lib/whatsapp/agentes/types";
 import { rotuloCidade, type Cidade, type InfoMinima, type RegrasNegocio } from "./esquema";
 import { acharTermo, contemTermo, normalizarTexto, UFS } from "./texto";
 import { dentroDoRaio } from "./raio";
-import { bairrosNoTexto, municipiosNoTexto } from "./lugares";
+import { bairrosNoTexto, municipioReal, municipiosNoTexto } from "./lugares";
 
 /** O que o modelo disse que entendeu (campos extras do JSON da resposta). */
 export interface SinaisModelo {
@@ -184,7 +184,11 @@ function mencaoDoModelo(regras: RegrasNegocio, historico: WaMessageLite[], sinai
   const tipo = classificar(regras, nome, uf);
   const conhecida =
     regras.cidadesAtendidas.find((c) => mesmaCidade(c, nome, uf)) ?? regras.cidadesNaoAtendidas.find((c) => mesmaCidade(c, nome, uf));
-  return { tipo, cidade: conhecida ?? { cidade: nome, uf }, regiao: null, msg, msgId: ids[msg], pos: 0, moradia: false, fonte: "modelo" };
+  if (conhecida) return { tipo, cidade: conhecida, regiao: null, msg, msgId: ids[msg], pos: 0, moradia: false, fonte: "modelo" };
+  // 19/10: "Trinco/MA" (de "trinco" numa foto de fechadura) não é cidade. Só município de verdade.
+  const real = municipioReal(nome, uf);
+  if (!real) return null;
+  return { tipo: classificar(regras, real.nome, real.uf), cidade: { cidade: real.nome, uf: real.uf }, regiao: null, msg, msgId: ids[msg], pos: 0, moradia: false, fonte: "modelo" };
 }
 
 const chave = (m: Mencao) => (m.cidade ? normalizarTexto(m.cidade.cidade) : "") + "|" + (m.regiao ? normalizarTexto(m.regiao) : "");

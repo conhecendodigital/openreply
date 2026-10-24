@@ -10,7 +10,7 @@ import { MUNICIPIOS } from "./municipios-dados";
 import { normalizarTexto } from "./texto";
 import type { Cidade, RegrasNegocio } from "./esquema";
 
-interface Municipio {
+export interface Municipio {
   nome: string;
   uf: string;
 }
@@ -31,6 +31,7 @@ const PALAVRA_COMUM = new Set([
   "campos", "vale", "praia", "ilha", "rio", "jardim", "planalto", "centro", "bela vista", "boa vista", "nova",
   "sao jose", "santa rita", "bom jesus", "agua boa", "cascata", "colina", "aurora", "bandeira", "cachoeira", "sobral",
   "anta", "quatis", "pedra", "salto", "alianca", "liberdade", "fortaleza", "pacoti", "cristal", "mirante", "oriente",
+  "granito", "cedro", "cumaru", "escada", "ipe", "jatoba", "laje", "ouro", "pedreira", "portao", "prata", "telha",
   "general", "presidente", "silva", "costa", "lima", "freitas", "souza", "barbosa", "marcos", "patos", "garca",
 ]);
 
@@ -53,6 +54,19 @@ function municipios(): Map<string, Municipio[]> {
     indice.set(k, l);
   }
   return indice;
+}
+
+/**
+ * 19/10 (Robério): o modelo leu "trinco lateral" na foto de uma fechadura e
+ * devolveu a cidade "Trinco/MA", que não existe. Cidade dita pelo modelo só
+ * vale se for um município de verdade. Devolve o município (com a UF certa)
+ * ou null.
+ */
+export function municipioReal(nome: string, uf = ""): Municipio | null {
+  const l = municipios().get(normalizarTexto(nome.trim()));
+  if (!l?.length) return null;
+  const u = uf.trim().toUpperCase();
+  return (u && l.find((m) => m.uf === u)) || (l.length === 1 || !u ? l[0] : null);
 }
 
 export interface LugarAchado {

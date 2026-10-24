@@ -7,6 +7,15 @@ import { prisma } from "@/lib/db/client";
 import { TOKEN_EXPIRY_WARNING_DAYS, WEBHOOK_STALE_HOURS } from "@/lib/channels/status";
 import { missingWebhookFields } from "@/lib/meta/webhook-fields";
 
+/** Same list as FACEBOOK_PAGE_WEBHOOK_FIELDS (lib/meta/client.ts), kept here so the overview never imports the Graph client. */
+const FACEBOOK_PAGE_FIELDS = ["feed", "messages", "messaging_postbacks", "messaging_referrals", "message_reads", "message_echoes"];
+
+function missingFieldsFor(platform: string, subscribed: readonly string[]): string[] {
+  if (platform !== "FACEBOOK") return missingWebhookFields(subscribed);
+  const have = new Set(subscribed);
+  return FACEBOOK_PAGE_FIELDS.filter((field) => !have.has(field));
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type ChannelAlertCode =
@@ -29,7 +38,8 @@ export type ChannelAlert = {
 };
 
 export type InstagramChannelCard = {
-  platform: "instagram";
+  /** 23/10/2026: "facebook" = a Facebook Page connected by Facebook Login. */
+  platform: "instagram" | "facebook";
   id: string;
   instagramId: string;
   username: string;
@@ -78,12 +88,6 @@ export const COMING_SOON_CHANNELS: ComingSoonChannel[] = [
     name: "WhatsApp",
     status: "COMING_SOON",
     requirements: ["WhatsApp Cloud API", "Business verification on Meta"],
-  },
-  {
-    platform: "messenger",
-    name: "Messenger",
-    status: "COMING_SOON",
-    requirements: ["Same Meta app as Instagram (Facebook Page permission)"],
   },
   {
     platform: "threads",
@@ -241,6 +245,7 @@ export async function getChannelsOverview(workspaceId: string, now = new Date())
     select: {
       ...ALERT_SELECT,
       instagramId: true,
+      platform: true,
       name: true,
       profilePictureUrl: true,
       disconnectedAt: true,
@@ -264,7 +269,7 @@ export async function getChannelsOverview(workspaceId: string, now = new Date())
       const forAlerts = { ...account, lastWebhookAt };
       const connected = account.status !== "DISCONNECTED";
       return {
-        platform: "instagram",
+        platform: account.platform === "FACEBOOK" ? "facebook" : "instagram",
         id: account.id,
         instagramId: account.instagramId,
         username: account.username,
@@ -280,7 +285,7 @@ export async function getChannelsOverview(workspaceId: string, now = new Date())
         webhookFields: account.webhookFields,
         // Subscribed before a field was added (e.g. live_comments): the page
         // points at what is missing; reconnecting subscribes again.
-        missingWebhookFields: account.webhookSubscribed ? missingWebhookFields(account.webhookFields) : [],
+        missingWebhookFields: account.webhookSubscribed ? missingFieldsFor(account.platform, account.webhookFields) : [],
         lastWebhookAt: lastWebhookAt?.toISOString() ?? null,
         webhooksStale: isWebhookStale(forAlerts, now),
         lastError: account.lastError,

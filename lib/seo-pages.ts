@@ -32,8 +32,8 @@ export const manychatAlternativePage: SeoPageConfig = {
   ],
   sections: [
     {
-      title: "Instagram only",
-      body: "Lead Engine does not try to cover every channel. Everything in it is built around comments, the Direct and the contacts of your Instagram professional account.",
+      title: "Built around Instagram",
+      body: "Lead Engine started on Instagram and is still built around comments, the Direct and the contacts of your professional account. It also connects Facebook Pages and WhatsApp, and publishes videos to TikTok.",
     },
     {
       title: "Proof for the client",
@@ -49,7 +49,7 @@ export const manychatAlternativePage: SeoPageConfig = {
   comparisons: [
     {
       label: "Channels",
-      ours: "Instagram only, through the official Meta API.",
+      ours: "Instagram and Facebook Pages through the official Meta API, WhatsApp, and video publishing on TikTok.",
       other: "Several channels, such as Instagram, Messenger and WhatsApp.",
     },
     {

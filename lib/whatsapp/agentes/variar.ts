@@ -9,7 +9,7 @@
  *   pedir pra não repetir.
  * - tirarRepetidas: depois da resposta, tira a bolha que é cópia de algo que o
  *   agente já mandou. Nunca tira a última bolha (é onde fica a pergunta), nunca
- *   tira o fecho de recusa e nunca deixa a resposta vazia.
+ *   tira o fecho de recusa da primeira vez e nunca deixa a resposta vazia.
  */
 import { parecido } from "@/lib/whatsapp/regras/exemplos";
 import { temFechoRecusa } from "@/lib/whatsapp/regras/fecho";
@@ -50,8 +50,12 @@ export function tirarRepetidas(bolhas: string[], historico: WaMessageLite[]): st
   const antigas = linhasDoAgente(historico);
   if (!antigas.length) return bolhas;
   const ultima = bolhas.length - 1;
+  // 19/10 (Robério): o fecho de recusa também sai se já foi mandado (antes ele ia em toda resposta).
+  const fechoJaMandado = antigas.some((a) => temFechoRecusa(normalizarTexto(a)));
   const ficam = bolhas.filter((b, i) => {
-    if (i === ultima || temFechoRecusa(normalizarTexto(b))) return true;
+    const fecho = temFechoRecusa(normalizarTexto(b));
+    if (fecho) return !fechoJaMandado;
+    if (i === ultima) return true;
     return !antigas.some((a) => a === b || parecido(a, b) >= LIMITE_REPETIDA);
   });
   return ficam.length ? ficam : bolhas;

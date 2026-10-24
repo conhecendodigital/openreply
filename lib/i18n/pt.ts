@@ -9,6 +9,7 @@ import { ptFunnels } from "@/lib/i18n/pt-funnels";
 import { ptFunnelsApi } from "@/lib/i18n/pt-funnels-api";
 import { ptFunnelsPopups } from "@/lib/i18n/pt-funnels-popups";
 import { ptSite } from "@/lib/i18n/pt-site";
+import { ptLanding } from "@/lib/i18n/pt-landing";
 import { ptPublic } from "@/lib/i18n/pt-public";
 import { ptCapi } from "@/lib/i18n/pt-capi";
 import { ptAuth } from "@/lib/i18n/pt-auth";
@@ -18,19 +19,29 @@ import { ptDmFormato } from "@/lib/i18n/pt-dm-formato";
 import { ptCanais } from "@/lib/i18n/pt-canais";
 import { ptWaRegras } from "@/lib/i18n/pt-wa-regras";
 import { ptWaLeads } from "@/lib/i18n/pt-wa-leads";
+import { ptWaPalavra } from "@/lib/i18n/pt-wa-palavra";
+import { ptFacebook } from "@/lib/i18n/pt-facebook";
+import { ptTiktok } from "@/lib/i18n/pt-tiktok";
+import { ptTiktokSite } from "@/lib/i18n/pt-tiktok-site";
 import { ptSecoes } from "@/lib/i18n/pt-secoes";
 import { ptAbas } from "@/lib/i18n/pt-abas";
 import { ptLinks } from "@/lib/i18n/pt-links";
 import { ptFunisAdmin } from "@/lib/i18n/pt-funis-admin";
+import { ptSocial } from "@/lib/i18n/pt-social";
 
 export const pt: Record<string, string> = {
   // 2026-10-10: aba Funis do admin, em lib/i18n/pt-funis-admin.ts.
   ...ptFunisAdmin,
+  ...ptSocial,
   // 2026-10-07: prévia do link e domínio dos links (campanha, quiz e Canais), em lib/i18n/pt-links.ts.
   ...ptLinks,
   // 2026-10-06: seções recolhíveis, índice e resumos em todo o painel, em lib/i18n/pt-secoes.ts.
   ...ptSecoes,
   ...ptAbas,
+  ...ptWaPalavra,
+  ...ptFacebook,
+  ...ptTiktok,
+  ...ptTiktokSite,
   // 2026-10-06: regras duras, aprendizado e teste do agente (WhatsApp > Agentes), em lib/i18n/pt-wa-regras.ts.
   ...ptWaRegras,
   // 2026-10-06: WhatsApp > Leads, ficha e estágio do lead, em lib/i18n/pt-wa-leads.ts.
@@ -58,6 +69,7 @@ export const pt: Record<string, string> = {
   ...ptCapi,
   // 2026-10-04: site público (página inicial, cabeçalho, login) em lib/i18n/pt-site.ts.
   ...ptSite,
+  ...ptLanding,
   // 2026-10-04: páginas públicas fora do painel (modelos, SEO, legais,
   // relatório público, convite) em lib/i18n/pt-public.ts.
   ...ptPublic,
