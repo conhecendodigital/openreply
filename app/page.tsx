@@ -1,136 +1,38 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 import Link from "next/link";
+import "./home.css";
 import { DemoNotice } from "@/components/demo-notice";
 import PublicSiteHeader from "@/components/public-site-header";
 import LegalCompanyLine from "@/components/legal-company-line";
 import { LeadEngineLogo } from "@/components/sidebar";
+import BrandTile from "@/components/home/brand-tile";
+import HeroStage from "@/components/home/hero-stage";
+import { homeIcons as icons } from "@/components/home/icons";
+import MotionSlot from "@/components/home/motion-slot";
+import Reveal from "@/components/home/reveal";
+import { CommentDmVisual, FlowVisual, PublishVisual } from "@/components/home/visuals";
 import { getT } from "@/lib/i18n/server";
-import type { TFunction } from "@/lib/i18n";
+import type { SocialBrand } from "@/lib/social/brand-icons";
 
 /**
- * Página inicial (2026-10-04): visual do instagram.com (fundo #fafafa, cartões
- * brancos com borda #dbdbdb, botão azul arredondado, pilha de fonte do site),
- * em português por padrão. Conteúdo honesto: diz o que o Lead Engine faz, sem
- * prometer resultado. Nenhum logo da Meta, do Instagram ou do TikTok, só o nome
- * em texto. 23/10/2026: mostra as redes conectadas (Instagram, Facebook,
- * WhatsApp) e o TikTok só para conectar a conta e publicar/agendar vídeos, para
- * a revisão do app do TikTok. Não promete resposta a comentário/DM do TikTok.
+ * Página inicial (24/10/2026): estilo Apple, com os logos oficiais de cada rede
+ * (Instagram, Facebook, WhatsApp, TikTok, YouTube) usados como os guias de marca
+ * pedem, sem recolorir nem distorcer e sem sugerir parceria. Textos honestos: diz o
+ * que o Lead Engine faz, sem prometer resultado. TikTok e YouTube só para conectar a
+ * conta e publicar ou agendar vídeos; nada de comentário ou DM dessas duas redes.
+ * Vídeos de movimento entram por components/home/motion-slot (public/motions/*.mp4,
+ * lista em lib/home/motion-slots.ts); sem o arquivo, aparece a ilustração em CSS.
  */
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
   return {
-    title: t("Lead Engine: Instagram, Facebook, WhatsApp and TikTok in one place"),
+    title: t("Lead Engine: Instagram, Facebook, WhatsApp, TikTok and YouTube in one place"),
     description: t(
-      "Turn comments into conversations on Instagram and Facebook, answer on WhatsApp, and publish or schedule videos on TikTok, all through official APIs."
+      "Turn comments into conversations on Instagram and Facebook, answer on WhatsApp, and publish or schedule videos on TikTok and YouTube, all through official APIs."
     ),
   };
 }
-
-/* Ícones de linha próprios (24x24), no traço fino do app. */
-function Icon({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-6 w-6"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {children}
-    </svg>
-  );
-}
-
-const icons = {
-  comment: (
-    <Icon>
-      <path d="M20.5 11.5a8.5 8.5 0 0 1-12.4 7.6L3.5 20.5l1.4-4.6A8.5 8.5 0 1 1 20.5 11.5z" />
-    </Icon>
-  ),
-  direct: (
-    <Icon>
-      <path d="M21.5 3 10.2 10.6" />
-      <path d="M21.5 3 15 21l-4.8-10.4L2.5 7.9z" />
-    </Icon>
-  ),
-  contacts: (
-    <Icon>
-      <circle cx="9" cy="8" r="3.5" />
-      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
-      <path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.5a6.5 6.5 0 0 1 3 5.5" />
-    </Icon>
-  ),
-  shield: (
-    <Icon>
-      <path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.5 7.5 10 4.4-1.5 7.5-5.4 7.5-10V5.6z" />
-      <path d="m8.8 12 2.3 2.3 4.3-4.6" />
-    </Icon>
-  ),
-  flow: (
-    <Icon>
-      <rect x="3" y="3" width="7" height="5.5" rx="1.5" />
-      <rect x="14" y="15.5" width="7" height="5.5" rx="1.5" />
-      <path d="M6.5 8.5v4a2.5 2.5 0 0 0 2.5 2.5h8.5v.5" />
-    </Icon>
-  ),
-  clock: (
-    <Icon>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3.2 2" />
-    </Icon>
-  ),
-  chart: (
-    <Icon>
-      <path d="M3.5 20.5h17" />
-      <rect x="5" y="11" width="3" height="6.5" rx="0.8" />
-      <rect x="10.5" y="6.5" width="3" height="11" rx="0.8" />
-      <rect x="16" y="13.5" width="3" height="4" rx="0.8" />
-    </Icon>
-  ),
-  unlink: (
-    <Icon>
-      <path d="M9.5 14.5 7.3 16.7a3.3 3.3 0 0 1-4.6-4.6l2.9-2.9a3.3 3.3 0 0 1 4.6 0" />
-      <path d="m14.5 9.5 2.2-2.2a3.3 3.3 0 0 1 4.6 4.6l-2.9 2.9a3.3 3.3 0 0 1-4.6 0" />
-    </Icon>
-  ),
-  check: (
-    <Icon>
-      <circle cx="12" cy="12" r="9" />
-      <path d="m8 12.2 2.7 2.7L16.2 9.4" />
-    </Icon>
-  ),
-  video: (
-    <Icon>
-      <rect x="3" y="5" width="18" height="14" rx="3" />
-      <path d="m10.5 9.4 4.2 2.6-4.2 2.6z" />
-    </Icon>
-  ),
-  upload: (
-    <Icon>
-      <path d="M12 16V4.5" />
-      <path d="m7.5 9 4.5-4.5L16.5 9" />
-      <path d="M4.5 15v3.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V15" />
-    </Icon>
-  ),
-  sliders: (
-    <Icon>
-      <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
-      <circle cx="15" cy="7" r="2" />
-      <circle cx="9" cy="17" r="2" />
-    </Icon>
-  ),
-  lock: (
-    <Icon>
-      <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
-      <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
-    </Icon>
-  ),
-};
 
 const features: Array<{ icon: keyof typeof icons; title: string; body: string }> = [
   {
@@ -167,29 +69,6 @@ const features: Array<{ icon: keyof typeof icons; title: string; body: string }>
     icon: "chart",
     title: "Reports",
     body: "See what was sent, clicked and replied, by campaign and by period, with A/B tests to compare messages.",
-  },
-];
-
-const networks: Array<{ icon: keyof typeof icons; name: string; body: string }> = [
-  {
-    icon: "comment",
-    name: "Instagram",
-    body: "Comment to DM, Direct inbox with photos and audio, comment moderation, flows and broadcasts.",
-  },
-  {
-    icon: "contacts",
-    name: "Facebook",
-    body: "Answer comments and Messenger messages on the Facebook Pages you manage.",
-  },
-  {
-    icon: "direct",
-    name: "WhatsApp",
-    body: "Conversations, leads and AI agents on your WhatsApp number, with a person always in control.",
-  },
-  {
-    icon: "video",
-    name: "TikTok",
-    body: "Connect your account with TikTok's official login, then publish or schedule your videos. No TikTok comments or DMs.",
   },
 ];
 
@@ -264,237 +143,187 @@ const controls: Array<{ icon: keyof typeof icons; title: string; body: string }>
   },
 ];
 
-/* Celular de exemplo com uma conversa no Direct, só em CSS. */
-function PhoneMock({ t }: { t: TFunction }) {
-  return (
-    <div
-      role="img"
-      aria-label={t("Example of a Direct conversation")}
-      className="relative mx-auto w-full max-w-[300px] rounded-[44px] border border-border bg-white p-2.5 shadow-[0_20px_60px_-25px_rgba(0,0,0,0.35)]"
-    >
-      <div className="overflow-hidden rounded-[36px] border border-border bg-white" aria-hidden="true">
-        {/* Barra de status */}
-        <div className="flex items-center justify-between px-6 pb-1 pt-3 text-[11px] font-semibold text-foreground">
-          <span>9:41</span>
-          <span className="h-5 w-20 rounded-full bg-foreground" />
-          <span className="flex items-center gap-1">
-            <span className="h-2 w-3 rounded-[2px] bg-foreground" />
-            <span className="h-2.5 w-5 rounded-[3px] border border-foreground" />
-          </span>
-        </div>
+const networks: Array<{ brand: SocialBrand; name: string; body: string }> = [
+  { brand: "INSTAGRAM", name: "Instagram", body: "Comment to DM, Direct inbox with photos and audio, comment moderation, flows and broadcasts." },
+  { brand: "FACEBOOK", name: "Facebook", body: "Answer comments and Messenger messages on the Facebook Pages you manage." },
+  { brand: "WHATSAPP", name: "WhatsApp", body: "Conversations, leads and AI agents on your WhatsApp number, with a person always in control." },
+  { brand: "TIKTOK", name: "TikTok", body: "Connect your account with TikTok's official login, then publish or schedule your videos. No TikTok comments or DMs." },
+  { brand: "YOUTUBE", name: "YouTube", body: "Connect your channel with Google's official login, then publish or schedule your videos. No YouTube comments." },
+];
 
-        {/* Topo da conversa */}
-        <div className="flex items-center gap-3 border-b border-border px-4 py-2.5">
-          <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m15 5-7 7 7 7" />
-          </svg>
-          <span className="ig-gradient grid h-8 w-8 shrink-0 place-items-center rounded-full p-[2px]">
-            <span className="grid h-full w-full place-items-center rounded-full bg-white text-[11px] font-semibold text-foreground">
-              M
-            </span>
-          </span>
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-[13px] font-semibold text-foreground">maria.flores</p>
-            <p className="text-[11px] text-muted">{t("Active now")}</p>
-          </div>
-        </div>
-
-        {/* Mensagens */}
-        <div className="space-y-2 px-3 pb-3 pt-3 text-[13px] leading-snug">
-          <p className="text-center text-[11px] text-muted">{t("Commented FLOWERS on your reel")}</p>
-
-          <div className="ml-auto max-w-[80%] rounded-[18px] bg-accent px-3.5 py-2 text-white">
-            {t("Hi Maria! Here is the price list you asked for. Want me to set one aside?")}
-          </div>
-          <div className="ml-auto max-w-[80%] rounded-[14px] border border-border px-3.5 py-2 text-center text-[13px] font-semibold text-accent">
-            {t("See price list")}
-          </div>
-
-          <div className="flex items-end gap-2">
-            <span className="h-6 w-6 shrink-0 rounded-full bg-[#efefef]" />
-            <div className="max-w-[75%] rounded-[18px] bg-[#efefef] px-3.5 py-2 text-foreground">
-              {t("I do! Do you deliver on Saturday?")}
-            </div>
-          </div>
-
-          <div className="flex items-end gap-2">
-            <span className="h-6 w-6 shrink-0" />
-            <div className="h-28 w-[62%] rounded-[18px] bg-[linear-gradient(135deg,#ffd1dc_0%,#fbe3c4_45%,#c9e7cf_100%)]">
-              <span className="sr-only">{t("Photo of the arrangement")}</span>
-            </div>
-          </div>
-
-          <div className="flex items-end gap-2">
-            <span className="h-6 w-6 shrink-0 rounded-full bg-[#efefef]" />
-            <div className="flex items-center gap-2 rounded-[18px] bg-[#efefef] px-3 py-2">
-              <svg viewBox="0 0 24 24" className="h-4 w-4 text-foreground" fill="currentColor">
-                <path d="M8 5.5v13l10.5-6.5z" />
-              </svg>
-              <span className="flex h-5 items-center gap-[3px]">
-                {[6, 12, 9, 16, 10, 14, 7, 12, 8, 5, 10, 6].map((h, i) => (
-                  <span key={i} className="w-[3px] rounded-full bg-foreground/70" style={{ height: `${h}px` }} />
-                ))}
-              </span>
-              <span className="text-[11px] text-muted">0:12</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Campo de mensagem */}
-        <div className="px-3 pb-4">
-          <div className="flex items-center gap-2 rounded-full border border-border px-3 py-2">
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-accent text-white">
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="4" y="7" width="16" height="12" rx="2" />
-                <circle cx="12" cy="13" r="3" />
-              </svg>
-            </span>
-            <span className="text-[13px] text-muted">{t("Message...")}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+const btnPrimary =
+  "home-btn inline-flex h-12 items-center justify-center rounded-full bg-accent px-7 text-[15px] font-semibold text-white hover:bg-accent-hover";
+const btnSecondary =
+  "home-btn inline-flex h-12 items-center justify-center rounded-full px-5 text-[15px] font-semibold text-accent hover:bg-accent/10";
 
 export default async function Home() {
   const t = await getT();
+  const lead = features.slice(0, 2);
+  const rest = features.slice(2);
   return (
-    <div className="min-h-screen bg-[#fafafa] text-foreground">
+    <div className="home min-h-screen">
       <DemoNotice variant="banner" />
       <PublicSiteHeader variant="home" />
 
       <main>
         {/* Topo */}
-        <section className="mx-auto grid w-full max-w-5xl items-center gap-10 px-4 pb-14 pt-10 sm:px-6 md:grid-cols-[1fr_1fr] md:gap-12 md:pb-20 md:pt-16">
-          <div className="md:order-2">
-            <p className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-muted">
-              <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
-              {t("Instagram, Facebook, WhatsApp and TikTok")}
-            </p>
-            <h1 className="mt-5 text-balance text-[32px] font-bold leading-[1.15] tracking-tight sm:text-[42px]">
+        <section className="mx-auto w-full max-w-6xl px-4 pb-10 pt-12 sm:px-6 md:pb-16 md:pt-20">
+          <div className="mx-auto max-w-3xl text-center">
+            <h1 className="home-display home-rise text-balance text-[40px] font-semibold sm:text-6xl md:text-[72px]">
               {t("Comments become conversations. Videos go out on schedule.")}
             </h1>
-            <p className="mt-4 max-w-xl text-base leading-7 text-muted">
+            <p
+              className="home-rise home-muted mx-auto mt-6 max-w-2xl text-lg leading-8 md:text-xl"
+              style={{ ["--d" as string]: "120ms" }}
+            >
               {t(
-                "Connect your Instagram professional account, your Facebook Page, WhatsApp and TikTok. Reply to comments with a message in the Direct or Messenger, talk to leads on WhatsApp, and publish or schedule your videos on TikTok. Everything goes through the official APIs, with no shared password."
+                "Connect your Instagram professional account, your Facebook Page, WhatsApp, TikTok and YouTube. Reply to comments with a message in the Direct or Messenger, talk to leads on WhatsApp, and publish or schedule your videos on TikTok and YouTube. Everything goes through the official APIs, with no shared password."
               )}
             </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Link
-                href="/login"
-                className="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
-              >
+            <div
+              className="home-rise mt-9 flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-3"
+              style={{ ["--d" as string]: "220ms" }}
+            >
+              <Link href="/login" className={btnPrimary}>
                 {t("Sign in")}
               </Link>
-              <a
-                href="#como-funciona"
-                className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-white px-6 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
-              >
+              <a href="#como-funciona" className={btnSecondary}>
                 {t("See how it works")}
               </a>
             </div>
-            <ul className="mt-6 flex flex-wrap gap-2" aria-label={t("Connected networks")}>
-              {networks.map((n) => (
-                <li
-                  key={n.name}
-                  className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-foreground"
-                >
-                  {n.name}
-                </li>
-              ))}
-            </ul>
           </div>
 
-          <div className="md:order-1">
-            <PhoneMock t={t} />
+          <div className="mt-12 md:mt-16">
+            <MotionSlot name="hero" className="overflow-hidden rounded-[28px] md:rounded-[36px]">
+              <HeroStage t={t} />
+            </MotionSlot>
           </div>
         </section>
 
         {/* Redes conectadas */}
-        <section id="redes" className="scroll-mt-20 border-t border-border bg-white py-14 md:py-20">
-          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("Connected networks")}</h2>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-muted">
-              {t(
-                "Each network is connected through its own official login. Here is what Lead Engine does on each one, and nothing more."
-              )}
-            </p>
-            <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {networks.map((n) => (
-                <li key={n.name} className="rounded-xl border border-border bg-white p-5">
-                  <span className="grid h-11 w-11 place-items-center rounded-full border border-border text-foreground">
-                    {icons[n.icon]}
-                  </span>
-                  <h3 className="mt-4 text-base font-semibold">{n.name}</h3>
-                  <p className="mt-1.5 text-sm leading-6 text-muted">{t(n.body)}</p>
+        <section id="redes" className="scroll-mt-20 py-16 md:py-28">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <h2 className="home-title mx-auto max-w-2xl text-balance text-center text-4xl font-semibold md:text-5xl">
+                {t("Connected networks")}
+              </h2>
+              <p className="home-muted mx-auto mt-4 max-w-2xl text-center text-lg leading-8">
+                {t(
+                  "Each network is connected through its own official login. Here is what Lead Engine does on each one, and nothing more."
+                )}
+              </p>
+            </Reveal>
+            <ul className="mt-12 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-5">
+              {networks.map((n, i) => (
+                <li key={n.name} className="min-w-0">
+                  <Reveal delay={i * 60} className="flex flex-col items-center text-center">
+                    <BrandTile brand={n.brand} size={64} />
+                    <h3 className="mt-5 text-lg font-semibold tracking-tight">{n.name}</h3>
+                    <p className="home-muted mt-1.5 max-w-[17rem] text-[15px] leading-6">{t(n.body)}</p>
+                  </Reveal>
                 </li>
               ))}
             </ul>
           </div>
         </section>
 
-        {/* Agende e publique vídeos */}
-        <section id="videos" className="scroll-mt-20 border-t border-border py-14 md:py-20">
-          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("Schedule and publish videos")}</h2>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-muted">
-              {t(
-                "From your computer to TikTok in four steps. You choose every option, and nothing goes out without your confirmation."
-              )}
-            </p>
-            <ol className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Recursos */}
+        <section id="recursos" className="scroll-mt-20 bg-[var(--home-soft)] py-16 md:py-28">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <h2 className="home-title max-w-2xl text-balance text-4xl font-semibold md:text-5xl">
+                {t("What Lead Engine does")}
+              </h2>
+              <p className="home-muted mt-4 max-w-2xl text-lg leading-8">
+                {t(
+                  "Tools for the conversations that already happen on your profile, without making you leave Instagram's rules."
+                )}
+              </p>
+            </Reveal>
+
+            <div className="mt-12 space-y-6 md:mt-16 md:space-y-8">
+              {lead.map((f, i) => (
+                <Reveal key={f.title}>
+                  <div className="grid items-center gap-6 overflow-hidden rounded-[28px] bg-white p-2 md:grid-cols-2 md:gap-0 md:rounded-[36px] md:p-3">
+                    <div className={`p-6 md:p-12 ${i % 2 ? "md:order-2" : ""}`}>
+                      <span className="grid h-11 w-11 place-items-center rounded-full bg-accent/10 text-accent">{icons[f.icon]}</span>
+                      <h3 className="home-title mt-6 text-3xl font-semibold md:text-4xl">{t(f.title)}</h3>
+                      <p className="home-muted mt-3 max-w-md text-lg leading-8">{t(f.body)}</p>
+                    </div>
+                    <MotionSlot name={i === 0 ? "comentario-dm" : "fluxo"} className={`overflow-hidden rounded-[22px] md:rounded-[28px] ${i % 2 ? "md:order-1" : ""}`}>
+                      {i === 0 ? <CommentDmVisual t={t} /> : <FlowVisual t={t} />}
+                    </MotionSlot>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+
+            <ul className="mt-12 grid gap-x-10 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 md:mt-16">
+              {rest.map((f, i) => (
+                <li key={f.title}>
+                  <Reveal delay={(i % 3) * 60}>
+                    <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-accent">{icons[f.icon]}</span>
+                    <h3 className="mt-4 text-lg font-semibold tracking-tight">{t(f.title)}</h3>
+                    <p className="home-muted mt-1.5 text-[15px] leading-6">{t(f.body)}</p>
+                  </Reveal>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* Vídeos */}
+        <section id="videos" className="scroll-mt-20 bg-[#1d1d1f] py-16 text-white md:py-28">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+            <Reveal className="flex flex-col items-start gap-5">
+              <span className="flex gap-2">
+                <BrandTile brand="TIKTOK" size={36} />
+                <BrandTile brand="YOUTUBE" size={36} />
+              </span>
+              <h2 className="home-title max-w-2xl text-balance text-4xl font-semibold md:text-5xl">
+                {t("Schedule and publish videos")}
+              </h2>
+              <p className="max-w-2xl text-lg leading-8 text-white/70">
+                {t(
+                  "From your computer to TikTok or YouTube in four steps. You choose every option, and nothing goes out without your confirmation."
+                )}
+              </p>
+            </Reveal>
+
+            <Reveal className="mt-12">
+              <MotionSlot name="publicar" className="mx-auto max-w-4xl overflow-hidden rounded-[28px] md:rounded-[36px]">
+                <PublishVisual t={t} />
+              </MotionSlot>
+            </Reveal>
+
+            <ol className="mt-12 grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
               {videoSteps.map((s, i) => (
-                <li key={s.title} className="rounded-xl border border-border bg-white p-5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-                    {t("Step {n}", { n: i + 1 })}
-                  </p>
-                  <span className="mt-3 grid h-11 w-11 place-items-center rounded-full border border-border text-foreground">
-                    {icons[s.icon]}
-                  </span>
-                  <h3 className="mt-3 text-base font-semibold">{t(s.title)}</h3>
-                  <p className="mt-1.5 text-sm leading-6 text-muted">{t(s.body)}</p>
+                <li key={s.title}>
+                  <Reveal delay={i * 60}>
+                    <p className="text-[15px] font-semibold text-white/50">{t("Step {n}", { n: i + 1 })}</p>
+                    <h3 className="mt-2 text-lg font-semibold tracking-tight">{t(s.title)}</h3>
+                    <p className="mt-1.5 text-[15px] leading-6 text-white/70">{t(s.body)}</p>
+                  </Reveal>
                 </li>
               ))}
             </ol>
           </div>
         </section>
 
-        {/* Recursos */}
-        <section id="recursos" className="scroll-mt-20 border-t border-border bg-white py-14 md:py-20">
-          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("What Lead Engine does")}</h2>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-muted">
-              {t(
-                "Tools for the conversations that already happen on your profile, without making you leave Instagram's rules."
-              )}
-            </p>
-            <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {features.map((f) => (
-                <li key={f.title} className="rounded-xl border border-border bg-white p-5">
-                  <span className="grid h-11 w-11 place-items-center rounded-full border border-border text-foreground">
-                    {icons[f.icon]}
-                  </span>
-                  <h3 className="mt-4 text-base font-semibold">{t(f.title)}</h3>
-                  <p className="mt-1.5 text-sm leading-6 text-muted">{t(f.body)}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
         {/* Como funciona */}
-        <section id="como-funciona" className="scroll-mt-20 border-t border-border py-14 md:py-20">
-          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("Three steps, no secret")}</h2>
-            <ol className="mt-8 grid gap-3 md:grid-cols-3">
+        <section id="como-funciona" className="scroll-mt-20 py-16 md:py-28">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <h2 className="home-title text-balance text-4xl font-semibold md:text-5xl">{t("Three steps, no secret")}</h2>
+            </Reveal>
+            <ol className="mt-12 grid gap-10 md:grid-cols-3 md:gap-12">
               {steps.map((s, i) => (
-                <li key={s.title} className="rounded-xl border border-border bg-white p-5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-                    {t("Step {n}", { n: i + 1 })}
-                  </p>
-                  <h3 className="mt-2 text-lg font-semibold">{t(s.title)}</h3>
-                  <p className="mt-1.5 text-sm leading-6 text-muted">{t(s.body)}</p>
+                <li key={s.title}>
+                  <Reveal delay={i * 80}>
+                    <p className="home-display text-6xl font-semibold text-accent" aria-hidden="true">{i + 1}</p>
+                    <h3 className="home-title mt-4 text-2xl font-semibold">{t(s.title)}</h3>
+                    <p className="home-muted mt-2 text-[17px] leading-7">{t(s.body)}</p>
+                  </Reveal>
                 </li>
               ))}
             </ol>
@@ -502,19 +331,23 @@ export default async function Home() {
         </section>
 
         {/* Controle */}
-        <section id="controle" className="scroll-mt-20 border-t border-border bg-white py-14 md:py-20">
-          <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("Automation helps, you decide")}</h2>
-            <ul className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2">
-              {controls.map((c) => (
-                <li key={c.title} className="flex gap-4">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-foreground">
-                    {icons[c.icon]}
-                  </span>
-                  <div>
-                    <h3 className="text-base font-semibold">{t(c.title)}</h3>
-                    <p className="mt-1 text-sm leading-6 text-muted">{t(c.body)}</p>
-                  </div>
+        <section id="controle" className="scroll-mt-20 bg-[var(--home-soft)] py-16 md:py-28">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <h2 className="home-title max-w-2xl text-balance text-4xl font-semibold md:text-5xl">
+                {t("Automation helps, you decide")}
+              </h2>
+            </Reveal>
+            <ul className="mt-12 grid gap-x-12 gap-y-9 sm:grid-cols-2">
+              {controls.map((c, i) => (
+                <li key={c.title}>
+                  <Reveal delay={(i % 2) * 60} className="flex gap-4">
+                    <span className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-accent">{icons[c.icon]}</span>
+                    <div>
+                      <h3 className="text-lg font-semibold tracking-tight">{t(c.title)}</h3>
+                      <p className="home-muted mt-1 text-[15px] leading-6">{t(c.body)}</p>
+                    </div>
+                  </Reveal>
                 </li>
               ))}
             </ul>
@@ -522,38 +355,33 @@ export default async function Home() {
         </section>
 
         {/* Chamada final */}
-        <section className="border-t border-border py-14 md:py-20">
-          <div className="mx-auto w-full max-w-md px-4 sm:px-6">
-            <div className="rounded-xl border border-border bg-white px-6 py-10 text-center sm:px-10">
-              <div className="flex justify-center">
-                <LeadEngineLogo />
-              </div>
-              <h2 className="mt-5 text-xl font-semibold leading-snug">
-                {t("Ready to look at your comments with other eyes?")}
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                {t("Sign in with your email and connect your Instagram, Facebook, WhatsApp or TikTok account.")}
-              </p>
-              <Link
-                href="/login"
-                className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover"
-              >
-                {t("Sign in")}
-              </Link>
+        <section className="py-20 md:py-32">
+          <Reveal className="mx-auto w-full max-w-2xl px-4 text-center sm:px-6">
+            <div className="flex justify-center">
+              <LeadEngineLogo />
             </div>
-          </div>
+            <h2 className="home-title mt-6 text-balance text-4xl font-semibold md:text-5xl">
+              {t("Ready to look at your comments with other eyes?")}
+            </h2>
+            <p className="home-muted mx-auto mt-4 max-w-xl text-lg leading-8">
+              {t("Sign in with your email and connect your Instagram, Facebook, WhatsApp, TikTok or YouTube account.")}
+            </p>
+            <Link href="/login" className={`${btnPrimary} mt-8`}>
+              {t("Sign in")}
+            </Link>
+          </Reveal>
         </section>
       </main>
 
-      <footer className="border-t border-border py-8">
-        <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 px-4 text-center text-xs text-muted sm:px-6">
+      <footer className="border-t border-[var(--home-line)] py-8">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-3 px-4 text-center text-xs text-muted sm:px-6">
           <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2" aria-label={t("Lead Engine")}>
             <Link href="/privacy" className="hover:underline">{t("Privacy")}</Link>
             <Link href="/terms" className="hover:underline">{t("Terms")}</Link>
             <Link href="/data-deletion" className="hover:underline">{t("Data deletion")}</Link>
             <Link href="/templates" className="hover:underline">{t("Templates")}</Link>
           </nav>
-          <p>{t("Uses the official APIs of Meta and TikTok. Not affiliated with Meta, Instagram, Facebook, WhatsApp or TikTok.")}</p>
+          <p>{t("Uses the official APIs of Meta, TikTok and Google. Not affiliated with Meta, Instagram, Facebook, WhatsApp, TikTok, Google or YouTube.")}</p>
           <LegalCompanyLine />
         </div>
       </footer>
