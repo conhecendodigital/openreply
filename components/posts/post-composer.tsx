@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/components/lang-provider";
 import { callApi, putFile, type UploadTicket } from "@/components/posts/api";
-import { Avatar, btnPrimary, btnSecondary } from "@/components/posts/accounts-bar";
+import { btnPrimary, btnSecondary } from "@/components/posts/accounts-bar";
 import { FacebookTop } from "@/components/posts/options/facebook";
 import { InstagramFields } from "@/components/posts/options/instagram";
 import { TikTokFields, TikTokFooter, TikTokTop } from "@/components/posts/options/tiktok";
@@ -19,6 +19,16 @@ import { fieldClass, labelClass } from "@/components/posts/styles";
 import { VideoPicker, type MediaState, type UploadState } from "@/components/posts/video-picker";
 import { BrandIcon } from "@/components/social/brand-icon";
 import { NETWORK_LIMITS } from "@/lib/social/limits";
+import {
+  channelKey,
+  channelsFor,
+  formatFromSettings,
+  pickedChannels,
+  shortProblem,
+  toggleChannel,
+  withYouTubeFormat,
+  type Channel,
+} from "@/lib/social/channels";
 import {
   NETWORK_NAME,
   acceptForNetwork,
@@ -65,9 +75,19 @@ export function PostComposer({
 }) {
   const t = useT();
   const active = accounts.filter((a) => a.status === "ACTIVE");
-  const [accountId, setAccountId] = useState(post?.accountId ?? (active.length === 1 ? active[0].id : ""));
-  const account = accounts.find((a) => a.id === accountId) ?? null;
-  const network = account?.platform ?? post?.platform ?? null;
+  const allChannels = channelsFor(active);
+  // Canais marcados. Editar um post existente continua sendo uma conta só.
+  const [picked, setPicked] = useState<string[]>(() => {
+    if (post) return [channelKey(post.accountId, post.platform === "YOUTUBE" ? formatFromSettings(post.settings) : null)];
+    return active.length === 1 && active[0].platform !== "YOUTUBE" ? [active[0].id] : [];
+  });
+  const chosen = pickedChannels(allChannels, picked);
+  const first = chosen[0] ?? null;
+  const accountId = first?.accountId ?? post?.accountId ?? "";
+  const network = first?.platform ?? post?.platform ?? null;
+  const networksChosen = new Set(chosen.map((c) => c.platform));
+  const multi = chosen.length > 1;
+  const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
 
   const [info, setInfo] = useState<{ id: string; data: CreatorInfo | null } | null>(null);
   const [caption, setCaption] = useState(post?.caption ?? "");
@@ -91,23 +111,25 @@ export function PostComposer({
   const [postId, setPostId] = useState<string | null>(post?.id ?? null);
   const objectUrl = useRef<string | null>(null);
 
-  const infoData = network === "TIKTOK" && info?.id === accountId ? info.data : null;
-  const infoLoading = network === "TIKTOK" && Boolean(accountId) && info?.id !== accountId;
-  const infoFailed = network === "TIKTOK" && Boolean(accountId) && info?.id === accountId && !info.data;
+  // Detalhes do TikTok vêm da primeira conta de TikTok marcada.
+  const tiktokId = chosen.find((c) => c.platform === "TIKTOK")?.accountId ?? "";
+  const infoData = tiktokId && info?.id === tiktokId ? info.data : null;
+  const infoLoading = Boolean(tiktokId) && info?.id !== tiktokId;
+  const infoFailed = Boolean(tiktokId) && info?.id === tiktokId && !info.data;
 
   // Detalhes do criador do TikTok (privacidades, interações e duração) toda vez que a conta muda.
   useEffect(() => {
-    if (!accountId || network !== "TIKTOK") return;
+    if (!tiktokId) return;
     let alive = true;
-    void callApi<CreatorInfo>(`/api/social-accounts/${accountId}/creator-info`).then((res) => {
+    void callApi<CreatorInfo>(`/api/social-accounts/${tiktokId}/creator-info`).then((res) => {
       if (!alive) return;
-      setInfo({ id: accountId, data: res.data });
+      setInfo({ id: tiktokId, data: res.data });
       if (res.data) setTiktok((s) => normalizeSettings(s, res.data));
     });
     return () => {
       alive = false;
     };
-  }, [accountId, network]);
+  }, [tiktokId]);
 
   useEffect(
     () => () => {
@@ -126,14 +148,17 @@ export function PostComposer({
   async function pickFile(file: File | undefined) {
     if (!file) return;
     setErrors([]);
-    const accepted = NETWORK_LIMITS[network ?? "TIKTOK"].videoTypes;
+    const accepted = (chosen.length ? chosen.map((c) => NETWORK_LIMITS[c.platform].videoTypes) : [NETWORK_LIMITS.TIKTOK.videoTypes]).reduce((a, b) =>
+      a.filter((x) => b.includes(x))
+    );
     if (!accepted.includes(file.type)) {
-      setUpload({ pct: 0, error: network === "TIKTOK" || !network ? t("Use an MP4, MOV or WebM video.") : t("Use an MP4 or MOV video.") });
+      setUpload({ pct: 0, error: networksChosen.has("TIKTOK") && networksChosen.size === 1 || !network ? t("Use an MP4, MOV or WebM video.") : t("Use an MP4 or MOV video.") });
       return;
     }
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = URL.createObjectURL(file);
     setDurationSec(null);
+    setVideoSize(null);
     setMedia({ url: "", bytes: file.size, type: file.type, name: file.name, preview: objectUrl.current });
     setUpload({ pct: 0, error: null });
 
@@ -157,80 +182,112 @@ export function PostComposer({
     setUpload(null);
   }
 
-  function settingsFor(action: ComposerAction): Record<string, unknown> {
-    if (network === "YOUTUBE") return youTubeSettingsPayload(youtube);
-    if (network === "INSTAGRAM") return { ...instagram };
-    if (network === "FACEBOOK") return facebookSettingsPayload(facebook);
-    void action;
+  function settingsFor(channel: Channel): Record<string, unknown> {
+    if (channel.platform === "YOUTUBE") {
+      return withYouTubeFormat(youTubeSettingsPayload(youtube), channel.format ?? "video", {
+        width: videoSize?.width ?? null,
+        height: videoSize?.height ?? null,
+        durationSec: durationSec,
+      });
+    }
+    if (channel.platform === "INSTAGRAM") return { ...instagram };
+    if (channel.platform === "FACEBOOK") return facebookSettingsPayload(facebook);
     return { ...tiktok };
   }
 
-  async function submit(action: ComposerAction) {
+  function channelName(c: Channel): string {
+    const a = accounts.find((x) => x.id === c.accountId);
+    const net = c.platform === "YOUTUBE" && c.format === "short" ? "YouTube Shorts" : NETWORK_NAME[c.platform];
+    return a ? `${net} (${a.displayName})` : net;
+  }
+
+  /** Erros de um canal, sem misturar com os dos outros. */
+  function channelErrors(c: Channel, action: ComposerAction): string[] {
     const errs =
-      network && network !== "TIKTOK"
+      c.platform !== "TIKTOK"
         ? validateSocialComposer(
-            { network, accountId, caption, mediaUrl: media.url, mediaBytes: media.bytes, mediaContentType: media.type, youtube, facebook, scheduledLocal },
+            { network: c.platform, accountId: c.accountId, caption, mediaUrl: media.url, mediaBytes: media.bytes, mediaContentType: media.type, youtube, facebook, scheduledLocal },
             action
           )
-        : validateComposer({ accountId, caption, mediaUrl: media.url, mediaContentType: media.type, durationSec, settings: tiktok, scheduledLocal }, infoData, action);
-    if (!network && !errs.length) errs.push("Pick the account.");
-    if (upload && !upload.error) errs.push("Wait for the upload to finish.");
-    setErrors(errs);
-    if (errs.length) return;
+        : validateComposer({ accountId: c.accountId, caption, mediaUrl: media.url, mediaContentType: media.type, durationSec, settings: tiktok, scheduledLocal }, infoData, action);
+    if (c.platform === "YOUTUBE" && c.format === "short" && media.url) {
+      const problem = shortProblem({ width: videoSize?.width ?? null, height: videoSize?.height ?? null, durationSec });
+      if (problem) errs.push(problem);
+    }
+    return errs;
+  }
 
-    setSaving(action);
+  async function saveOne(c: Channel, action: ComposerAction, existingId: string | null): Promise<{ ok: boolean; stage: "save" | "action" }> {
     const body = {
-      socialAccountId: accountId,
+      socialAccountId: c.accountId,
       caption,
       mediaUrl: media.url,
       mediaBytes: media.bytes,
       mediaContentType: media.type,
-      settings: settingsFor(action),
+      settings: settingsFor(c),
     };
-    const saved = postId
-      ? await callApi<PostDTO>(`/api/posts/${postId}`, { method: "PATCH", body: JSON.stringify(body) })
+    const saved = existingId
+      ? await callApi<PostDTO>(`/api/posts/${existingId}`, { method: "PATCH", body: JSON.stringify(body) })
       : await callApi<PostDTO>("/api/posts", { method: "POST", body: JSON.stringify({ ...body, scheduledAt: null }) });
-    if (!saved.ok || !saved.data) {
-      setSaving(null);
-      setErrors(["Could not save the post. Check the fields and try again."]);
-      return;
-    }
-    setPostId(saved.data.id);
-
+    if (!saved.ok || !saved.data) return { ok: false, stage: "save" };
+    if (!existingId) setPostId(saved.data.id);
     if (action === "schedule") {
-      const res = await callApi(`/api/posts/${saved.data.id}/schedule`, {
-        method: "POST",
-        body: JSON.stringify({ scheduledAt: brasiliaLocalToIso(scheduledLocal) }),
-      });
-      if (!res.ok) {
-        setSaving(null);
-        setErrors(["The post was saved as a draft, but it could not be scheduled."]);
-        await onSaved();
-        return;
-      }
+      const res = await callApi(`/api/posts/${saved.data.id}/schedule`, { method: "POST", body: JSON.stringify({ scheduledAt: brasiliaLocalToIso(scheduledLocal) }) });
+      if (!res.ok) return { ok: false, stage: "action" };
     } else if (action === "publish") {
       const res = await callApi(`/api/posts/${saved.data.id}/publish`, { method: "POST" });
-      if (!res.ok) {
-        setSaving(null);
-        setErrors(["The post was saved as a draft, but it could not be published."]);
-        await onSaved();
-        return;
-      }
+      if (!res.ok) return { ok: false, stage: "action" };
+    }
+    return { ok: true, stage: "action" };
+  }
+
+  async function submit(action: ComposerAction) {
+    const global: string[] = [];
+    if (!chosen.length) global.push("Pick the account.");
+    if (upload && !upload.error) global.push("Wait for the upload to finish.");
+    // Cada canal é conferido sozinho: o que está certo segue, o que não está é avisado pelo nome.
+    const problems: string[] = [];
+    const ready: Channel[] = [];
+    for (const c of chosen) {
+      const errs = channelErrors(c, action);
+      if (errs.length === 0) ready.push(c);
+      else for (const e of errs) problems.push(multi ? `${channelName(c)}: ${t(e)}` : e);
+    }
+    setErrors([...global, ...problems]);
+    if (global.length || ready.length === 0) return;
+
+    setSaving(action);
+    // Um post por canal; o vídeo já foi enviado uma vez só. Um canal que falha não derruba os outros.
+    const failed: string[] = [];
+    const done: string[] = [];
+    for (const c of ready) {
+      const result = await saveOne(c, action, chosen.length === 1 ? postId : null);
+      if (result.ok) done.push(c.key);
+      else failed.push(`${channelName(c)}: ${t(result.stage === "save" ? "Could not save the post. Check the fields and try again." : "The post was saved as a draft, but it could not be published.")}`);
     }
     setSaving(null);
+    if (failed.length || problems.length) {
+      // Quem deu certo sai da seleção para não ser criado de novo ao tentar outra vez.
+      setPicked((p) => p.filter((k) => !done.includes(k)));
+      setErrors([...problems, ...failed]);
+      await onSaved();
+      return;
+    }
     await onSaved();
     onClose();
   }
 
   const nowLocal = isoToBrasiliaLocal(new Date().toISOString());
   const uploading = Boolean(upload && !upload.error);
-  const captionMax = NETWORK_LIMITS[network ?? "TIKTOK"].captionMax;
-  const isYouTube = network === "YOUTUBE";
+  const captionMax = chosen.length ? Math.max(...chosen.map((c) => NETWORK_LIMITS[c.platform].captionMax)) : NETWORK_LIMITS.TIKTOK.captionMax;
+  const isYouTube = networksChosen.has("YOUTUBE");
   const lockedAccount = Boolean(post?.status === "SCHEDULED" || postId);
-  const lacksYouTubeUpload = isYouTube && account != null && !account.scopes.includes(YOUTUBE_UPLOAD_SCOPE);
-  const grouped = (["TIKTOK", "YOUTUBE", "INSTAGRAM", "FACEBOOK"] as const)
-    .map((n) => ({ network: n, items: active.filter((a) => a.platform === n) }))
-    .filter((g) => g.items.length > 0);
+  const hasTikTok = networksChosen.has("TIKTOK");
+  const lacksYouTubeUpload = chosen.some((c) => {
+    if (c.platform !== "YOUTUBE") return false;
+    const a = accounts.find((x) => x.id === c.accountId);
+    return a != null && !a.scopes.includes(YOUTUBE_UPLOAD_SCOPE);
+  });
 
   return (
     <section aria-label={post ? t("Edit post") : t("New post")} className="panel space-y-5 rounded-xl border border-border p-4 sm:p-6">
@@ -242,49 +299,54 @@ export function PostComposer({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        <VideoPicker media={media} upload={upload} accept={acceptForNetwork(network)} onPick={(f) => void pickFile(f)} onDuration={setDurationSec} />
+        <VideoPicker media={media} upload={upload} accept={acceptForNetwork(networksChosen.size === 1 ? network : networksChosen.has("TIKTOK") ? "INSTAGRAM" : network)} onPick={(f) => void pickFile(f)} onDuration={setDurationSec} onDimensions={(width, height) => setVideoSize({ width, height })} />
 
         <div className="min-w-0 space-y-5">
-          <label className="flex flex-col gap-2 text-sm">
-            <span className={labelClass}>{t("Account")}</span>
-            <select value={accountId} disabled={lockedAccount} onChange={(e) => setAccountId(e.target.value)} className={fieldClass}>
-              <option value="">{t("Choose an account")}</option>
-              {grouped.map((g) => (
-                <optgroup key={g.network} label={NETWORK_NAME[g.network]}>
-                  {g.items.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.displayName}
-                      {a.username ? ` (@${a.username})` : ""}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            {active.length === 0 && <span className="text-xs text-warning">{t("Connect an account first.")}</span>}
-          </label>
-
-          {account && network !== "TIKTOK" && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl bg-surface-hover px-4 py-3">
-              <Avatar url={account.avatarUrl} name={account.displayName} size={36} />
-              <div className="min-w-[10rem] flex-1">
-                <p className="text-xs text-muted">{t("Posting as")}</p>
-                <p className="break-words text-sm font-semibold">
-                  {account.displayName}
-                  {account.username ? <span className="font-normal text-muted"> @{account.username}</span> : null}
-                </p>
-              </div>
-              <BrandIcon brand={account.platform} size={28} />
+          <fieldset className="space-y-2" disabled={lockedAccount}>
+            <legend className={labelClass}>{post ? t("Account") : t("Channels")}</legend>
+            {!post && <p className="text-xs text-muted">{t("Mark every channel that should get this video. Each one becomes its own post.")}</p>}
+            <div className="flex flex-wrap gap-2">
+              {allChannels
+                .filter((c) => !post || c.key === picked[0])
+                .map((c) => {
+                  const a = accounts.find((x) => x.id === c.accountId);
+                  const on = picked.includes(c.key);
+                  const label = c.platform === "YOUTUBE" && c.format === "short" ? "YouTube Shorts" : NETWORK_NAME[c.platform];
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      role="checkbox"
+                      aria-checked={on}
+                      disabled={lockedAccount}
+                      onClick={() => setPicked((p) => toggleChannel(p, c.key))}
+                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-sm transition-colors disabled:cursor-default ${
+                        on ? "border-accent bg-accent/10" : "border-border bg-surface hover:bg-surface-hover"
+                      }`}
+                    >
+                      <span className={on ? "" : "opacity-60 grayscale"}>
+                        <BrandIcon brand={c.platform} size={30} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold">{label}</span>
+                        <span className="block max-w-[11rem] truncate text-xs text-muted">{a?.displayName}</span>
+                      </span>
+                    </button>
+                  );
+                })}
             </div>
-          )}
+            {active.length === 0 && <span className="text-xs text-warning">{t("Connect an account first.")}</span>}
+          </fieldset>
+
           {lacksYouTubeUpload && (
             <p role="alert" className="rounded-xl bg-warning/10 px-4 py-2.5 text-sm text-warning">
               {t("This YouTube channel did not allow uploads. Connect it again and accept every permission.")}
             </p>
           )}
 
-          {network === "TIKTOK" && <TikTokTop accountId={accountId} info={infoData} loading={infoLoading} failed={infoFailed} durationSec={durationSec} />}
-          {network === "YOUTUBE" && <YouTubeTop form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} />}
-          {network === "FACEBOOK" && <FacebookTop form={facebook} onChange={(n) => setFacebook((f) => ({ ...f, ...n }))} />}
+          {hasTikTok && <TikTokTop accountId={accountId} info={infoData} loading={infoLoading} failed={infoFailed} durationSec={durationSec} />}
+          {isYouTube && <YouTubeTop form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} />}
+          {networksChosen.has("FACEBOOK") && <FacebookTop form={facebook} onChange={(n) => setFacebook((f) => ({ ...f, ...n }))} />}
 
           <label className="flex flex-col gap-2 text-sm">
             <span className={labelClass}>{isYouTube ? t("Description") : t("Caption")}</span>
@@ -301,9 +363,9 @@ export function PostComposer({
             </span>
           </label>
 
-          {network === "TIKTOK" && <TikTokFields settings={tiktok} info={infoData} patch={patchTikTok} />}
-          {network === "YOUTUBE" && <YouTubeFields form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} />}
-          {network === "INSTAGRAM" && <InstagramFields form={instagram} onChange={(n) => setInstagram((f) => ({ ...f, ...n }))} />}
+          {hasTikTok && <TikTokFields settings={tiktok} info={infoData} patch={patchTikTok} />}
+          {isYouTube && <YouTubeFields form={youtube} onChange={(n) => setYoutube((f) => ({ ...f, ...n }))} />}
+          {networksChosen.has("INSTAGRAM") && <InstagramFields form={instagram} onChange={(n) => setInstagram((f) => ({ ...f, ...n }))} />}
 
           <fieldset className="space-y-2">
             <legend className={labelClass}>{t("When")}</legend>
@@ -325,7 +387,7 @@ export function PostComposer({
             )}
           </fieldset>
 
-          {network === "TIKTOK" && <TikTokFooter settings={tiktok} />}
+          {hasTikTok && <TikTokFooter settings={tiktok} />}
 
           {errors.length > 0 && (
             <ul role="alert" className="space-y-1 rounded-xl bg-error/10 px-4 py-3 text-sm text-error">

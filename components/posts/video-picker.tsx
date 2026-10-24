@@ -23,12 +23,18 @@ export function VideoPicker({
   accept,
   onPick,
   onDuration,
+  onDimensions,
+  extraSources,
 }: {
   media: MediaState;
   upload: UploadState;
   accept: string;
   onPick: (file: File | undefined) => void;
   onDuration: (seconds: number) => void;
+  /** Largura e altura do vídeo, para conferir as regras do YouTube Shorts. */
+  onDimensions?: (width: number, height: number) => void;
+  /** Outras origens do vídeo (ex.: Google Drive, no próximo PR), ao lado de enviar do computador. */
+  extraSources?: React.ReactNode;
 }) {
   const t = useT();
   const uploading = Boolean(upload && !upload.error);
@@ -43,7 +49,10 @@ export function VideoPicker({
             controls
             playsInline
             preload="metadata"
-            onLoadedMetadata={(e) => onDuration(e.currentTarget.duration)}
+            onLoadedMetadata={(e) => {
+              onDuration(e.currentTarget.duration);
+              onDimensions?.(e.currentTarget.videoWidth, e.currentTarget.videoHeight);
+            }}
             className="aspect-[9/16] w-full bg-black object-contain"
           />
         ) : (
@@ -63,6 +72,7 @@ export function VideoPicker({
           }}
         />
       </label>
+      {extraSources}
       {media.name && (
         <p className="break-all text-xs text-muted">
           {media.name} · {formatBytes(media.bytes)}
