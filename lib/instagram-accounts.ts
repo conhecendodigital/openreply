@@ -34,10 +34,41 @@ export async function canConnectInstagramAccount({
 }
 
 /**
- * One account of the workspace: the given id, or (without one) the latest
- * connected, preferring an ACTIVE one. Returns it whatever its status, so
- * local settings (moderation, links, contacts) keep working while the channel
- * is off. Anything that calls Meta uses requireActiveInstagramAccount.
+ * The same preference as pickDefaultInstagramAccount, as a database order:
+ * "INSTAGRAM" sorts after "FACEBOOK", so platform desc puts Instagram first;
+ * Postgres orders the status enum by its declared order (ACTIVE first).
+ */
+export const DEFAULT_ACCOUNT_ORDER = [
+  { platform: "desc" as const },
+  { status: "asc" as const },
+  { connectedAt: "desc" as const },
+];
+
+type DefaultCandidate = { platform?: string | null; status: string };
+
+/**
+ * 25/10/2026: the default account of the workspace. Since 23/10 the table also
+ * holds Facebook Pages (platform FACEBOOK), so "the latest connected" picked
+ * the Page as soon as one was connected after the Instagram. Order of
+ * preference: Instagram ACTIVE, then any Instagram, then an ACTIVE Page, then
+ * anything. `accounts` must already be ordered by connectedAt desc.
+ */
+export function pickDefaultInstagramAccount<T extends DefaultCandidate>(accounts: readonly T[]): T | null {
+  const isInstagram = (a: T) => (a.platform ?? "INSTAGRAM") !== "FACEBOOK";
+  return (
+    accounts.find((a) => isInstagram(a) && a.status === "ACTIVE") ??
+    accounts.find(isInstagram) ??
+    accounts.find((a) => a.status === "ACTIVE") ??
+    accounts[0] ??
+    null
+  );
+}
+
+/**
+ * One account of the workspace: the given id, or (without one) the default
+ * from pickDefaultInstagramAccount. Returns it whatever its status, so local
+ * settings (moderation, links, contacts) keep working while the channel is
+ * off. Anything that calls Meta uses requireActiveInstagramAccount.
  */
 export async function getWorkspaceInstagramAccount(
   workspaceId: string,
@@ -49,12 +80,15 @@ export async function getWorkspaceInstagramAccount(
     });
   }
 
-  // Postgres orders an enum by its declared order: ACTIVE comes first.
   return prisma.instagramAccount.findFirst({
     where: { workspaceId },
-    orderBy: [{ status: "asc" }, { connectedAt: "desc" }],
+    orderBy: DEFAULT_ACCOUNT_ORDER,
   });
 }
+
+/** Posts, overview, profile and stories read the Instagram Graph API only. */
+export const FACEBOOK_PAGE_NOT_INSTAGRAM =
+  "Essa conta é uma Página do Facebook, não um Instagram. Escolha a conta do Instagram (listar_contas_instagram mostra as duas).";
 
 export type ActiveAccountResult =
   | { ok: true; account: InstagramAccount }
@@ -67,7 +101,8 @@ export type ActiveAccountResult =
  */
 export async function requireActiveInstagramAccount(
   workspaceId: string,
-  instagramAccountId?: string | null
+  instagramAccountId?: string | null,
+  options: { instagramOnly?: boolean } = {}
 ): Promise<ActiveAccountResult> {
   const account = await getWorkspaceInstagramAccount(workspaceId, instagramAccountId);
   if (!account) {
@@ -75,6 +110,19 @@ export async function requireActiveInstagramAccount(
       ok: false,
       response: NextResponse.json(
         { success: false, error: "Instagram account not connected." },
+        { status: 400 }
+      ),
+    };
+  }
+  if (options.instagramOnly && account.platform === "FACEBOOK") {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          success: false,
+          error: FACEBOOK_PAGE_NOT_INSTAGRAM,
+          code: "facebook_page",
+        },
         { status: 400 }
       ),
     };

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentWorkspaceId } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
+import { pickDefaultInstagramAccount } from "@/lib/instagram-accounts";
 
 export const runtime = "nodejs";
 
@@ -22,16 +23,16 @@ export async function GET() {
   const instagramAccounts = await prisma.instagramAccount.findMany({
     where: { workspaceId },
     orderBy: { connectedAt: "desc" },
-    select: { id: true, username: true, instagramId: true, name: true, status: true },
+    select: { id: true, username: true, instagramId: true, name: true, status: true, platform: true },
   });
 
   return NextResponse.json({
     success: true,
     data: {
       instagramAccounts,
-      // Prefer a working channel; a disconnected one is still listed.
-      selectedInstagramAccountId:
-        (instagramAccounts.find((a) => a.status === "ACTIVE") ?? instagramAccounts[0])?.id ?? null,
+      // Prefer a working Instagram; a Facebook Page only when there is no
+      // Instagram (25/10/2026). A disconnected one is still listed.
+      selectedInstagramAccountId: pickDefaultInstagramAccount(instagramAccounts)?.id ?? null,
     },
   });
 }

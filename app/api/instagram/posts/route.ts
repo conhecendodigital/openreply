@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
 
   const resolved = await requireActiveInstagramAccount(
     workspaceId,
-    request.nextUrl.searchParams.get("instagramAccountId")
+    request.nextUrl.searchParams.get("instagramAccountId"),
+    { instagramOnly: true }
   );
   if (!resolved.ok) return resolved.response;
   const account = resolved.account;

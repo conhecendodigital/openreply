@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentWorkspaceId, isApiTokenRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
+import { DEFAULT_ACCOUNT_ORDER } from "@/lib/instagram-accounts";
 import { calculateCtr, normalizeTopKeywords } from "@/lib/tracking/analytics";
 import { buildTrackedUrl, DM_FORMATS, parseDmFormat } from "@/lib/tracking/message";
 import { generateTrackedLinkSlug } from "@/lib/tracking/server";
@@ -425,7 +426,7 @@ export async function POST(request: NextRequest) {
         })
       : prisma.instagramAccount.findFirst({
           where: { workspaceId },
-          orderBy: { connectedAt: "desc" },
+          orderBy: DEFAULT_ACCOUNT_ORDER,
         }),
   ]);
 

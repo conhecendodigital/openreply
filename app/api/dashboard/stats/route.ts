@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, getCurrentWorkspaceId } from "@/lib/auth";
 import { prisma } from "@/lib/db/client";
+import { DEFAULT_ACCOUNT_ORDER } from "@/lib/instagram-accounts";
 import {
   calculateCtr,
   normalizeTopKeywords,
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
     }),
     prisma.instagramAccount.findFirst({
       where: { workspaceId },
-      orderBy: { connectedAt: "desc" },
+      orderBy: DEFAULT_ACCOUNT_ORDER,
       select: {
         id: true,
         username: true,
@@ -68,6 +69,7 @@ export async function GET(request: NextRequest) {
         tokenExpiresAt: true,
         webhookSubscribed: true,
         status: true,
+        platform: true,
         lastError: true,
       },
     }),
