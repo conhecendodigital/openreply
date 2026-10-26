@@ -235,6 +235,8 @@ export async function startFlowRun(data: FlowStartJob, now: Date = new Date()): 
   // tap opened. Even when the flow's own trigger is a comment there is no
   // comment here: never a private reply (triggerRef is the recipient id).
   const isComment = data.kind !== "BROADCAST" && triggerIsComment(def.trigger.type);
+  const firstNode =
+    data.startNodeId && def.nodes.some((n) => n.id === data.startNodeId) ? data.startNodeId : (def.trigger.next ?? null);
   let runId: string;
   try {
     const created = await prisma.flowRun.create({
@@ -246,7 +248,7 @@ export async function startFlowRun(data: FlowStartJob, now: Date = new Date()): 
         igUserId: data.igUserId,
         triggerKey: data.triggerKey,
         triggerCommentId: isComment ? data.triggerRef : null,
-        currentNodeId: def.trigger.next ?? null,
+        currentNodeId: firstNode,
         status: "ACTIVE",
         startedAt: now,
       },
@@ -265,12 +267,12 @@ export async function startFlowRun(data: FlowStartJob, now: Date = new Date()): 
   await step(run, { id: "trigger", type: "trigger" }, "entered", { detail: data.triggerKey });
   await timeline(run, "FLOW_STARTED", runId, flow.name, { triggerKey: data.triggerKey });
 
-  if (!def.trigger.next) {
+  if (!firstNode) {
     await finish(run, "DONE", "empty", null);
     return "DONE";
   }
   const inboundAt = data.inboundAt ? new Date(data.inboundAt) : null;
-  const outcome = await advance(runId, def.trigger.next, 0, ["ACTIVE"], inboundAt);
+  const outcome = await advance(runId, firstNode, 0, ["ACTIVE"], inboundAt);
   return outcome === "noop" ? "started" : outcome;
 }
 
