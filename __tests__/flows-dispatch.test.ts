@@ -9,7 +9,7 @@ const h = vi.hoisted(() => ({
   prisma: {
     flow: { findMany: vi.fn(), update: vi.fn() },
     flowRun: { findFirst: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
-    flowStep: { create: vi.fn() },
+    flowStep: { create: vi.fn(), findFirst: vi.fn() },
   },
   add: vi.fn(),
 }));
@@ -64,6 +64,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.add.mockResolvedValue({});
   h.prisma.flowStep.create.mockResolvedValue({});
+  h.prisma.flowStep.findFirst.mockResolvedValue(null);
   h.prisma.flow.update.mockResolvedValue({});
 });
 
@@ -165,7 +166,7 @@ describe("button taps", () => {
     );
   });
 
-  it("ignores stale taps, someone else's tap and a button the step does not have", async () => {
+  it("ignores ended runs, someone else's tap and a target no button of the flow has", async () => {
     h.prisma.flowRun.findUnique.mockResolvedValue(run({ status: "DONE" }));
     expect(await tap()).toBe("ignored");
     h.prisma.flowRun.findUnique.mockResolvedValue(run());
@@ -173,6 +174,78 @@ describe("button taps", () => {
     expect(await tap("flow:r_1:m3")).toBe("ignored");
     h.prisma.flowRun.updateMany.mockResolvedValue({ count: 0 });
     expect(await tap()).toBe("ignored");
+    expect(h.add).not.toHaveBeenCalled();
+  });
+});
+
+describe("tap on an older card (elisneire, 26/10)", () => {
+  // uso -> trava -> r_generica; she then taps "Cara de IA" on the older trava card.
+  const quiz = {
+    trigger: { type: "COMMENT", keywords: [], next: "uso" },
+    nodes: [
+      { id: "uso", type: "message", text: "pra que?", buttons: [{ id: "u1", kind: "next", label: "Negócio", next: "t_neg" }] },
+      { id: "t_neg", type: "action", action: { kind: "add_tag", tag: "x" }, next: "trava" },
+      {
+        id: "trava",
+        type: "message",
+        text: "o que atrapalha?",
+        buttons: [
+          { id: "v2", kind: "next", label: "Genérica", next: "r_gen" },
+          { id: "v3", kind: "next", label: "Cara de IA", next: "r_ia" },
+        ],
+      },
+      { id: "r_gen", type: "message", text: "gen", buttons: [{ id: "c2", kind: "next", label: "Como?", next: "oferta" }] },
+      { id: "r_ia", type: "message", text: "ia", buttons: [{ id: "c3", kind: "next", label: "Como?", next: "oferta" }] },
+      { id: "oferta", type: "message", text: "oferta", next: "espera" },
+      { id: "espera", type: "wait", mode: "delay", minutes: 180, next: "fim" },
+      { id: "fim", type: "end" },
+    ],
+  };
+  const run = (over: Record<string, unknown> = {}) => ({
+    id: "r_9",
+    flowId: "f_9",
+    igUserId: "u_1",
+    status: "WAITING_TAP",
+    currentNodeId: "r_gen",
+    stepCount: 7,
+    flow: { isActive: true, published: quiz, instagramAccount: { instagramId: "ig_1" } },
+    ...over,
+  });
+  const tap = (payload: string) => routeFlowTap({ instagramId: "ig_1", igUserId: "u_1", payload, at: new Date(60_000) });
+
+  it("an older card's button moves the run there instead of staying silent", async () => {
+    h.prisma.flowRun.findUnique.mockResolvedValue(run());
+    h.prisma.flowRun.updateMany.mockResolvedValue({ count: 1 });
+    expect(await tap("flow:r_9:r_ia")).toBe("moved");
+    expect(h.prisma.flowRun.updateMany).toHaveBeenCalledWith({
+      where: { id: "r_9", status: "WAITING_TAP", currentNodeId: "r_gen", stepCount: 7 },
+      data: { status: "ACTIVE", currentNodeId: "r_ia", waitingUntil: null },
+    });
+    expect(h.prisma.flowStep.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ nodeId: "trava", outcome: "tapped", detail: "r_ia" }),
+    });
+    expect(h.add).toHaveBeenCalledWith("flow-step", expect.objectContaining({ runId: "r_9", nodeId: "r_ia", seq: 7 }), expect.anything());
+  });
+
+  it("works while the run waits on a delay (after the offer)", async () => {
+    h.prisma.flowRun.findUnique.mockResolvedValue(run({ status: "WAITING_DELAY", currentNodeId: "fim" }));
+    h.prisma.flowRun.updateMany.mockResolvedValue({ count: 1 });
+    expect(await tap("flow:r_9:t_neg")).toBe("moved");
+    expect(h.prisma.flowRun.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ status: "WAITING_DELAY", currentNodeId: "fim" }) })
+    );
+  });
+
+  it("the same old button twice in a few seconds goes once", async () => {
+    h.prisma.flowRun.findUnique.mockResolvedValue(run());
+    h.prisma.flowStep.findFirst.mockResolvedValue({ id: "s_1" });
+    expect(await tap("flow:r_9:t_neg")).toBe("ignored");
+    expect(h.add).not.toHaveBeenCalled();
+  });
+
+  it("a run that already ended stays ended", async () => {
+    h.prisma.flowRun.findUnique.mockResolvedValue(run({ status: "DONE" }));
+    expect(await tap("flow:r_9:r_ia")).toBe("ignored");
     expect(h.add).not.toHaveBeenCalled();
   });
 });
