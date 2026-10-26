@@ -79,6 +79,7 @@ import {
   routeFlowTap,
 } from "@/lib/flows/dispatch";
 import { runFlowStepJob, runReplyTimeout, startFlowRun } from "@/lib/flows/engine";
+import { findHandoffFlow } from "@/lib/flows/campaign-handoff";
 // Etapa 5: A/B (off by default: no lookup, same objects) and broadcasts.
 import { applyVariant, campaignVariantFor, variantData } from "@/lib/ab/variant";
 import {
@@ -1102,6 +1103,25 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
       },
     },
   });
+
+  if (!automation && !isFollowCheck && !fallback) {
+    // The campaign was turned off and a flow copied from it took the post:
+    // the tap on the old opening DM goes on in the flow (campaign-handoff).
+    const target = await findHandoffFlow({ automationId, instagramId: instagramAccountId, igUserId: userId }).catch(() => null);
+    if (target) {
+      await startFlowRun({
+        instagramAccountId,
+        flowId: target.flowId,
+        kind: "BROADCAST",
+        triggerKey: `reveal:${automationId}:${userId}:${tappedAt.getTime()}`,
+        triggerRef: userId,
+        igUserId: userId,
+        inboundAt: tappedAt.getTime(),
+        startNodeId: target.startNodeId,
+      });
+    }
+    return;
+  }
 
   if (
     !automation ||

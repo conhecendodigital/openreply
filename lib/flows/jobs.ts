@@ -43,6 +43,11 @@ export interface FlowStartJob {
   text?: string | null;
   /** ms. The person's DM / tap / link that opened the window (none for a comment). */
   inboundAt?: number | null;
+  /**
+   * Start here instead of trigger.next (a tap on the opening DM of a campaign
+   * that was turned off and replaced by this flow: lib/flows/campaign-handoff).
+   */
+  startNodeId?: string | null;
 }
 
 export interface FlowStepJob {
