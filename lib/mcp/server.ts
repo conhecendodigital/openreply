@@ -175,7 +175,7 @@ type FlowSummaryRow = {
 const FLOW_DRAFT_HELP =
   "Rascunho = { trigger: { type, postId?, matchAnyPost?, storyId?, conversationLinkId?, keywords[], matchAnyWord, wholeWordMatch, next }, nodes: [...] }. " +
   'Nós: {id, type:"message", text, imageUrl?, buttons:[{id,label,kind:"link",url} | {id,label,kind:"next",next}] (até 3), next?}; ' +
-  '{id, type:"condition", check:{kind:"follows"}|{kind:"has_tag",tag}|{kind:"clicked",nodeId?}, yes, no}; ' +
+  '{id, type:"condition", check:{kind:"follows"}|{kind:"has_tag",tag}|{kind:"clicked",nodeId?}|{kind:"ab_split",percentA:1-99} (teste A/B: yes = versão A, no = versão B; mesma pessoa sempre no mesmo lado), yes, no}; ' +
   '{id, type:"action", action:{kind:"add_tag"|"remove_tag",tag}|{kind:"notify_owner",note?}|{kind:"propose_draft",text,reason?}|{kind:"handoff",hours?}, next?}; ' +
   '{id, type:"wait", mode:"delay", minutes, next} | {id, type:"wait", mode:"reply", timeoutMinutes?, next, onTimeout?}; {id, type:"end"}. ' +
   "Variáveis no texto: {username} e {first_name}. Rascunho de resposta (propose_draft) nunca é enviado sem aprovação humana.";

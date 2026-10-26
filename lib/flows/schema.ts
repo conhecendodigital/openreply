@@ -103,6 +103,11 @@ const conditionNode = z.object({
     z.object({ kind: z.literal("has_tag"), tag: z.string().max(MAX_TAG) }),
     /** Clicked a link of this flow (in this run). nodeId = only that node's links. */
     z.object({ kind: z.literal("clicked"), nodeId: ref }),
+    /**
+     * A/B split: the same person always falls on the same side (seed = flow +
+     * IGSID). "yes" = version A (percentA % of the people), "no" = version B.
+     */
+    z.object({ kind: z.literal("ab_split"), percentA: z.number().int().min(1).max(99) }),
   ]),
   yes: ref,
   no: ref,

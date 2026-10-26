@@ -62,6 +62,7 @@ import {
   type FlowStepJob,
 } from "@/lib/flows/jobs";
 import type { FlowRunStatus } from "@/app/generated/prisma/client";
+import { abSplitIsA } from "@/lib/flows/ab-split";
 
 export const OPEN_RUN_STATUSES: FlowRunStatus[] = ["ACTIVE", "WAITING_DELAY", "WAITING_REPLY", "WAITING_TAP"];
 /** An open run untouched this long is stale (the window closed long ago). */
@@ -524,6 +525,11 @@ async function runCondition(input: NodeInput): Promise<NodeResult> {
         select: { id: true },
       });
       yes = Boolean(click);
+      break;
+    }
+    case "ab_split": {
+      yes = abSplitIsA(run.flowId, run.igUserId, node.check.percentA);
+      detail = yes ? "A" : "B";
       break;
     }
   }

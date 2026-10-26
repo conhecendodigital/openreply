@@ -90,6 +90,7 @@ export function nodeSummary(t: TFunction, node: FlowNode): string {
     case "condition":
       if (node.check.kind === "follows") return t("Follows the account?");
       if (node.check.kind === "has_tag") return t("Has the tag {tag}?", { tag: node.check.tag || "…" });
+      if (node.check.kind === "ab_split") return t("A/B test: {a}% A / {b}% B", { a: node.check.percentA, b: 100 - node.check.percentA });
       return t("Clicked the link?");
     case "action":
       switch (node.action.kind) {

@@ -481,7 +481,14 @@ function ConditionEditor({ def, node, setDef, ctx, onCreated }: { def: FlowDefin
             const kind = e.target.value;
             patch((n) => ({
               ...n,
-              check: kind === "has_tag" ? { kind: "has_tag", tag: "" } : kind === "clicked" ? { kind: "clicked", nodeId: null } : { kind: "follows" },
+              check:
+                kind === "has_tag"
+                  ? { kind: "has_tag", tag: "" }
+                  : kind === "clicked"
+                    ? { kind: "clicked", nodeId: null }
+                    : kind === "ab_split"
+                      ? { kind: "ab_split", percentA: 50 }
+                      : { kind: "follows" },
             }));
           }}
           className={inputClass}
@@ -489,8 +496,24 @@ function ConditionEditor({ def, node, setDef, ctx, onCreated }: { def: FlowDefin
           <option value="follows">{t("Follows the account?")}</option>
           <option value="has_tag">{t("Has a tag?")}</option>
           <option value="clicked">{t("Clicked the link?")}</option>
+          <option value="ab_split">{t("A/B test (split the people)")}</option>
         </select>
       </Field>
+      {node.check.kind === "ab_split" && (
+        <Field label={t("% of the people in version A (yes)")} hint={t("The rest goes to version B (no). The same person always falls on the same side.")}>
+          <input
+            type="number"
+            min={1}
+            max={99}
+            value={node.check.percentA}
+            onChange={(e) => {
+              const v = Math.min(99, Math.max(1, Math.round(Number(e.target.value) || 50)));
+              patch((n) => ({ ...n, check: { kind: "ab_split", percentA: v } }));
+            }}
+            className={inputClass}
+          />
+        </Field>
+      )}
       {node.check.kind === "has_tag" && (
         <Field label={t("Tag")}>
           <input
@@ -523,8 +546,8 @@ function ConditionEditor({ def, node, setDef, ctx, onCreated }: { def: FlowDefin
           </select>
         </Field>
       )}
-      <TargetSelect def={def} sourceId={node.id} handle="yes" label={t("If yes, goes to")} setDef={setDef} onCreated={onCreated} />
-      <TargetSelect def={def} sourceId={node.id} handle="no" label={t("If no, goes to")} setDef={setDef} onCreated={onCreated} />
+      <TargetSelect def={def} sourceId={node.id} handle="yes" label={node.check.kind === "ab_split" ? t("Version A goes to") : t("If yes, goes to")} setDef={setDef} onCreated={onCreated} />
+      <TargetSelect def={def} sourceId={node.id} handle="no" label={node.check.kind === "ab_split" ? t("Version B goes to") : t("If no, goes to")} setDef={setDef} onCreated={onCreated} />
     </div>
   );
 }
