@@ -27,7 +27,7 @@ import {
   type FlowStartJob,
   type FlowStepJob,
 } from "@/lib/flows/jobs";
-import { parseFlowDefinition } from "@/lib/flows/schema";
+import { parseFlowDefinition, type FlowNode } from "@/lib/flows/schema";
 
 export type FlowEvent = {
   /** Trigger types to try, in order (a story reply tries STORY_REPLY, then DM). */
@@ -255,9 +255,12 @@ export async function resumeFlowOnReply(input: {
 }
 
 /**
- * "flow:<runId>:<targetNodeId>": the run must be WAITING_TAP on a message
- * whose button leads to that target, for this same person. A stale tap (old
- * message, run moved on or ended) is ignored with a log. Never throws.
+ * "flow:<runId>:<targetNodeId>": the run must be open and waiting (a tap or a
+ * delay) for this same person, and the target must be a button of a message
+ * of this flow. A tap on an OLDER card of the same run still works: people go
+ * back and pick another option, and ignoring it left them with no answer.
+ * The same target tapped twice in a few seconds goes once. A run that ended,
+ * someone else's tap or a target no button has is ignored. Never throws.
  */
 export async function routeFlowTap(input: {
   instagramId: string;
@@ -284,7 +287,7 @@ export async function routeFlowTap(input: {
       !run ||
       run.igUserId !== input.igUserId ||
       run.flow?.instagramAccount?.instagramId !== input.instagramId ||
-      run.status !== "WAITING_TAP" ||
+      (run.status !== "WAITING_TAP" && run.status !== "WAITING_DELAY") ||
       !run.currentNodeId
     ) {
       console.log(`[Flows] Stale or foreign tap ignored (${input.payload})`);
@@ -292,13 +295,30 @@ export async function routeFlowTap(input: {
     }
     const def = parseFlowDefinition(run.flow.published);
     if (!def.ok) return "ignored";
-    const node = def.definition.nodes.find((n) => n.id === run.currentNodeId);
-    if (!node || node.type !== "message" || !node.buttons.some((b) => b.kind === "next" && b.next === parsed.targetNodeId)) {
-      console.log(`[Flows] Tap for a button the current step does not have, ignored (${input.payload})`);
+    const hasButton = (n: FlowNode) =>
+      n.type === "message" && n.buttons.some((b) => b.kind === "next" && b.next === parsed.targetNodeId);
+    const current = def.definition.nodes.find((n) => n.id === run.currentNodeId);
+    // The card the tap came from: the current step, or an older card of this flow.
+    const node = current && hasButton(current) ? current : def.definition.nodes.find(hasButton);
+    if (!node || !def.definition.nodes.some((n) => n.id === parsed.targetNodeId)) {
+      console.log(`[Flows] Tap for a button this flow does not have, ignored (${input.payload})`);
       return "ignored";
     }
+    if (node !== current) {
+      const recent = await prisma.flowStep
+        .findFirst({
+          where: { runId: run.id, outcome: "tapped", detail: parsed.targetNodeId, occurredAt: { gte: new Date(input.at.getTime() - 15_000) } },
+          select: { id: true },
+        })
+        .catch(() => null);
+      if (recent) {
+        console.log(`[Flows] Same old button tapped again in a few seconds, ignored (${input.payload})`);
+        return "ignored";
+      }
+      console.log(`[Flows] Tap on an older card, run jumps to ${parsed.targetNodeId} (${input.payload})`);
+    }
     const claim = await prisma.flowRun.updateMany({
-      where: { id: run.id, status: "WAITING_TAP", currentNodeId: node.id, stepCount: run.stepCount },
+      where: { id: run.id, status: run.status, currentNodeId: run.currentNodeId, stepCount: run.stepCount },
       data: { status: "ACTIVE", currentNodeId: parsed.targetNodeId, waitingUntil: null },
     });
     if (claim.count === 0) return "ignored";
