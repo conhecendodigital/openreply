@@ -19,6 +19,8 @@ export interface InstagramCard {
   tokenExpiresInDays: number | null;
   webhookSubscribed: boolean;
   webhookFields: string[];
+  /** Permissões concedidas na última conexão, como a Meta informou (vazio = desconhecido). */
+  grantedScopes?: string[];
   /** Expected fields (lib/meta/webhook-fields.ts) this account is not subscribed to. */
   missingWebhookFields?: string[];
   lastWebhookAt: string | null;

@@ -1,6 +1,6 @@
 # Agendar em várias redes (aba Posts)
 
-A aba Posts agenda e publica vídeo em **TikTok, YouTube, Instagram (Reels) e Página do Facebook**. TikTok segue como antes (`docs/tiktok-revisao.md`).
+A aba Posts agenda e publica vídeo em **TikTok, YouTube, Instagram (Reels e carrossel) e Página do Facebook**. TikTok segue como antes (`docs/tiktok-revisao.md`).
 
 ## Como funciona
 
@@ -15,7 +15,7 @@ A aba Posts agenda e publica vídeo em **TikTok, YouTube, Instagram (Reels) e P�
 |---|---|
 | `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` | Opcionais. Sem elas vale `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` (o mesmo app do login). |
 | `YOUTUBE_OAUTH_SCOPES` | Opcional. Troca a lista de permissões (separada por vírgula ou espaço). Padrão: `youtube.upload`, `youtube.readonly`, `youtube.force-ssl` e `youtube`. |
-| `INSTAGRAM_PUBLISH_ENABLED=1` | Liga o escopo `instagram_business_content_publish` na conexão do Instagram. |
+| `INSTAGRAM_PUBLISH_DISABLED=1` | Interruptor de emergência (27/10/2026). Por padrão o login do Instagram já pede `instagram_business_content_publish`; com `=1` volta ao pedido antigo, sem publicar. `INSTAGRAM_PUBLISH_ENABLED=0` (nome antigo) também desliga; `=1` não faz mais diferença. |
 | `FACEBOOK_PUBLISH_ENABLED=1` | Liga o escopo `pages_manage_posts` na conexão do Facebook. |
 
 ## Google Cloud (YouTube)
@@ -34,7 +34,40 @@ Modo de teste e verificação:
 
 ## Meta (Instagram e Facebook)
 
-- Instagram: permissão `instagram_business_content_publish` (precisa de revisão do app) e `INSTAGRAM_PUBLISH_ENABLED=1`. Depois, reconectar a conta.
+### Permissões do login do Instagram (Instagram Login)
+
+O botão "Conectar Instagram" pede, por padrão, estas cinco permissões:
+
+| Permissão | Para quê | Na documentação da Meta |
+|---|---|---|
+| `instagram_business_basic` | perfil e mídia | confirmada |
+| `instagram_business_manage_messages` | Direct | confirmada |
+| `instagram_business_manage_comments` | comentários | confirmada |
+| `instagram_business_content_publish` | publicar Reels e carrossel | confirmada |
+| `instagram_business_manage_insights` | métricas | já era pedida antes; as páginas consultadas em 27/10/2026 não a listam |
+
+Fontes: developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login, .../content-publishing e developers.facebook.com/docs/permissions.
+
+Se a tela da Meta não mostrar "publicar" ao conectar, a causa mais provável é o app: a permissão precisa estar adicionada ao caso de uso do app em Meta for Developers (e, para outras contas além das suas, passar na revisão do app). Pedir uma permissão que o app não tem pode fazer a tela de autorização falhar inteira. Se isso acontecer, ponha `INSTAGRAM_PUBLISH_DISABLED=1` no Dokploy e redeploy: o login volta a pedir só as quatro de antes.
+
+### Painel "Permissões autorizadas"
+
+Em Canais, no detalhe do Instagram, cada permissão aparece como Ativa, Faltando ou Não confirmada. A documentação consultada não traz um endpoint para ler as permissões de um token. O único registro documentado é o campo `permissions` da resposta que a Meta dá ao trocar o código pelo token, então guardamos esse campo na conexão (`InstagramAccount.grantedScopes`, migração `20261029120000_instagram_granted_scopes`, aditiva). O painel mostra "concedidas na última conexão", não uma leitura ao vivo. Conta conectada antes disso aparece como "Não confirmada" até reconectar.
+
+### Carrossel
+
+- Escolha "Carrossel" nas opções do Instagram (só com o Instagram marcado sozinho). Dá para escolher várias imagens, reordenar e remover. O mínimo é 2 e o máximo é 20 (limite da documentação da Meta). Tamanho recomendado: 1080x1350 (4:5); a tela avisa se o slide for diferente e se o formato for diferente do primeiro (a Meta corta todos pelo formato do primeiro).
+- A Meta só aceita JPEG. PNG enviado na tela é convertido para JPEG (sharp, qualidade 92, sem redimensionar, transparência vira fundo branco) na hora de publicar e guardado de novo na pasta do workspace.
+- Como é guardado: `ScheduledPost.settings = { shareToFeed, format: "CAROUSEL", slides: [{ url, bytes, contentType, width, height }] }`. `mediaUrl`, `mediaBytes` e `mediaContentType` do post são os do 1º slide. Sem mudança de tabela; Reels antigos seguem iguais (sem `format`).
+- Publicação: um container filho por imagem (`is_carousel_item=true`), espera cada filho ficar FINISHED, container pai `media_type=CAROUSEL` com `children` na ordem dos slides e, no cron, confere o pai e só então chama `media_publish`. Erro em um filho para tudo e diz qual slide.
+- Limite diário pela API: a documentação mostra dois números (50 e 100 posts em 24 horas) e diz que carrossel conta como um post. Não bloqueamos por contagem: o endpoint `content_publishing_limit` da Meta é a fonte.
+
+### Reel de teste
+
+Opção no Reel: "Reel de teste" (só para quem não segue). Manda `trial_params={"graduation_strategy":"MANUAL"|"SS_PERFORMANCE"}` no container do Reel. A documentação mostra o parâmetro em JSON; o código manda o JSON como texto no campo. Desligado por padrão. Ainda não foi testado contra a Meta real.
+
+### Facebook
+
 - Facebook: permissão `pages_manage_posts` e `FACEBOOK_PUBLISH_ENABLED=1`. Depois, reconectar a Página.
 - Sem a permissão, a publicação falha com a mensagem para reconectar.
 
@@ -45,6 +78,7 @@ Modo de teste e verificação:
 | TikTok | 2200 | mp4, mov, webm, até 1 GB |
 | YouTube | título 100, descrição 5000 | mp4, mov, webm, até 2 GB. Declarar "feito para crianças" (sem padrão) e conteúdo com IA |
 | Instagram (Reels) | 2200 | mp4, mov, até 300 MB. A Meta processa e o cron confere até ficar pronto |
+| Instagram (carrossel) | 2200 | 2 a 20 imagens JPEG ou PNG, até 8 MB cada (limite nosso). PNG vira JPEG ao publicar |
 | Facebook (Página) | título 255, descrição 5000 | mp4, mov, até 1 GB |
 
 ## Outros pontos

@@ -11,6 +11,7 @@ import { useState } from "react";
 import { useDateTime, useTimeAgo } from "@/components/contact-ui";
 import { channelAlertText, isSeriousAlert } from "@/components/channel-alert-banner";
 import { useLang, useT } from "@/components/lang-provider";
+import { buildPermissionPanel } from "@/lib/meta/permissions";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import {
   STATUS_LABEL,
@@ -262,6 +263,8 @@ export function InstagramChannelDetail({
         )}
         </CollapsibleSection>
 
+        {card.platform === "instagram" && <PermissionsPanel card={card} t={t} />}
+
         {test && (
           <div
             role="status"
@@ -479,3 +482,37 @@ function Avatar({ card }: { card: InstagramCard }) {
   );
 }
 
+
+/** Permissões autorizadas: o que a Meta informou como concedido na última conexão (não é leitura ao vivo). */
+export function PermissionsPanel({ card, t }: { card: InstagramCard; t: ReturnType<typeof useT> }) {
+  const panel = buildPermissionPanel(card.grantedScopes, []);
+  const tone = { granted: "bg-success/10 text-success", missing: "border border-dashed border-warning text-foreground", unknown: "bg-surface-hover text-muted" } as const;
+  const mark = { granted: t("Permission active"), missing: t("Permission missing"), unknown: t("Not confirmed") } as const;
+  return (
+    <div data-testid="permissions-panel">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Authorized permissions")}</p>
+      <p className="mt-0.5 text-xs text-muted">
+        {panel.unknown
+          ? t("The Meta did not report the permissions of this connection. Reconnect the account to see them here.")
+          : t("Granted in the last connection, as Meta reported. If you change them on Meta later, reconnect to update this list.")}
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {panel.rows.map((row) => (
+          <li key={row.scope} className="flex flex-wrap items-center gap-2 text-sm">
+            <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${tone[row.state]}`}>{mark[row.state]}</span>
+            <span>{t(row.label)}</span>
+            <span className="font-mono text-xs text-muted">{row.scope}</span>
+          </li>
+        ))}
+      </ul>
+      {panel.missingPublish && (
+        <p role="alert" className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+          {t("Publishing permission missing: Reels and carousels from the Posts tab will not go out. Reconnect the account and accept every permission on the Meta screen. If the Meta screen does not show it, the app still needs the publishing permission in the Meta for Developers panel.")}
+        </p>
+      )}
+      {!panel.unknown && !panel.missingPublish && panel.missing.length > 0 && (
+        <p className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">{t("Some permissions are missing. Reconnect the account and accept every permission.")}</p>
+      )}
+    </div>
+  );
+}

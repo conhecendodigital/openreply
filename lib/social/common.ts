@@ -17,6 +17,19 @@ export function mediaUrlProblem(workspaceId: string, mediaUrl: string): string |
 export function commonMediaProblem(provider: SocialProvider, post: ProviderPost): ReadyProblem | null {
   const urlProblem = mediaUrlProblem(post.workspaceId, post.mediaUrl);
   if (urlProblem) return { message: urlProblem, code: "invalid_media" };
+  if (post.mediaContentType.startsWith("image/")) {
+    // Imagem (slide de carrossel): só a rede que declara imageTypes aceita.
+    if (!provider.imageTypes?.includes(post.mediaContentType)) {
+      return { message: `${provider.label} does not accept this file format`, code: "invalid_media" };
+    }
+    if (post.mediaBytes > (provider.imageMaxBytes ?? 0)) {
+      return { message: `${provider.label} image limit is ${Math.round((provider.imageMaxBytes ?? 0) / (1024 * 1024))} MB in the Lead Engine`, code: "invalid_media" };
+    }
+    if (post.caption.length > provider.captionMax) {
+      return { message: `The text is over the ${provider.label} limit of ${provider.captionMax} characters`, code: "invalid_caption" };
+    }
+    return null;
+  }
   if (!provider.videoTypes.includes(post.mediaContentType)) {
     return { message: `${provider.label} does not accept this video format`, code: "invalid_media" };
   }

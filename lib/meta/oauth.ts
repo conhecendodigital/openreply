@@ -6,6 +6,7 @@ import {
   timingSafeEqual,
 } from "crypto";
 import { getEncryptionKeyHex, requireEnv } from "@/lib/env";
+import { INSTAGRAM_BASE_SCOPES, INSTAGRAM_PUBLISH_SCOPE } from "@/lib/meta/scopes";
 
 // Instagram API with Instagram Login authorizes on www.instagram.com. The old
 // api.instagram.com/oauth/authorize host belonged to the retired Basic Display
@@ -74,19 +75,37 @@ export function verifyOAuthState(state: string | null): OAuthStatePayload | null
   }
 }
 
-export const INSTAGRAM_PUBLISH_SCOPE = "instagram_business_content_publish";
+export { INSTAGRAM_BASE_SCOPES, INSTAGRAM_PUBLISH_SCOPE };
 
-const INSTAGRAM_SCOPES =
-  "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_manage_insights";
+/*
+ * Permissões da conta pelo Instagram Login. Nomes conferidos na documentação da Meta
+ * (developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login,
+ * .../content-publishing e /docs/permissions): basic, content_publish, manage_comments e
+ * manage_messages. `manage_insights` já era pedida aqui antes e continua (as páginas consultadas
+ * em 27/10/2026 não a listam, então é a única que não foi reconfirmada).
+ */
+
+/**
+ * Publicar (Reels e carrossel, aba Posts) fica LIGADO por padrão. Interruptor de emergência:
+ * INSTAGRAM_PUBLISH_DISABLED=1 volta ao pedido antigo (sem publicar). INSTAGRAM_PUBLISH_ENABLED=0
+ * (nome antigo, que ligava) também desliga; qualquer outro valor dele é ignorado.
+ */
+export function isInstagramPublishRequested(env: Record<string, string | undefined> = process.env): boolean {
+  if (env.INSTAGRAM_PUBLISH_DISABLED === "1") return false;
+  if (env.INSTAGRAM_PUBLISH_ENABLED === "0") return false;
+  return true;
+}
+
+/** Lista de permissões que o login do Instagram pede agora. */
+export function getRequestedInstagramScopes(env: Record<string, string | undefined> = process.env): string[] {
+  return isInstagramPublishRequested(env) ? [...INSTAGRAM_BASE_SCOPES, INSTAGRAM_PUBLISH_SCOPE] : [...INSTAGRAM_BASE_SCOPES];
+}
 
 export function getAuthorizationUrl(redirectUri: string, state: string): string {
-  // Publicar Reels (aba Posts) pede instagram_business_content_publish, que a Meta só
-  // libera depois da revisão do app: fica desligado até INSTAGRAM_PUBLISH_ENABLED=1.
-  const scope = process.env.INSTAGRAM_PUBLISH_ENABLED === "1" ? `${INSTAGRAM_SCOPES},${INSTAGRAM_PUBLISH_SCOPE}` : INSTAGRAM_SCOPES;
   const params = new URLSearchParams({
     client_id: requireEnv("INSTAGRAM_APP_ID"),
     redirect_uri: redirectUri,
-    scope,
+    scope: getRequestedInstagramScopes().join(","),
     response_type: "code",
     state,
   });
@@ -94,10 +113,20 @@ export function getAuthorizationUrl(redirectUri: string, state: string): string 
   return `${INSTAGRAM_OAUTH_URL}?${params.toString()}`;
 }
 
+/**
+ * A Meta devolve as permissões concedidas junto do token curto (campo `permissions`, texto
+ * separado por vírgula; a documentação mostra o corpo dentro de `data[0]`, o código antigo lia
+ * o corpo solto: os dois formatos são aceitos).
+ */
+export function parseGrantedScopes(value: unknown): string[] {
+  const list = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[,\s]+/) : [];
+  return Array.from(new Set(list.map((x) => String(x).trim()).filter((x) => /^[a-z_]{3,80}$/.test(x))));
+}
+
 export async function exchangeCodeForToken(
   code: string,
   redirectUri: string
-): Promise<{ accessToken: string; userId: string }> {
+): Promise<{ accessToken: string; userId: string; permissions: string[] }> {
   const body = new URLSearchParams({
     client_id: requireEnv("INSTAGRAM_APP_ID"),
     client_secret: requireEnv("INSTAGRAM_APP_SECRET"),
@@ -119,10 +148,12 @@ export async function exchangeCodeForToken(
     );
   }
 
-  const data = await response.json();
+  const raw = await response.json();
+  const data = Array.isArray(raw?.data) ? raw.data[0] ?? {} : raw;
   return {
     accessToken: data.access_token,
     userId: String(data.user_id),
+    permissions: parseGrantedScopes(data.permissions),
   };
 }
 

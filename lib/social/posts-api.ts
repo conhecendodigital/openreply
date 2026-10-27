@@ -17,7 +17,8 @@ export const POST_INCLUDE = {
 export const CAPTION_ABSOLUTE_MAX = 5000;
 /** Maior vídeo aceito no corpo (YouTube 2 GB); o limite de cada rede é conferido depois. */
 export const VIDEO_ABSOLUTE_MAX_BYTES = 2 * 1024 * 1024 * 1024;
-export const VIDEO_ABSOLUTE_TYPES = ["video/mp4", "video/quicktime", "video/webm"] as const;
+/** Vídeos e, só para o carrossel do Instagram, imagens (cada rede confere o que aceita). */
+export const VIDEO_ABSOLUTE_TYPES = ["video/mp4", "video/quicktime", "video/webm", "image/jpeg", "image/png"] as const;
 
 export const mediaFields = {
   mediaUrl: z.string().trim().url().max(2000),
@@ -59,6 +60,14 @@ export function mediaLimitsProblem(
 ): string | null {
   if (media.caption !== undefined && media.caption.length > provider.captionMax) {
     return `The text is over the ${provider.label} limit of ${provider.captionMax} characters`;
+  }
+  const isImage = media.mediaContentType?.startsWith("image/") ?? false;
+  if (isImage) {
+    if (!provider.imageTypes?.includes(media.mediaContentType ?? "")) return `${provider.label} does not accept this file format`;
+    if (media.mediaBytes !== undefined && media.mediaBytes > (provider.imageMaxBytes ?? 0)) {
+      return `${provider.label} image limit is ${Math.round((provider.imageMaxBytes ?? 0) / (1024 * 1024))} MB in the Lead Engine`;
+    }
+    return null;
   }
   if (media.mediaContentType !== undefined && !provider.videoTypes.includes(media.mediaContentType)) {
     return `${provider.label} does not accept this video format`;
