@@ -279,12 +279,12 @@ describe("MCP", () => {
     expect(resolveHandler("POST", "/api/posts/upload-url")).toBeNull();
   });
 
-  it("tem as 4 ferramentas e nenhuma agenda ou publica", () => {
+  it("tem as ferramentas de leitura e rascunho; agendar/publicar só pelas rotas do MCP, nunca apagar ou cancelar", () => {
     const names = TOOLS.map((t) => t.name);
     expect(names).toEqual(
       expect.arrayContaining(["listar_contas_sociais", "listar_posts_agendados", "ver_post_agendado", "criar_rascunho_post"])
     );
-    expect(names.filter((n) => /agendar_post|publicar_post|cancelar_post|apagar_post/.test(n))).toEqual([]);
+    expect(names.filter((n) => /cancelar_post|apagar_post/.test(n))).toEqual([]);
   });
 
   it("criar_rascunho_post só faz POST /api/posts", async () => {

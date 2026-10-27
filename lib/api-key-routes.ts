@@ -71,6 +71,10 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   // 2026-10-23 (redes sociais): o MCP lê e cria RASCUNHO de post. Agendar, publicar, cancelar, apagar e subir vídeo ficam só na tela.
   /^\/api\/posts$/,
   /^\/api\/posts\/(?!upload-url$)[^/]+$/,
+  // 2026-10-27: enviar_midia_post (MCP) pede aqui o link de envio. A rota da tela (/api/posts/upload-url) segue fora.
+  /^\/api\/mcp-media\/upload-url$/,
+  // 2026-10-27: agendar_post e publicar_post (MCP), pedido do dono. Interruptor: MCP_PUBLISH_DISABLED=1.
+  /^\/api\/mcp-publish\/[^/]+\/(schedule|publish)$/,
 ];
 
 /**

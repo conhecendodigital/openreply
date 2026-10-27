@@ -52,6 +52,12 @@ export async function POST(request: NextRequest) {
     const checked = validateDraftSettings(provider, data.settings);
     if (!checked.ok) return fail("Invalid body", 400, { code: "invalid_body", issues: checked.issues });
     settings = checked.data;
+    // Slides do carrossel (27/10): também têm que estar na pasta de posts deste workspace, já no rascunho.
+    const slides = (settings as { slides?: { url: string }[] } | null)?.slides ?? [];
+    for (const [index, slide] of slides.entries()) {
+      const problem = mediaUrlProblem(auth.context.workspaceId, slide.url);
+      if (problem) return fail(`Slide ${index + 1}: ${problem}`, 400, { code: "invalid_media" });
+    }
   }
 
   const caller = await getApiCaller();
