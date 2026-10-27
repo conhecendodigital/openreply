@@ -292,6 +292,12 @@ export const ptFlows: Record<string, string> = {
   // Avisos da conversão (lib/flows/convert.ts)
   "The public reply to the comment is not part of flows; the campaign keeps doing it":
     "A resposta pública no comentário não faz parte dos fluxos; a campanha continua fazendo",
+  "The campaign's public replies to the comment were copied to the trigger":
+    "As respostas públicas da campanha no comentário foram copiadas pro gatilho",
+  "Public reply sent": "Resposta pública enviada",
+  "Public reply failed": "Resposta pública falhou",
+  "One per line. A different one is drawn for each comment. Empty: no public reply.":
+    "Uma por linha. Sorteia uma diferente a cada comentário. Vazio: não responde em público.",
   "The campaign also answers the words by DM; a flow has one trigger, so that part was not copied":
     "A campanha também responde as palavras por DM; um fluxo tem um gatilho só, então essa parte não foi copiada",
   "\"Next reel\" was not copied: choose the post in the trigger": "\"Próximo reel\" não foi copiado: escolha o post no gatilho",

@@ -28,6 +28,8 @@ import {
   type ActionNode,
   type ConditionNode,
   type FlowDefinition,
+  MAX_PUBLIC_REPLIES,
+  MAX_PUBLIC_REPLY_LENGTH,
   type FlowNode,
   type FlowNodeType,
   type FlowTrigger,
@@ -167,6 +169,7 @@ function TriggerEditor({ def, setDef, ctx, onCreated }: { def: FlowDefinition; s
   const trig = def.trigger;
   const [pickPost, setPickPost] = useState(!trig.postId && !trig.matchAnyPost);
   const [oneStory, setOneStory] = useState(Boolean(trig.storyId));
+  const [repliesText, setRepliesText] = useState((trig.publicReplies ?? []).join("\n"));
   const patch = (p: Partial<FlowTrigger>) => setDef((d) => ({ ...d, trigger: { ...d.trigger, ...p } }));
   const needsWords = trig.type !== "STORY_MENTION" && trig.type !== "CONVERSATION_LINK";
   const isCommentLike = trig.type === "COMMENT" || trig.type === "LIVE_COMMENT";
@@ -234,6 +237,28 @@ function TriggerEditor({ def, setDef, ctx, onCreated }: { def: FlowDefinition; s
             </div>
           )}
         </div>
+      )}
+
+      {trig.type === "COMMENT" && (
+        <Field label={t("Public reply under the post")} hint={t("One per line. A different one is drawn for each comment. Empty: no public reply.")}>
+          <textarea
+            value={repliesText}
+            rows={3}
+            maxLength={MAX_PUBLIC_REPLIES * (MAX_PUBLIC_REPLY_LENGTH + 1)}
+            onChange={(e) => {
+              setRepliesText(e.target.value);
+              patch({
+                publicReplies: e.target.value
+                  .split("\n")
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                  .slice(0, MAX_PUBLIC_REPLIES)
+                  .map((line) => line.slice(0, MAX_PUBLIC_REPLY_LENGTH)),
+              });
+            }}
+            className={inputClass}
+          />
+        </Field>
       )}
 
       {trig.type === "STORY_REPLY" && (

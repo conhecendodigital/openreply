@@ -209,7 +209,7 @@ export const OPEN_STATUSES = ["ACTIVE", "WAITING_DELAY", "WAITING_REPLY", "WAITI
 
 const FOLLOW_UP_OUTCOMES = new Set(["tapped", "clicked", "replied", "timeout"]);
 /** Extra rows of a step that already has one ("stopped" always follows them). */
-const DETAIL_OUTCOMES = new Set(["error", "maybe_sent"]);
+const DETAIL_OUTCOMES = new Set(["error", "maybe_sent", "public_reply", "public_reply_error"]);
 
 /** Per node: how many passed, outcomes, clicks, and runs that stopped / wait there. */
 export async function flowReport(flowId: string) {

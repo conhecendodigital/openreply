@@ -42,6 +42,9 @@ export const FLOW_TRIGGERS = [
 ] as const;
 export type FlowTriggerType = (typeof FLOW_TRIGGERS)[number];
 
+export const MAX_PUBLIC_REPLIES = 10;
+export const MAX_PUBLIC_REPLY_LENGTH = 500;
+
 export const NODE_TYPES = ["message", "condition", "action", "wait", "end"] as const;
 export type FlowNodeType = (typeof NODE_TYPES)[number];
 
@@ -63,6 +66,8 @@ export const flowTriggerSchema = z.object({
   keywords: z.array(z.string().max(MAX_KEYWORD_LENGTH)).max(MAX_FLOW_KEYWORDS).optional().default([]),
   matchAnyWord: z.boolean().optional().default(false),
   wholeWordMatch: z.boolean().optional().default(true),
+  /** Comment triggers: public replies under the comment (one is drawn per comment, like campaigns). */
+  publicReplies: z.array(z.string().max(MAX_PUBLIC_REPLY_LENGTH)).max(MAX_PUBLIC_REPLIES).optional().default([]),
   next: ref,
   position: position.optional(),
 });
@@ -224,6 +229,7 @@ export function emptyFlowDefinition(type: FlowTriggerType = "COMMENT"): FlowDefi
       keywords: [],
       matchAnyWord: false,
       wholeWordMatch: true,
+      publicReplies: [],
       next: null,
       position: { x: 0, y: 0 },
     },
