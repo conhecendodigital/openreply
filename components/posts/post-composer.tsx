@@ -12,6 +12,7 @@ import { useT } from "@/components/lang-provider";
 import { callApi, putFile, type UploadTicket } from "@/components/posts/api";
 import { btnPrimary, btnSecondary } from "@/components/posts/accounts-bar";
 import { FacebookTop } from "@/components/posts/options/facebook";
+import { CarouselPicker } from "@/components/posts/carousel-picker";
 import { InstagramFields } from "@/components/posts/options/instagram";
 import { TikTokFields, TikTokFooter, TikTokTop } from "@/components/posts/options/tiktok";
 import { YouTubeFields, YouTubeTop } from "@/components/posts/options/youtube";
@@ -40,6 +41,7 @@ import {
   facebookFormFromSettings,
   facebookSettingsPayload,
   instagramFormFromSettings,
+  instagramSettingsPayload,
   validateSocialComposer,
   youTubeFormFromSettings,
   youTubeSettingsPayload,
@@ -108,6 +110,7 @@ export function PostComposer({
     name: "",
     preview: post?.mediaUrl ?? "",
   });
+  const [slidesBusy, setSlidesBusy] = useState(false);
   const [durationSec, setDurationSec] = useState<number | null>(null);
   const [upload, setUpload] = useState<UploadState>(null);
   const [mode, setMode] = useState<"now" | "schedule">(initialMode === "schedule" || post?.status === "SCHEDULED" ? "schedule" : "now");
@@ -188,6 +191,13 @@ export function PostComposer({
     setUpload(null);
   }
 
+  /** Carrossel: a mídia do post é o 1º slide (os outros ficam em settings.slides). */
+  const carouselMode = instagram.format === "CAROUSEL" && networksChosen.has("INSTAGRAM");
+  const firstSlide = instagram.slides[0];
+  const postMedia = carouselMode
+    ? { url: firstSlide?.url ?? "", bytes: firstSlide?.bytes ?? 0, type: firstSlide?.contentType ?? "" }
+    : { url: media.url, bytes: media.bytes, type: media.type };
+
   function settingsFor(channel: Channel): Record<string, unknown> {
     if (channel.platform === "YOUTUBE") {
       return withYouTubeFormat(youTubeSettingsPayload(youtube), channel.format ?? "video", {
@@ -196,7 +206,7 @@ export function PostComposer({
         durationSec: durationSec,
       });
     }
-    if (channel.platform === "INSTAGRAM") return { ...instagram };
+    if (channel.platform === "INSTAGRAM") return instagramSettingsPayload(instagram);
     if (channel.platform === "FACEBOOK") return facebookSettingsPayload(facebook);
     return { ...tiktok };
   }
@@ -217,7 +227,7 @@ export function PostComposer({
     const errs =
       c.platform !== "TIKTOK"
         ? validateSocialComposer(
-            { network: c.platform, accountId: c.accountId, caption: textFor(c), mediaUrl: media.url, mediaBytes: media.bytes, mediaContentType: media.type, youtube, facebook, scheduledLocal },
+            { network: c.platform, accountId: c.accountId, caption: textFor(c), mediaUrl: postMedia.url, mediaBytes: postMedia.bytes, mediaContentType: postMedia.type, youtube, facebook, instagram, otherNetworks: networksChosen.size > 1, scheduledLocal },
             action
           )
         : validateComposer({ accountId: c.accountId, caption: textFor(c), mediaUrl: media.url, mediaContentType: media.type, durationSec, settings: tiktok, scheduledLocal }, infoData, action);
@@ -232,9 +242,9 @@ export function PostComposer({
     const body = {
       socialAccountId: c.accountId,
       caption: textFor(c),
-      mediaUrl: media.url,
-      mediaBytes: media.bytes,
-      mediaContentType: media.type,
+      mediaUrl: postMedia.url,
+      mediaBytes: postMedia.bytes,
+      mediaContentType: postMedia.type,
       settings: settingsFor(c),
     };
     const saved = existingId
@@ -255,7 +265,7 @@ export function PostComposer({
   async function submit(action: ComposerAction) {
     const global: string[] = [];
     if (!chosen.length) global.push("Pick the account.");
-    if (upload && !upload.error) global.push("Wait for the upload to finish.");
+    if ((upload && !upload.error) || slidesBusy) global.push("Wait for the upload to finish.");
     // Cada canal é conferido sozinho: o que está certo segue, o que não está é avisado pelo nome.
     const problems: string[] = [];
     const ready: Channel[] = [];
@@ -289,7 +299,7 @@ export function PostComposer({
   }
 
   const nowLocal = isoToBrasiliaLocal(new Date().toISOString());
-  const uploading = Boolean(upload && !upload.error);
+  const uploading = Boolean(upload && !upload.error) || slidesBusy;
   const isYouTube = networksChosen.has("YOUTUBE");
   const captionChannels = chosen.filter((c) => c.platform !== "YOUTUBE");
   // Sem canal marcado a tela mostra a legenda; com só YouTube, só os campos dele.
@@ -318,7 +328,11 @@ export function PostComposer({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+        {carouselMode ? (
+          <CarouselPicker slides={instagram.slides} onChange={(slides) => setInstagram((f) => ({ ...f, slides }))} onBusy={setSlidesBusy} />
+        ) : (
         <VideoPicker media={media} upload={upload} accept={acceptForNetwork(networksChosen.size === 1 ? network : networksChosen.has("TIKTOK") ? "INSTAGRAM" : network)} onPick={(f) => void pickFile(f)} onDuration={setDurationSec} onDimensions={(width, height) => setVideoSize({ width, height })} />
+        )}
 
         <div className="min-w-0 space-y-5">
           <fieldset className="space-y-2" disabled={lockedAccount}>
@@ -417,7 +431,7 @@ export function PostComposer({
               {optionNetworks.length > 1 && <NetworkHeading network={n} />}
               {n === "TIKTOK" && <TikTokFields settings={tiktok} info={infoData} patch={patchTikTok} />}
               {n === "YOUTUBE" && <YouTubeFields form={youtube} onChange={(f2) => setYoutube((f) => ({ ...f, ...f2 }))} />}
-              {n === "INSTAGRAM" && <InstagramFields form={instagram} onChange={(f2) => setInstagram((f) => ({ ...f, ...f2 }))} />}
+              {n === "INSTAGRAM" && <InstagramFields form={instagram} onChange={(f2) => setInstagram((f) => ({ ...f, ...f2 }))} locked={Boolean(post || postId)} />}
             </div>
           ))}
 

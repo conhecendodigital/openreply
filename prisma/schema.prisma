@@ -301,6 +301,10 @@ model InstagramAccount {
   profilePictureUrl String?
   /// Webhook fields subscribed on the last successful subscribe.
   webhookFields     String[]               @default([])
+  /// 27/10/2026: permissions Meta reported as granted when the account last connected
+  /// (`permissions` of the Instagram Login token response). Empty = unknown (connected
+  /// before this field existed, or Meta did not report): reconnect to fill it.
+  grantedScopes     String[]               @default([])
   /// Last webhook Meta delivered for this account (throttled to ~1/min).
   lastWebhookAt     DateTime?
   connectedAt       DateTime               @default(now())

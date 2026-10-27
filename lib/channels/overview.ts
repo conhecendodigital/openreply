@@ -54,6 +54,8 @@ export type InstagramChannelCard = {
   tokenExpiresInDays: number | null;
   webhookSubscribed: boolean;
   webhookFields: string[];
+  /** Permissões que a Meta informou como concedidas na última conexão (vazio = desconhecido). */
+  grantedScopes: string[];
   /** Fields we expect (lib/meta/webhook-fields.ts) but are not subscribed. */
   missingWebhookFields: string[];
   /** Last webhook Meta delivered for this account. */
@@ -250,6 +252,7 @@ export async function getChannelsOverview(workspaceId: string, now = new Date())
       profilePictureUrl: true,
       disconnectedAt: true,
       webhookFields: true,
+      grantedScopes: true,
       lastError: true,
       lastErrorAt: true,
       moderationSettings: { select: { mode: true } },
@@ -283,6 +286,7 @@ export async function getChannelsOverview(workspaceId: string, now = new Date())
         tokenExpiresInDays: connected ? daysLeft(account.tokenExpiresAt, now) : null,
         webhookSubscribed: account.webhookSubscribed,
         webhookFields: account.webhookFields,
+        grantedScopes: account.grantedScopes ?? [],
         // Subscribed before a field was added (e.g. live_comments): the page
         // points at what is missing; reconnecting subscribes again.
         missingWebhookFields: account.webhookSubscribed ? missingFieldsFor(account.platform, account.webhookFields) : [],

@@ -121,14 +121,19 @@ export function PostList({
                 const asking = confirm?.id === p.id ? confirm.kind : null;
                 return (
                   <article key={p.id} className="panel flex flex-wrap gap-4 rounded-xl border border-border p-4">
-                    <video
-                      src={p.mediaUrl ? `${p.mediaUrl}#t=0.1` : undefined}
-                      preload="metadata"
-                      muted
-                      playsInline
-                      aria-hidden
-                      className="h-24 w-[54px] shrink-0 rounded-lg bg-surface-hover object-cover"
-                    />
+                    {p.mediaContentType.startsWith("image/") ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.mediaUrl} alt="" aria-hidden className="h-24 w-[54px] shrink-0 rounded-lg bg-surface-hover object-cover" />
+                    ) : (
+                      <video
+                        src={p.mediaUrl ? `${p.mediaUrl}#t=0.1` : undefined}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        aria-hidden
+                        className="h-24 w-[54px] shrink-0 rounded-lg bg-surface-hover object-cover"
+                      />
+                    )}
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="line-clamp-2 break-words text-sm font-medium">
                         {p.caption || <span className="text-muted">{t("No caption")}</span>}

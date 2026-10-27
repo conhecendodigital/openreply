@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const redirectUri = `${baseUrl}/api/instagram/callback`;
-    const { accessToken: shortLivedToken } = await exchangeCodeForToken(
+    const { accessToken: shortLivedToken, permissions } = await exchangeCodeForToken(
       code,
       redirectUri
     );
@@ -107,6 +107,8 @@ export async function GET(request: NextRequest) {
       tokenExpiresAt,
       webhookSubscribed,
       webhookFields: webhookSubscribed ? WEBHOOK_SUBSCRIBED_FIELDS : [],
+      // Permissões que a Meta disse ter concedido nesta conexão (vazio = a Meta não informou).
+      grantedScopes: permissions ?? [],
       profilePictureUrl: userInfo.profile_picture_url ?? null,
       disconnectedAt: null,
       disconnectedBy: null,

@@ -53,6 +53,9 @@ export interface SocialProvider {
   captionMax: number;
   videoTypes: readonly string[];
   maxBytes: number;
+  /** Só Instagram: imagens aceitas (carrossel) e peso máximo. Sem isto, imagem é recusada. */
+  imageTypes?: readonly string[];
+  imageMaxBytes?: number;
   /** Opções de um rascunho criado sem tela (MCP). */
   defaultSettings: Record<string, unknown>;
   /** Rascunho aceita opções incompletas; agendar e publicar exigem as completas (readyProblem). */

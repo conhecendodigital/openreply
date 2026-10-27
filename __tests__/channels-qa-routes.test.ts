@@ -83,6 +83,7 @@ vi.mock("@/lib/meta/client", async (importOriginal) => {
 import * as disconnectRoute from "../app/api/instagram/disconnect/route";
 import * as purgeRoute from "../app/api/instagram/purge/route";
 import * as callbackRoute from "../app/api/instagram/callback/route";
+import { exchangeCodeForToken } from "../lib/meta/oauth";
 import * as testRoute from "../app/api/channels/instagram/[id]/test/route";
 import * as channelsRoute from "../app/api/channels/route";
 import { getChannelAlerts } from "../lib/channels/overview";
@@ -230,6 +231,21 @@ describe("reconnect (OAuth callback upsert) turns the same row back on, as it wa
       name: "Matheus",
       profile_picture_url: "https://cdn/p.jpg",
     });
+  });
+
+  it("guarda as permissões que a Meta informou como concedidas (vazio quando não informou)", async () => {
+    vi.mocked(exchangeCodeForToken).mockResolvedValueOnce({
+      accessToken: "short",
+      userId: "ig_owner",
+      permissions: ["instagram_business_basic", "instagram_business_content_publish"],
+    });
+    h.prisma.instagramAccount.findUnique.mockImplementation(async () => ({ id: "acc_A", workspaceId: "ws_A", status: "ACTIVE" }));
+    await callback();
+    const first = h.prisma.instagramAccount.upsert.mock.calls[0][0];
+    expect(first.update.grantedScopes).toEqual(["instagram_business_basic", "instagram_business_content_publish"]);
+    expect(first.create.grantedScopes).toEqual(["instagram_business_basic", "instagram_business_content_publish"]);
+    await callback();
+    expect(h.prisma.instagramAccount.upsert.mock.calls[1][0].update.grantedScopes).toEqual([]);
   });
 
   it("a DISCONNECTED account comes back ACTIVE on the same row; campaigns are not touched", async () => {

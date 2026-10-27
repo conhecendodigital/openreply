@@ -6,6 +6,7 @@
 import { brasiliaLocalToIso } from "@/lib/tiktok-composer";
 import { FACEBOOK_TITLE_MAX, NETWORK_LIMITS, YOUTUBE_TITLE_MAX } from "@/lib/social/limits";
 import type { SocialPlatform } from "@/lib/social/types";
+import { slideProblems, type InstagramSlide } from "@/lib/social/instagram-carousel";
 import { countHashtags, INSTAGRAM_HASHTAG_MAX, YOUTUBE_TAGS_TOTAL_MAX, youtubeTagsLength } from "@/lib/social/text-fields";
 
 export type { SocialPlatform };
@@ -37,8 +38,16 @@ export interface YouTubeForm {
   containsSyntheticMedia: boolean;
 }
 
+export type InstagramFormat = "REELS" | "CAROUSEL";
+export type InstagramTrial = "" | "MANUAL" | "SS_PERFORMANCE";
+
 export interface InstagramForm {
   shareToFeed: boolean;
+  /** Reel (vídeo) ou carrossel (2 a 20 imagens, na ordem). */
+  format: InstagramFormat;
+  slides: InstagramSlide[];
+  /** Reel de teste: só a quem não segue. Vazio = Reel normal. */
+  trial: InstagramTrial;
 }
 
 export interface FacebookForm {
@@ -50,7 +59,7 @@ export function emptyYouTubeForm(): YouTubeForm {
 }
 
 export function emptyInstagramForm(): InstagramForm {
-  return { shareToFeed: true };
+  return { shareToFeed: true, format: "REELS", slides: [], trial: "" };
 }
 
 export function emptyFacebookForm(): FacebookForm {
@@ -71,7 +80,19 @@ export function youTubeFormFromSettings(settings: Record<string, unknown> | null
 }
 
 export function instagramFormFromSettings(settings: Record<string, unknown> | null | undefined): InstagramForm {
-  return { shareToFeed: settings?.shareToFeed !== false };
+  const trial = settings?.trial;
+  return {
+    shareToFeed: settings?.shareToFeed !== false,
+    format: settings?.format === "CAROUSEL" ? "CAROUSEL" : "REELS",
+    slides: Array.isArray(settings?.slides) ? (settings.slides as InstagramSlide[]) : [],
+    trial: trial === "MANUAL" || trial === "SS_PERFORMANCE" ? trial : "",
+  };
+}
+
+/** Opções do Instagram como a API recebe. Reel comum continua só com shareToFeed (igual a antes). */
+export function instagramSettingsPayload(form: InstagramForm): Record<string, unknown> {
+  if (form.format === "CAROUSEL") return { shareToFeed: form.shareToFeed, format: "CAROUSEL", slides: form.slides };
+  return form.trial ? { shareToFeed: form.shareToFeed, format: "REELS", trial: form.trial } : { shareToFeed: form.shareToFeed };
 }
 
 export function facebookFormFromSettings(settings: Record<string, unknown> | null | undefined): FacebookForm {
@@ -103,6 +124,10 @@ export interface SocialComposerInput {
   mediaContentType: string;
   youtube: YouTubeForm;
   facebook: FacebookForm;
+  /** Opções do Instagram (formato, slides do carrossel, reel de teste). */
+  instagram?: InstagramForm;
+  /** Mais de uma rede marcada: carrossel só vale para o Instagram sozinho. */
+  otherNetworks?: boolean;
   /** Só quando for agendar. */
   scheduledLocal?: string;
 }
@@ -113,16 +138,23 @@ export function validateSocialComposer(input: SocialComposerInput, action: Compo
   const limits = NETWORK_LIMITS[input.network];
   const name = NETWORK_NAME[input.network];
   if (!input.accountId) errors.push(`Pick the ${name} account.`);
-  if (!input.mediaUrl) errors.push("Add the video.");
+  const carousel = input.network === "INSTAGRAM" && input.instagram?.format === "CAROUSEL";
+  if (carousel) {
+    if (input.otherNetworks) errors.push("A carousel only goes to Instagram. Unmark the other networks or pick Reel.");
+    errors.push(...slideProblems(input.instagram?.slides));
+  } else if (!input.mediaUrl) errors.push("Add the video.");
+  if (input.network === "INSTAGRAM" && !carousel && input.mediaContentType.startsWith("image/")) {
+    errors.push("Reels need a video. Pick the carousel format to post images.");
+  }
   if (input.caption.length > limits.captionMax) errors.push("The caption is too long.");
   if (input.network === "YOUTUBE" && input.youtube.title.length > YOUTUBE_TITLE_MAX) errors.push("The title is too long.");
   if (input.network === "YOUTUBE" && youtubeTagsLength(input.youtube.tags) > YOUTUBE_TAGS_TOTAL_MAX) errors.push("The tags are too long.");
   if (input.network === "INSTAGRAM" && countHashtags(input.caption) > INSTAGRAM_HASHTAG_MAX) errors.push("Instagram accepts up to 30 hashtags.");
   if (input.network === "FACEBOOK" && input.facebook.title.length > FACEBOOK_TITLE_MAX) errors.push("The title is too long.");
-  if (input.mediaUrl && input.mediaContentType && !limits.videoTypes.includes(input.mediaContentType)) {
+  if (!carousel && input.mediaUrl && input.mediaContentType && !limits.videoTypes.includes(input.mediaContentType)) {
     errors.push(`${name} does not accept this video format. Use an MP4 or MOV video.`);
   }
-  if (input.mediaUrl && input.mediaBytes > limits.maxBytes) errors.push(`The video is larger than ${name} allows.`);
+  if (!carousel && input.mediaUrl && input.mediaBytes > limits.maxBytes) errors.push(`The video is larger than ${name} allows.`);
   if (action === "draft") return errors;
 
   if (input.network === "YOUTUBE") {

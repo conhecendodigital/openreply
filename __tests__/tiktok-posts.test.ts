@@ -142,7 +142,10 @@ describe("endereço do vídeo (o servidor baixa esse endereço)", () => {
     expect(createPostSchema.safeParse({ ...base, caption: "x".repeat(5001) }).success).toBe(false);
     expect(mediaLimitsProblem(tiktokProvider, { caption: "x".repeat(2201) })).not.toBeNull();
     expect(mediaLimitsProblem(tiktokProvider, { caption: "x".repeat(2200) })).toBeNull();
-    expect(createPostSchema.safeParse({ ...base, mediaContentType: "image/png" }).success).toBe(false);
+    // 27/10/2026: o corpo aceita imagem (slide de carrossel do Instagram), mas o TikTok recusa ao escolher a conta.
+    expect(createPostSchema.safeParse({ ...base, mediaContentType: "image/png" }).success).toBe(true);
+    expect(mediaLimitsProblem(tiktokProvider, { mediaContentType: "image/png" })).not.toBeNull();
+    expect(createPostSchema.safeParse({ ...base, mediaContentType: "image/gif" }).success).toBe(false);
     expect(createPostSchema.safeParse({ ...base, status: "SCHEDULED" }).success).toBe(false);
   });
 });
