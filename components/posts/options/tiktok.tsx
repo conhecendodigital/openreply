@@ -10,7 +10,7 @@
 import { useT } from "@/components/lang-provider";
 import { Avatar } from "@/components/posts/accounts-bar";
 import { fieldClass, labelClass } from "@/components/posts/styles";
-import { PRIVACY_LABELS, availablePrivacyOptions, disclosureKind, type CreatorInfo, type TikTokSettings } from "@/lib/tiktok-composer";
+import { availablePrivacyOptions, privacyLabel, disclosureKind, type CreatorInfo, type TikTokSettings } from "@/lib/tiktok-composer";
 
 const BC_POLICY = "https://www.tiktok.com/legal/page/global/bc-policy/en";
 const MUSIC_POLICY = "https://www.tiktok.com/legal/page/global/music-usage-confirmation/en";
@@ -83,6 +83,7 @@ export function TikTokFields({
 }) {
   const t = useT();
   const c = settings.commercial;
+  const viaZernio = info?.via === "zernio";
   const privacyOptions = info?.privacyLevelOptions ?? [];
   const allowedPrivacy = availablePrivacyOptions(privacyOptions, c.enabled && c.brandedContent);
   return (
@@ -95,14 +96,20 @@ export function TikTokFields({
           <option value="">{t("Choose who can see it")}</option>
           {privacyOptions.map((o) => (
             <option key={o} value={o} disabled={!allowedPrivacy.includes(o)}>
-              {t(PRIVACY_LABELS[o] ?? o)}
+              {t(privacyLabel(o, info))}
             </option>
           ))}
         </select>
         {c.enabled && c.brandedContent && privacyOptions.includes("SELF_ONLY") && (
           <span className="text-xs text-warning">{t("Branded content can't be private, so Only me is not available.")}</span>
         )}
-        <span className="text-xs text-muted">{t("Accounts not yet audited by TikTok can only post as Only me.")}</span>
+        {viaZernio ? (
+          <span className="text-xs text-muted">
+            {t("Posting through Zernio: the video goes out Public, or as a draft in the TikTok app, where you choose the audience. In a draft, the caption does not come along.")}
+          </span>
+        ) : (
+          <span className="text-xs text-muted">{t("Accounts not yet audited by TikTok can only post as Only me.")}</span>
+        )}
       </div>
 
       <fieldset className="space-y-2">
@@ -130,6 +137,7 @@ export function TikTokFields({
         ))}
       </fieldset>
 
+      {!viaZernio && (
       <div className="space-y-2">
         <label className="flex items-start gap-3 text-sm">
           <input
@@ -173,6 +181,7 @@ export function TikTokFields({
           </div>
         )}
       </div>
+      )}
 
       <label className="flex items-start gap-3 text-sm">
         <input type="checkbox" checked={settings.isAigc} onChange={(e) => patch({ isAigc: e.target.checked })} className="mt-0.5 h-4 w-4 accent-accent" />
