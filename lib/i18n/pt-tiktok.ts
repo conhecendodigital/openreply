@@ -91,4 +91,8 @@ export const ptTiktok: Record<string, string> = {
   "The post was saved as a draft, but it could not be scheduled.": "O post foi salvo como rascunho, mas não deu pra agendar.",
   "The post was saved as a draft, but it could not be published.": "O post foi salvo como rascunho, mas não deu pra publicar.",
   "Wait for the upload to finish.": "Espere o envio terminar.",
+  "Draft in the TikTok app": "Rascunho no app do TikTok",
+  "Posting through Zernio: the video goes out Public, or as a draft in the TikTok app, where you choose the audience. In a draft, the caption does not come along.":
+    "Publicando pela Zernio: o vídeo sai Público ou como rascunho no app do TikTok, onde você escolhe o público. No rascunho, a legenda não vai junto.",
+  "Commercial content is not available when publishing through Zernio.": "Conteúdo comercial não está disponível ao publicar pela Zernio.",
 };

@@ -65,6 +65,17 @@ export interface CreatorInfo {
   duetDisabled: boolean;
   stitchDisabled: boolean;
   maxVideoPostDurationSec: number;
+  /** "zernio" quando o TikTok publica pela Zernio (TIKTOK_VIA_ZERNIO=1): só Público ou rascunho no app, sem conteúdo comercial. */
+  via?: "zernio";
+}
+
+/** Nome da privacidade na tela. Pela Zernio, "Só eu" vira o rascunho no app do TikTok. */
+export function privacyLabel(option: string, info: CreatorInfo | null): string {
+  if (info?.via === "zernio") {
+    if (option === "PUBLIC_TO_EVERYONE") return "Public";
+    if (option === "SELF_ONLY") return "Draft in the TikTok app";
+  }
+  return PRIVACY_LABELS[option] ?? option;
 }
 
 export interface PostDTO {
@@ -130,6 +141,7 @@ export function normalizeSettings(s: TikTokSettings, info: CreatorInfo | null): 
   if (next.commercial.enabled && next.commercial.brandedContent && next.privacyLevel === "SELF_ONLY") {
     next.privacyLevel = "";
   }
+  if (info?.via === "zernio") next.commercial = { enabled: false, yourBrand: false, brandedContent: false };
   if (info) {
     if (info.commentDisabled) next.allowComment = false;
     if (info.duetDisabled) next.allowDuet = false;
@@ -188,6 +200,7 @@ export function validateComposer(
   } else if (info && !info.privacyLevelOptions.includes(s.privacyLevel)) {
     errors.push("That privacy option is not available for this account.");
   }
+  if (info?.via === "zernio" && s.commercial.enabled) errors.push("Commercial content is not available when publishing through Zernio.");
   if (s.commercial.enabled && !s.commercial.yourBrand && !s.commercial.brandedContent) {
     errors.push("Pick Your brand or Branded content.");
   }
