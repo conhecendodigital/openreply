@@ -277,6 +277,7 @@ describe("abrir como fluxo", () => {
       followUpMessage: null,
       followUpDelayMinutes: 0,
       publicReplyEnabled: true,
+      publicReplyMessages: ["Te mandei no direct 📩"],
       isActive: true,
       trackedLinks: [{ label: null, destinationUrl: "https://example.com" }],
       sequence: null,
@@ -289,7 +290,7 @@ describe("abrir como fluxo", () => {
     expect(data).toMatchObject({ isActive: false, sourceAutomationId: "auto_1", instagramAccountId: "acc_1", name: "FOTO (fluxo)" });
     const body = await res.json();
     expect(body.data.validation.ok).toBe(true);
-    expect(body.data.warnings.map((w: { code: string }) => w.code)).toContain("public_reply_not_copied");
+    expect(body.data.warnings.map((w: { code: string }) => w.code)).toContain("public_reply_copied");
     // The campaign is only read.
     const automation = h.models.get("automation")!;
     for (const method of ["update", "updateMany", "delete", "deleteMany", "upsert", "create"]) {

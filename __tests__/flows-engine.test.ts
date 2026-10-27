@@ -28,6 +28,7 @@ const h = vi.hoisted(() => {
     clicks: [] as Record<string, unknown>[],
     links: [] as Record<string, unknown>[],
     events: [] as Record<string, unknown>[],
+    automations: new Map<string, Record<string, unknown>>(),
     seq: 0,
   };
   const OPEN = ["ACTIVE", "WAITING_DELAY", "WAITING_REPLY", "WAITING_TAP"];
@@ -102,6 +103,12 @@ const h = vi.hoisted(() => {
     },
     flowLinkClick: { findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => state.clicks.find((c) => matches(c, where)) ?? null) },
     operationalEvent: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => state.events.push(data)) },
+    automation: {
+      findFirst: vi.fn(async ({ where }: { where: { id: string; workspaceId: string } }) => {
+        const a = state.automations.get(where.id);
+        return a && a.workspaceId === where.workspaceId ? { ...a } : null;
+      }),
+    },
   };
   return {
     state,
@@ -109,6 +116,7 @@ const h = vi.hoisted(() => {
     add: vi.fn(),
     sendFlowMessage: vi.fn(),
     sendImageMessage: vi.fn(),
+    sendCommentReply: vi.fn(),
     follows: vi.fn(),
     tracked: vi.fn(),
     dmSlot: vi.fn(),
@@ -128,6 +136,7 @@ vi.mock("@/lib/queue/client", () => ({ getDMQueue: () => ({ add: h.add }) }));
 vi.mock("@/lib/meta/client", () => ({
   sendFlowMessage: h.sendFlowMessage,
   sendImageMessage: h.sendImageMessage,
+  sendCommentReply: h.sendCommentReply,
   getUserFollowStatus: h.follows,
   MetaApiError: class MetaApiError extends Error {
     code: number;
@@ -209,6 +218,7 @@ beforeEach(() => {
   h.state.clicks.length = 0;
   h.state.links.length = 0;
   h.state.events.length = 0;
+  h.state.automations.clear();
   h.state.contact = {
     id: "ct_1",
     workspaceId: "ws_1",
@@ -221,6 +231,7 @@ beforeEach(() => {
   };
   h.sendFlowMessage.mockResolvedValue({ message_id: "mid_out" });
   h.sendImageMessage.mockResolvedValue({ message_id: "mid_img" });
+  h.sendCommentReply.mockResolvedValue({ id: "reply_1" });
   h.dmSlot.mockResolvedValue({ allowed: true });
   h.flowSlot.mockResolvedValue({ allowed: true });
   h.reserve.mockResolvedValue({ allowed: true, periodStart: new Date(), limit: 1000 });
@@ -629,5 +640,57 @@ describe("Etapa 5: flow started by a broadcast button (kind BROADCAST)", () => {
     expect(await bc()).toBe("paused");
     expect(await bc()).toBe("duplicate");
     expect(h.sendFlowMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("public reply under the comment (like campaigns)", () => {
+  const comment = (over: Record<string, unknown> = {}) =>
+    start({ kind: "COMMENT", triggerKey: "comment:cm_1", triggerRef: "cm_1", username: "maria", ...over });
+
+  it("posts the flow's own reply first, with {username} and without {link}, then the private reply", async () => {
+    setFlow({ type: "COMMENT", postId: "p_1", publicReplies: ["Te mandei no direct, @{username} {link}"], next: "m1" }, [msg("m1", "Oi!")]);
+    await comment();
+    expect(h.sendCommentReply).toHaveBeenCalledTimes(1);
+    expect(h.sendCommentReply).toHaveBeenCalledWith("token", "cm_1", "Te mandei no direct, @maria");
+    expect(h.sendCommentReply.mock.invocationCallOrder[0]).toBeLessThan(h.sendFlowMessage.mock.invocationCallOrder[0]);
+    expect(outcomes().slice(0, 2)).toEqual(["trigger:entered", "trigger:public_reply"]);
+    expect(h.prisma.automation.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("a flow copied from a campaign with no replies of its own uses the campaign's (same workspace only)", async () => {
+    h.state.automations.set("au_1", {
+      id: "au_1",
+      workspaceId: "ws_1",
+      publicReplyEnabled: true,
+      publicReplyMessages: ["Chegou no direct 📩"],
+      publicReplyMessage: null,
+    });
+    setFlow({ type: "COMMENT", postId: "p_1", next: "m1" }, [msg("m1", "Oi!")], { sourceAutomationId: "au_1" });
+    await comment();
+    expect(h.prisma.automation.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "au_1", workspaceId: "ws_1" } }));
+    expect(h.sendCommentReply).toHaveBeenCalledWith("token", "cm_1", "Chegou no direct 📩");
+  });
+
+  it("no reply when the source campaign had it off, or the flow has none", async () => {
+    h.state.automations.set("au_1", { id: "au_1", workspaceId: "ws_1", publicReplyEnabled: false, publicReplyMessages: ["x"], publicReplyMessage: null });
+    setFlow({ type: "COMMENT", postId: "p_1", next: "m1" }, [msg("m1", "Oi!")], { sourceAutomationId: "au_1" });
+    await comment();
+    expect(h.sendCommentReply).not.toHaveBeenCalled();
+    expect(outcomes()).not.toContain("trigger:public_reply");
+    expect(h.sendFlowMessage).toHaveBeenCalled();
+  });
+
+  it("a failed public reply is recorded and the DM still goes", async () => {
+    h.sendCommentReply.mockRejectedValueOnce(new Error("comment deleted"));
+    setFlow({ type: "COMMENT", postId: "p_1", publicReplies: ["No direct!"], next: "m1" }, [msg("m1", "Oi!")]);
+    await comment();
+    expect(outcomes()).toContain("trigger:public_reply_error");
+    expect(h.sendFlowMessage).toHaveBeenCalled();
+  });
+
+  it("never on a DM trigger", async () => {
+    setFlow({ type: "DM", publicReplies: ["No direct!"], next: "m1" }, [msg("m1", "Oi!")]);
+    await start();
+    expect(h.sendCommentReply).not.toHaveBeenCalled();
   });
 });

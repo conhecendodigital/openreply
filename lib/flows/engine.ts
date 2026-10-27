@@ -63,6 +63,8 @@ import {
 } from "@/lib/flows/jobs";
 import type { FlowRunStatus } from "@/app/generated/prisma/client";
 import { abSplitIsA } from "@/lib/flows/ab-split";
+import { sendCommentReply } from "@/lib/meta/client";
+import { drawPublicReply, publicReplyPool, renderPublicReply } from "@/lib/flows/public-reply";
 
 export const OPEN_RUN_STATUSES: FlowRunStatus[] = ["ACTIVE", "WAITING_DELAY", "WAITING_REPLY", "WAITING_TAP"];
 /** An open run untouched this long is stale (the window closed long ago). */
@@ -267,6 +269,18 @@ export async function startFlowRun(data: FlowStartJob, now: Date = new Date()): 
   await step(run, { id: "trigger", type: "trigger" }, "entered", { detail: data.triggerKey });
   await timeline(run, "FLOW_STARTED", runId, flow.name, { triggerKey: data.triggerKey });
 
+  // Like the campaigns: the public reply goes first, so a DM that fails
+  // (restricted messaging) never takes it away. Once per comment: a run is
+  // created once per triggerKey.
+  if (isComment && data.kind === "COMMENT") {
+    await postPublicReply(
+      run,
+      { workspaceId: flow.workspaceId, sourceAutomationId: flow.sourceAutomationId, accessToken: flow.instagramAccount.accessToken },
+      def.trigger,
+      data
+    );
+  }
+
   if (!firstNode) {
     await finish(run, "DONE", "empty", null);
     return "DONE";
@@ -274,6 +288,34 @@ export async function startFlowRun(data: FlowStartJob, now: Date = new Date()): 
   const inboundAt = data.inboundAt ? new Date(data.inboundAt) : null;
   const outcome = await advance(runId, firstNode, 0, ["ACTIVE"], inboundAt);
   return outcome === "noop" ? "started" : outcome;
+}
+
+/** Never throws: a failed public reply is recorded on the trigger step and the run goes on. */
+async function postPublicReply(
+  run: { id: string; flowId: string },
+  flow: { workspaceId: string; sourceAutomationId: string | null; accessToken: string | null },
+  trigger: FlowDefinition["trigger"],
+  data: FlowStartJob
+) {
+  try {
+    const own = (trigger.publicReplies ?? []).some((t) => t.trim());
+    const source =
+      !own && flow.sourceAutomationId
+        ? await prisma.automation.findFirst({
+            where: { id: flow.sourceAutomationId, workspaceId: flow.workspaceId },
+            select: { publicReplyEnabled: true, publicReplyMessages: true, publicReplyMessage: true },
+          })
+        : null;
+    const chosen = drawPublicReply(publicReplyPool(trigger, source));
+    if (!chosen || !data.triggerRef || !flow.accessToken) return;
+    const text = renderPublicReply(chosen, { username: data.username });
+    if (!text) return;
+    await sendCommentReply(decryptToken(flow.accessToken), data.triggerRef, text);
+    await step(run, { id: "trigger", type: "trigger" }, "public_reply", { detail: text });
+  } catch (error) {
+    console.warn("[Flows] public reply failed:", errorMessage(error));
+    await step(run, { id: "trigger", type: "trigger" }, "public_reply_error", { detail: errorMessage(error) });
+  }
 }
 
 // ─── Jobs that move a run on ────────────────────────────────────────────────

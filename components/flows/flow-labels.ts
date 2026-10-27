@@ -153,6 +153,7 @@ export function issueText(t: TFunction, issue: Pick<FlowIssue, "code" | "message
 
 export const CONVERT_WARNING_LABEL: Record<string, string> = {
   public_reply_not_copied: "The public reply to the comment is not part of flows; the campaign keeps doing it",
+  public_reply_copied: "The campaign's public replies to the comment were copied to the trigger",
   dm_trigger_not_copied: "The campaign also answers the words by DM; a flow has one trigger, so that part was not copied",
   next_reel_not_copied: "\"Next reel\" was not copied: choose the post in the trigger",
   link_history_stays: "Link buttons got new tracked links; the click history stays with the campaign",
@@ -166,6 +167,8 @@ export const OUTCOME_LABEL: Record<string, string> = {
   entered: "Entered",
   sent: "Sent",
   private_reply: "Private reply",
+  public_reply: "Public reply sent",
+  public_reply_error: "Public reply failed",
   yes: "Yes",
   no: "No",
   tagged: "Tagged",

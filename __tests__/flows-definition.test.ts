@@ -222,6 +222,7 @@ function campaign(over: Partial<ConvertibleCampaign> = {}): ConvertibleCampaign 
     followUpMessage: "Gostou?",
     followUpDelayMinutes: 30,
     publicReplyEnabled: true,
+    publicReplyMessages: ["Te mandei no direct 📩"],
     trackedLinks: [{ label: null, destinationUrl: "https://example.com/a" }],
     sequenceSteps: [{ order: 1, message: "Passo 1", delayMinutes: 60 }],
     ...over,
@@ -245,7 +246,8 @@ describe("campaign -> flow", () => {
     expect(byId.followup).toMatchObject({ text: "Gostou?", next: "espera_seq_1" });
     expect(byId.seq_1).toMatchObject({ text: "Passo 1", next: "fim" });
     expect(byId.fim).toMatchObject({ type: "end" });
-    expect(warnings).toEqual(expect.arrayContaining(["public_reply_not_copied", "link_history_stays", "sequence_stop_on_reply"]));
+    expect(warnings).toEqual(expect.arrayContaining(["public_reply_copied", "link_history_stays", "sequence_stop_on_reply"]));
+    expect(definition.trigger.publicReplies).toEqual(["Te mandei no direct 📩"]);
     expect(validateFlow(flowDefinitionSchema.parse(definition)).errors).toEqual([]);
   });
 

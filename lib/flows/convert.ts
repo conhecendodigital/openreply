@@ -18,12 +18,15 @@ import { hasFollowUpButton, splitFollowUpLinks } from "@/lib/campaigns/followup-
 import {
   FLOW_SCHEMA_VERSION,
   MAX_BUTTON_LABEL,
+  MAX_PUBLIC_REPLIES,
+  MAX_PUBLIC_REPLY_LENGTH,
   MAX_WAIT_MIN,
   MIN_WAIT_MIN,
   type FlowDefinition,
   type FlowNode,
   type FlowTriggerType,
 } from "@/lib/flows/schema";
+import { campaignPublicReplies } from "@/lib/flows/public-reply";
 
 export type ConvertibleCampaign = {
   id: string;
@@ -51,12 +54,15 @@ export type ConvertibleCampaign = {
   followUpDelayMinutes: number;
   followUpButtonLabel?: string | null;
   publicReplyEnabled: boolean;
+  publicReplyMessages?: string[];
+  publicReplyMessage?: string | null;
   trackedLinks: { label: string | null; destinationUrl: string }[];
   sequenceSteps?: { order: number; message: string; delayMinutes: number }[];
 };
 
 export type ConvertWarning =
   | "public_reply_not_copied"
+  | "public_reply_copied"
   | "dm_trigger_not_copied"
   | "next_reel_not_copied"
   | "link_history_stays"
@@ -66,6 +72,7 @@ export type ConvertWarning =
 
 export const CONVERT_WARNING_TEXT: Record<ConvertWarning, string> = {
   public_reply_not_copied: "The public reply to the comment is not part of flows; the campaign keeps doing it",
+  public_reply_copied: "The campaign's public replies to the comment were copied to the trigger",
   dm_trigger_not_copied: "The campaign also answers the words by DM; a flow has one trigger, so that part was not copied",
   next_reel_not_copied: "\"Next reel\" was not copied: choose the post in the trigger",
   link_history_stays: "Link buttons got new tracked links; the click history stays with the campaign",
@@ -99,7 +106,17 @@ export function campaignToFlowDefinition(campaign: ConvertibleCampaign): {
     : "COMMENT";
   const isComment = type === "COMMENT" || type === "LIVE_COMMENT";
 
-  if (campaign.publicReplyEnabled && type === "COMMENT") warnings.push("public_reply_not_copied");
+  const publicReplies =
+    type === "COMMENT"
+      ? campaignPublicReplies({
+          publicReplyEnabled: campaign.publicReplyEnabled,
+          publicReplyMessages: campaign.publicReplyMessages ?? [],
+          publicReplyMessage: campaign.publicReplyMessage ?? null,
+        })
+          .map((t) => t.slice(0, MAX_PUBLIC_REPLY_LENGTH))
+          .slice(0, MAX_PUBLIC_REPLIES)
+      : [];
+  if (publicReplies.length > 0) warnings.push("public_reply_copied");
   if (campaign.dmTriggerEnabled && type === "COMMENT") warnings.push("dm_trigger_not_copied");
   if (campaign.pendingNextReel && type === "COMMENT" && !campaign.postId && !campaign.matchAnyPost) {
     warnings.push("next_reel_not_copied");
@@ -218,6 +235,7 @@ export function campaignToFlowDefinition(campaign: ConvertibleCampaign): {
         keywords: type === "STORY_MENTION" ? [] : campaign.keywords.slice(0, 10),
         matchAnyWord: type === "STORY_MENTION" ? false : campaign.matchAnyWord,
         wholeWordMatch: campaign.wholeWordMatch,
+        publicReplies,
         next: firstId,
         position: { x: 0, y: 0 },
       },
