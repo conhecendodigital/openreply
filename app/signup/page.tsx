@@ -13,8 +13,8 @@ import { safeCallbackPath } from "@/lib/auth-config";
 /**
  * Criar conta (09/10/2026, pedido do dono). Não abre cadastro por senha
  * (disableSignUp continua true): a conta nasce no primeiro link por e-mail ou
- * no Google, e só pra quem tem acesso (ALLOWED_EMAILS, lista do beta ou convite
- * de equipe, ver lib/auth-signin.ts). A senha a pessoa cria depois em
+ * no Google, aberta a qualquer e-mail (com SIGNIN_RESTRICTED=1 volta a exigir
+ * ALLOWED_EMAILS, lista do beta ou convite, ver lib/auth-signin.ts). A senha a pessoa cria depois em
  * Configurações, Segurança. Assim ninguém cria conta com o e-mail de outro.
  */
 export async function generateMetadata(): Promise<Metadata> {

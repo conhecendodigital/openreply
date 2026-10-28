@@ -55,6 +55,12 @@ export async function hitRateLimit(
 
 /** Magic links per e-mail address per hour. */
 export const MAGIC_LINK_LIMIT = { limit: 5, windowSeconds: 60 * 60 };
+/**
+ * Magic links per client IP per hour (login aberto, 28/10/2026). Stops one
+ * machine from mailing links to many addresses (e-mail bombing / Resend quota).
+ * Conservative but above a shared office or mobile carrier NAT.
+ */
+export const MAGIC_LINK_IP_LIMIT = { limit: 20, windowSeconds: 60 * 60 };
 /** Fase 0: tentativas de senha por e-mail a cada 15 minutos. */
 export const PASSWORD_LIMIT = { limit: 10, windowSeconds: 15 * 60 };
 /**

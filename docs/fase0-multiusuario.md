@@ -6,7 +6,7 @@ O que muda:
 
 - O login sai do NextAuth e vai pro **Better Auth**. Três jeitos de entrar: **senha**, **Google** e **link por e-mail** (Resend, como hoje).
 - **2FA** com app autenticador (Google Authenticator, Authy), com **10 códigos de recuperação**. Obrigatório pro admin, opcional pros outros. O código é pedido nos três jeitos de entrar.
-- **Allowlist**: só entra quem está no `ALLOWED_EMAILS`, na tabela `BetaAllowlist` (você gerencia em `/admin`) ou foi convidado pra um workspace.
+- **Login aberto (28/10/2026)**: qualquer e-mail recebe o link e cria conta. Limite de 5 links por e-mail e 20 por IP por hora. Interruptor de emergência: `SIGNIN_RESTRICTED=1` no ambiente fecha o cadastro e volta a valer a allowlist antiga: só entra quem está no `ALLOWED_EMAILS`, na tabela `BetaAllowlist` (você gerencia em `/admin`) ou foi convidado pra um workspace. Convite continua levando a pessoa pro workspace de quem convidou.
 - **Admin da plataforma** (`User.role = ADMIN`): vê usuários, status e números. Abrir conversa de outro workspace só com registro em `AdminAccessLog`.
 - **Schema `whatsapp`** no mesmo Postgres, com as tabelas vazias e **RLS ligada desde o primeiro dia**.
 - Chave de API e MCP: **nada muda**. Continuam presas ao workspace onde foram criadas.
@@ -28,7 +28,7 @@ Telas novas: `/login` (senha, Google, link), `/login/2fa` (código), `/account/p
 
 Sem essas duas variáveis, o botão do Google simplesmente não aparece. Senha e link continuam funcionando.
 
-Segurança: o Google só é ligado a uma conta que já existe quando o próprio Google confirmou o e-mail. E-mail fora da allowlist não entra com Google.
+Segurança: o Google só é ligado a uma conta que já existe quando o próprio Google confirmou o e-mail. Com `SIGNIN_RESTRICTED=1`, e-mail fora da allowlist não entra com Google.
 
 ---
 
@@ -100,7 +100,7 @@ Opcionais (RLS, ver seção 5): `DATABASE_URL_APP`, `DB_RLS_ROLE`, `DB_SYSTEM_RO
 ## 4. Login: regras de segurança
 
 - Não existe cadastro aberto por senha. A senha é criada depois de entrar pelo link ou pelo Google (evita alguém registrar o e-mail de outra pessoa antes dela).
-- A allowlist vale nos três caminhos e em **toda sessão nova**: tirou a pessoa da lista, ela não entra mais nem com a senha. Remover em `/admin` também fecha as sessões abertas dela.
+- Com `SIGNIN_RESTRICTED=1`, a allowlist vale nos três caminhos e em **toda sessão nova**: tirou a pessoa da lista, ela não entra mais nem com a senha. Remover em `/admin` também fecha as sessões abertas dela.
 - Pedido de link pra e-mail fora da lista responde igual ao de dentro (ninguém descobre quem está na lista), mas nenhum e-mail sai.
 - Limites: 5 links por e-mail por hora e 10 tentativas de senha por e-mail a cada 15 minutos (Redis), mais o limite por IP do próprio Better Auth. 2FA trava a conta por 15 minutos depois de 10 códigos errados.
 - Admin sem 2FA não usa o painel nem a API pela sessão (só a tela de ligar o 2FA). As chaves de API dele continuam funcionando.

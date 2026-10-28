@@ -45,10 +45,12 @@ export type AuthDeps = {
   baseURL: string;
   /** Envia o e-mail com o link de acesso. */
   sendMagicLink: (email: string, url: string) => Promise<void>;
-  /** Allowlist: ALLOWED_EMAILS, BetaAllowlist ou convite de workspace. */
+  /** Pode entrar? Aberto por padrão; com SIGNIN_RESTRICTED=1, allowlist/beta/convite (lib/auth-signin.ts). */
   canSignIn: (email: string) => Promise<boolean>;
   /** Limite de links por e-mail (true = pode mandar). */
   canSendMagicLink: (email: string) => Promise<boolean>;
+  /** Limite de links por IP (true = pode mandar). Opcional. */
+  canSendMagicLinkFromIp?: (ip: string) => Promise<boolean>;
   /** Limite de tentativas de senha por e-mail (true = pode tentar). */
   canTryPassword: (email: string) => Promise<boolean>;
   /** Já existe alguém com este e-mail, ignorando maiúsculas? Evita conta duplicada. */
@@ -95,6 +97,15 @@ export function safeCallbackPath(target: string | null | undefined, baseURL: str
 
 /** Caminhos que criam sessão sem passar pelo 2FA do plugin. */
 const PASSWORDLESS_SIGN_IN_PATHS = new Set(["/magic-link/verify", "/callback/:id", "/sign-in/social"]);
+
+/**
+ * IP do cliente pelo x-forwarded-for. Vale o ÚLTIMO item: é o que o nosso
+ * proxy viu; os anteriores o cliente pode forjar.
+ */
+export function clientIp(header: string | null | undefined): string | null {
+  const parts = (header ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : null;
+}
 
 export function createAuth(deps: AuthDeps) {
   const plugins = [
@@ -209,10 +220,17 @@ export function createAuth(deps: AuthDeps) {
       before: createAuthMiddleware(async (ctx) => {
         if (ctx.path === "/sign-in/magic-link") {
           const email = String(ctx.body?.email ?? "").trim().toLowerCase();
-          // Resposta igual pra quem tem e pra quem não tem acesso: ninguém
-          // descobre pela tela quais e-mails estão na lista.
+          // Com SIGNIN_RESTRICTED, resposta igual pra quem tem e pra quem não tem
+          // acesso: ninguém descobre pela tela quais e-mails estão na lista.
           const allowed = email ? await deps.canSignIn(email).catch(() => false) : false;
           if (!allowed) return ctx.json({ status: true });
+          const ip = clientIp(ctx.headers?.get?.("x-forwarded-for"));
+          if (ip && deps.canSendMagicLinkFromIp && !(await deps.canSendMagicLinkFromIp(ip))) {
+            throw new APIError("TOO_MANY_REQUESTS", {
+              message: "Você pediu muitos links. Espere um pouco e tente de novo.",
+              code: "MAGIC_LINK_RATE_LIMIT",
+            });
+          }
           if (!(await deps.canSendMagicLink(email))) {
             throw new APIError("TOO_MANY_REQUESTS", {
               message: "Você pediu muitos links. Espere um pouco e tente de novo.",

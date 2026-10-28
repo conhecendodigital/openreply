@@ -51,3 +51,26 @@ export async function sendLoginEmail(to: string, url: string): Promise<void> {
     throw new Error(`Resend respondeu ${res.status} ao enviar o link de acesso.`);
   }
 }
+
+/** a***@dominio.com: o suficiente pra achar no log, sem expor o e-mail inteiro. */
+export function maskEmail(email: string): string {
+  const [user = "", domain = ""] = email.trim().split("@");
+  return `${user.slice(0, 1)}***@${domain}`;
+}
+
+/**
+ * Envia o link e, se falhar, registra no log do servidor (sem chave e sem
+ * e-mail completo) antes de repassar o erro. Antes a falha do Resend sumia.
+ */
+export async function sendLoginEmailLogged(to: string, url: string): Promise<void> {
+  try {
+    await sendLoginEmail(to, url);
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "Error";
+    // A mensagem do Resend só traz o status; a do SMTP pode trazer o endereço.
+    const raw = err instanceof Error ? err.message : String(err);
+    const message = raw.replace(/[^\s@]+@[^\s@]+/g, "[email]").slice(0, 200);
+    console.error(`[auth] falha ao enviar o link de acesso para ${maskEmail(to)}: ${name}: ${message}`);
+    throw err;
+  }
+}

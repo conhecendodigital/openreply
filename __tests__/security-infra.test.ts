@@ -197,14 +197,22 @@ describe("limites de requisição", () => {
     expect(await allowSignIn({ user: { email: "dono@ex.com" }, email: { verificationRequest: false } })).toBe(true);
   });
 
-  it("magic link: e-mail fora do ALLOWED_EMAILS continua barrado", async () => {
+  it("magic link: login aberto, e-mail fora de qualquer lista recebe o link", async () => {
+    vi.stubEnv("ALLOWED_EMAILS", "dono@ex.com");
+    const semConvite = async () => false;
+    expect(await allowSignIn({ user: { email: "novo@ex.com" }, email: { verificationRequest: true } }, semConvite)).toBe(true);
+  });
+
+  it("magic link: com SIGNIN_RESTRICTED=1, e-mail fora do ALLOWED_EMAILS continua barrado", async () => {
+    vi.stubEnv("SIGNIN_RESTRICTED", "1");
     vi.stubEnv("ALLOWED_EMAILS", "dono@ex.com");
     const semConvite = async () => false;
     expect(await allowSignIn({ user: { email: "intruso@ex.com" }, email: { verificationRequest: true } }, semConvite)).toBe(false);
     expect(await allowSignIn({ user: { email: "dono@ex.com" }, email: { verificationRequest: true } }, semConvite)).toBe(true);
   });
 
-  it("magic link: convidado entra mesmo fora do ALLOWED_EMAILS; erro no banco barra", async () => {
+  it("magic link: com SIGNIN_RESTRICTED=1, convidado entra mesmo fora do ALLOWED_EMAILS; erro no banco barra", async () => {
+    vi.stubEnv("SIGNIN_RESTRICTED", "1");
     vi.stubEnv("ALLOWED_EMAILS", "dono@ex.com");
     const convidados = async (email: string) => email === "convidada@ex.com";
     expect(await allowSignIn({ user: { email: "convidada@ex.com" }, email: { verificationRequest: true } }, convidados)).toBe(true);
@@ -213,6 +221,18 @@ describe("limites de requisição", () => {
     const bancoCaiu = async () => { throw new Error("db down"); };
     expect(await allowSignIn({ user: { email: "convidada@ex.com" }, email: { verificationRequest: true } }, bancoCaiu)).toBe(false);
     expect(await allowSignIn({ user: { email: null }, email: { verificationRequest: true } }, convidados)).toBe(false);
+  });
+
+  it("magic link: o limite por e-mail continua barrando com o login aberto e com o interruptor", async () => {
+    for (const restricted of [undefined, "1"]) {
+      vi.unstubAllEnvs();
+      if (restricted) vi.stubEnv("SIGNIN_RESTRICTED", restricted);
+      const send = { user: { email: `aberto-${restricted ?? "off"}@ex.com` }, email: { verificationRequest: true } };
+      const sempreConvidado = async () => true;
+      const out = [];
+      for (let i = 0; i < MAGIC_LINK_LIMIT.limit + 1; i++) out.push(await allowSignIn(send, sempreConvidado));
+      expect(out[MAGIC_LINK_LIMIT.limit]).toBe(false);
+    }
   });
 });
 

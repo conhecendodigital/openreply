@@ -1,14 +1,18 @@
 /**
- * Quem pode entrar (allowlist), separado do login pra dar pra testar.
+ * Quem pode entrar.
  *
- * Fase 0 (06/10/2026, login novo): vale pros três caminhos (senha, Google e
- * link por e-mail). Roda antes de mandar o link (verificationRequest = true),
- * então um e-mail barrado nunca recebe nada, e de novo sempre que uma sessão
- * vai ser criada (lib/auth-config.ts).
+ * 28/10/2026 (pedido do dono): o login é ABERTO por padrão. Qualquer e-mail
+ * recebe o link e cria conta, sem ALLOWED_EMAILS, BetaAllowlist ou convite
+ * como requisito. Antes, quem não estava nas listas era barrado em silêncio
+ * e nenhum e-mail saía.
  *
- * Entra quem está no ALLOWED_EMAILS, na tabela BetaAllowlist (o beta) ou foi
- * convidado pra um workspace. Com as duas listas vazias, fica aberto como era
- * antes (instalação nova de quem hospeda o próprio Lead Engine).
+ * Interruptor de emergência: SIGNIN_RESTRICTED=1 (ou true/yes/on) volta ao
+ * comportamento antigo (ALLOWED_EMAILS, BetaAllowlist ou convite de workspace),
+ * sem mexer em código. Convites e a lista beta continuam existindo: o convite
+ * ainda leva a pessoa pro workspace dele (lib/workspace.ts), só não é mais
+ * requisito pra receber o link.
+ *
+ * O limite de links por e-mail (e por IP) vale nos dois modos.
  */
 import { isEmailAllowedToSignIn } from "@/lib/env";
 import { hitRateLimit, MAGIC_LINK_LIMIT } from "@/lib/http-rate-limit";
@@ -81,6 +85,11 @@ export async function isSignInOpen(): Promise<boolean> {
   }
 }
 
+/** SIGNIN_RESTRICTED ligado = cadastro fechado pelas listas (comportamento antigo). */
+export function isSignInRestricted(env: Record<string, string | undefined> = process.env): boolean {
+  return /^(1|true|yes|on)$/i.test((env.SIGNIN_RESTRICTED ?? "").trim());
+}
+
 export async function allowSignIn(
   params: {
     user?: { email?: string | null } | null;
@@ -90,16 +99,18 @@ export async function allowSignIn(
   openLookup: () => Promise<boolean> = isSignInOpen
 ): Promise<boolean> {
   const address = params.user?.email;
-  // ALLOWED_EMAILS vazio deixa todo mundo passar no isEmailAllowedToSignIn;
-  // agora uma linha na BetaAllowlist também fecha o login.
-  const envListSet = Boolean((process.env.ALLOWED_EMAILS ?? "").replace(/[\s,]/g, ""));
-  const allowed = envListSet ? isEmailAllowedToSignIn(address) : await openLookup();
-  if (!allowed) {
-    if (!address) return false;
-    // Not on the list: let in only who was invited or already is on a team.
-    // A database hiccup fails closed (no link is sent).
-    const invited = await accessLookup(address).catch(() => false);
-    if (!invited) return false;
+  if (!address || !address.trim()) return false;
+  if (isSignInRestricted()) {
+    // Interruptor ligado: ALLOWED_EMAILS vazio deixa todo mundo passar no
+    // isEmailAllowedToSignIn; uma linha na BetaAllowlist também fecha o login.
+    const envListSet = Boolean((process.env.ALLOWED_EMAILS ?? "").replace(/[\s,]/g, ""));
+    const allowed = envListSet ? isEmailAllowedToSignIn(address) : await openLookup();
+    if (!allowed) {
+      // Fora da lista: só entra quem foi convidado ou já está numa equipe.
+      // Erro no banco = fechado (nenhum link sai).
+      const invited = await accessLookup(address).catch(() => false);
+      if (!invited) return false;
+    }
   }
   // At most a few magic links per address per hour: stops e-mail bombing
   // and protects the Resend quota. Verifying a link is never limited.

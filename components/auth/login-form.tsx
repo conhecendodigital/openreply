@@ -119,7 +119,7 @@ export function LoginForm({
       <div className="mt-6 text-center" role="status">
         <h2 className="text-base font-semibold">{t("Check your email")}</h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          {t("If your email has access, the link arrives in a few seconds. It is valid for 15 minutes.")}
+          {t("The link arrives in a few seconds. It is valid for 15 minutes.")}
         </p>
         <button
           type="button"

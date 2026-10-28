@@ -76,7 +76,7 @@ export default async function LoginPage({
           <div className="rounded-xl border border-border bg-white px-6 py-5 text-center text-sm">
             <p className="font-semibold text-foreground">{t("First time here?")}</p>
             <p className="mt-1 text-muted">
-              {t("Ask for the link by email or use Google. If your email has access, your account is created on the spot.")}
+              {t("Ask for the link by email or use Google. Your account is created on the spot.")}
             </p>
             <p className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
               <Link href="/signup" className="font-semibold text-accent hover:underline">
