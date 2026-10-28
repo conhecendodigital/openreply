@@ -109,7 +109,7 @@ export function perguntouSeERobo(texto: string | null | undefined): boolean {
 }
 
 export const RESPOSTA_SOU_IA =
-  "Boa pergunta! Aqui quem responde é o assistente do Matheus, uma inteligência artificial.\n\nVou chamar o Matheus pra continuar essa conversa com você, tá bom?";
+  "Sou o Gil, assistente da equipe do Matheus, e uso inteligência artificial pra te responder.\n\nVou avisar o Matheus que você quer falar com ele, pode ser?";
 
 const SENSIVEL =
   /\b(cpf|cart[aã]o|senha|c[oó]digo de seguran[cç]a|cvv|rg\b|endere[cç]o completo|diagn[oó]stico|depress[aã]o|suic[ií]d|rem[eé]dio|doen[cç]a|c[aâ]ncer|processo|advogad|procon|reembolso|estorno|golpe|fraude|den[uú]ncia|chargeback|gr[aá]vida|aborto)\b/i;

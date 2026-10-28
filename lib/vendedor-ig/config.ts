@@ -13,7 +13,7 @@ export const LINK_PAGINA = "https://chatsemfrescura.cloudmatheus.com.br/?utm_sou
  * Preço confirmado pelo dono em 28/10/2026 (R$ 97). Sem prova social aqui de propósito.
  */
 export const DEFAULT_OFFER_FACTS = `PRODUTO: Chat Sem Frescura.
-PREÇO: R$ 97.
+PREÇO: parcelado em 12x de R$ 10,03 ou R$ 97 à vista.
 O QUE A PESSOA APRENDE E RECEBE:
 - Usar ChatGPT, Claude, NotebookLM e Gemini.
 - Criar vídeo e criar foto com IA.
@@ -24,6 +24,28 @@ LINKS (use exatamente estes, sem mudar nada):
 - Comprar direto: ${LINK_CHECKOUT}
 - Página com os detalhes: ${LINK_PAGINA}
 VOCABULÁRIO: sempre "Comando" (nunca "prompt") e "habilidade" (nunca "skill"). Nunca dizer que a IA "faz por você": a IA é apoio, a pessoa aplica.`;
+
+/**
+ * Preço oficial (dono, 28/10/2026). Vale SEMPRE, mesmo que o documento de fatos salvo na tela não tenha esta linha.
+ * Ordem de fala: primeiro o parcelado, depois o à vista, e só no fim da conversa.
+ */
+export const PRECO_OFICIAL = "PREÇO OFICIAL: 12x de R$ 10,03 no cartão (fale este primeiro) ou R$ 97 à vista (fale depois, ou se a pessoa pedir à vista/Pix).";
+
+/**
+ * Base de ferramentas (estudo de 28/10/2026, páginas oficiais lidas). O vendedor SÓ afirma o que está aqui sobre
+ * Gemini, ChatGPT, Claude e NotebookLM. Fora daqui: "isso varia, abre a tela de limites/planos pra ver" ou chama o dono.
+ */
+export const BASE_FERRAMENTAS = `GEMINI:
+- Criar vídeo no Gemini exige plano pago do Google (Google AI Plus, Pro ou Ultra). Nas páginas oficiais, o plano grátis não aparece com geração de vídeo. NUNCA prometa vídeo grátis no Gemini.
+- Onde fica: no computador, gemini.google.com, abre a barra lateral e toca em "Criar vídeo". No Android, menu no canto superior esquerdo e "Vídeos".
+- Não aparece pra: conta sem plano pago, menor de 18 anos, país onde o recurso não chegou, conta de trabalho ou escola sem licença. O Google avisa que recurso varia por plano, aparelho e região.
+- Quanto cada plano libera por dia: o Google não publica número. Não cite número de limite. Diga pra pessoa olhar em Configurações, Limites de uso.
+- Imagem no Gemini (Nano Banana) aparece em todos os planos, com limite menor no grátis.
+- Preço mensal no Brasil (pode ter mudado): AI Plus R$ 24,99; AI Pro R$ 96,99. Só cite se a pessoa perguntar.
+CHATGPT: limites e planos mudam toda hora e não foram confirmados. Não afirme limite, preço nem se gera vídeo. Diga que varia e pra pessoa olhar o plano dela.
+CLAUDE: ótimo pra texto, roteiro, código e análise. Não gera foto nem ilustração (cria diagramas e gráficos). Pra foto e vídeo, use Gemini ou ChatGPT. Limite do grátis renova a cada 5 horas e varia com o tamanho da conversa. Preço em reais não confirmado.
+NOTEBOOKLM: no grátis, até 100 cadernos e 50 fontes por caderno. Limite diário de áudio, vídeo e chat não confirmado: não cite número. Pode estar desligado em conta de trabalho ou escola.
+COMANDOS DE BARRA (/comando): são atalhos da comunidade, não oficiais. Não chame de "secreto" nem "oficial", e não garanta que funcionam no plano grátis.`;
 
 export type VendedorConfig = {
   instagramAccountId: string;

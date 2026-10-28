@@ -63,6 +63,8 @@ export interface DepsVendedor {
   salvarFicha?(ficha: Ficha): Promise<void>;
   /** Aberturas que o vendedor usou nas últimas conversas da conta (anti-repetição). */
   aberturasRecentes?(): Promise<string[]>;
+  /** Textos inteiros que o vendedor mandou/rascunhou em outras conversas da conta (trava de similaridade). */
+  textosRecentes?(): Promise<string[]>;
   /** Exemplos aprendidos (rascunho vs versão do dono), já anonimizados. */
   exemplos?(): Promise<ExemploVendedor[]>;
   /** Dado oficial do perfil (seguidores) para a ficha. */
@@ -140,6 +142,8 @@ export async function processarConversa(deps: DepsVendedor): Promise<Resultado> 
     ...(await seguro(deps.fontesDaPessoa, [] as Fonte[])),
   ];
   const aberturas = await seguro(deps.aberturasRecentes, [] as string[]);
+  const textosRecentes = await seguro(deps.textosRecentes, [] as string[]);
+  const ctxResposta = { textosRecentes, ultimaDaPessoa: textoDela, estagio: fichaAntes.estagio };
   const exemplos = exemplosDoPrompt(await seguro(deps.exemplos, [] as ExemploVendedor[]), textoDela);
 
   // Modelo.
@@ -167,7 +171,7 @@ export async function processarConversa(deps: DepsVendedor): Promise<Resultado> 
   // Pergunta final obrigatória (uma só) e abertura nova: se falhar, reescreve UMA vez; se ainda falhar, vira rascunho.
   const avisosDeEstilo: string[] = [];
   if (!saida.passarProDono) {
-    const probs = problemasDaResposta(saida.partes, aberturas);
+    const probs = problemasDaResposta(saida.partes, aberturas, ctxResposta);
     if (probs.length) {
       try {
         const r2 = await deps.perguntarIa({
@@ -185,7 +189,7 @@ export async function processarConversa(deps: DepsVendedor): Promise<Resultado> 
       } catch {
         // falhou a reescrita: segue com a original, que vai cair no aviso abaixo
       }
-      for (const p of problemasDaResposta(saida.partes, aberturas)) avisosDeEstilo.push(p);
+      for (const p of problemasDaResposta(saida.partes, aberturas, ctxResposta)) avisosDeEstilo.push(p);
     }
   }
   const comIa = { model: modelo, costMicroUsd: custo };

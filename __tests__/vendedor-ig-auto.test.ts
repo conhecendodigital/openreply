@@ -56,7 +56,7 @@ function mk(over: Partial<DepsVendedor> = {}, msgs: StoredMessage[] = [msg({ mid
     finalizar: async (...a) => void calls.final(...a),
     perguntarIa: async (i) => {
       calls.ia(i);
-      return iaOk(["O Chat Sem Frescura custa R$ 97.", "Você usa IA hoje no seu negócio?"])();
+      return iaOk(["O Chat Sem Frescura sai em 12x de R$ 10,03.", "Você usa IA hoje no seu negócio?"])();
     },
     podeGastar: async () => true,
     cartao: async () => "",
@@ -269,7 +269,7 @@ describe("resposta", () => {
   });
 
   it("o preço e o link do documento de fatos passam", async () => {
-    const { deps, calls } = mk({ perguntarIa: iaOk([`Custa R$ 97. Compra por aqui: ${LINK_CHECKOUT}`, "Quer que eu explique o que vem?"]) as never });
+    const { deps, calls } = mk({ perguntarIa: iaOk([`Sai 12x de R$ 10,03 ou R$ 97 à vista. Compra por aqui: ${LINK_CHECKOUT}`, "Quer que eu explique o que vem?"]) as never });
     expect((await processarConversa(deps)).outcome).toBe("sent");
     expect(calls.enviar).toHaveBeenCalled();
   });

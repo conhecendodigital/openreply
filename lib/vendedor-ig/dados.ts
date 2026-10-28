@@ -213,6 +213,15 @@ export function criarDeps(conta: ContaIg, contato: ContatoIg, config: VendedorCo
       });
       return rows.map((r) => aberturaDe(r.text ?? "")).filter(Boolean);
     },
+    async textosRecentes() {
+      const rows = await prisma.vendedorIgLog.findMany({
+        where: { instagramAccountId: conta.id, outcome: { in: ["sent", "draft"] }, text: { not: null } },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+        select: { text: true },
+      });
+      return rows.map((r) => r.text ?? "").filter(Boolean);
+    },
     async exemplos(): Promise<ExemploVendedor[]> {
       const rows = await prisma.vendedorIgExemplo.findMany({
         where: { instagramAccountId: conta.id },
