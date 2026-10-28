@@ -7,7 +7,7 @@ A aba Posts agenda e publica vídeo em **TikTok, YouTube, Instagram (Reels e car
 - Cada rede é um provider em `lib/social/providers/`. Todos usam o mesmo fluxo: rascunho, agendado, publicando, publicado ou falhou.
 - `/api/cron/social-publish` (chamado pelo `scripts/cron.sh`) varre o que venceu e confere o que ficou esperando a rede (Instagram). `/api/cron/tiktok-publish` continua existindo como apelido.
 - YouTube e TikTok ficam em `SocialAccount`. Instagram e Facebook usam as contas que já estão em `InstagramAccount` (o mesmo token da aba Canais).
-- MCP e chave de API só leem e criam RASCUNHO. Agendar, publicar, cancelar, apagar e enviar arquivo é só pela tela.
+- MCP e chave de API leem, enviam mídia (link de PUT), criam RASCUNHO e, a pedido do dono, agendam e publicam um post que já existe (seção "MCP: enviar mídia, agendar e publicar" abaixo). Cancelar, apagar e a declaração "feito para crianças" do YouTube são só pela tela.
 
 ## Variáveis novas
 
@@ -86,3 +86,19 @@ Opção no Reel: "Reel de teste" (só para quem não segue). Manda `trial_params
 - Migração aditiva `20261028120000_social_multi_rede`: `ScheduledPost.socialAccountId` vira opcional e entra `channelId` (conta Instagram/Facebook). Faça backup antes (`pg_dump`).
 - Desconectar um canal mantém os dados. Só o dono apaga de verdade.
 - Comentários do YouTube não estão neste PR. Existe o ajudante `youtubeFetch(account, path)` (com renovação do token) para o próximo.
+
+## MCP: enviar mídia, agendar e publicar (27/10/2026)
+
+Fluxo: o Claude sobe o arquivo, cria o rascunho, e o dono revisa na tela ou manda agendar/publicar na conversa.
+
+1. `enviar_midia_post` {nome, contentType, bytes}: devolve `uploadUrl` (vale 15 min) e o `mediaUrl` final, em `<workspace>/posts/<mês>/<uuid>.<ext>`. O Claude faz o envio: `curl -X PUT -H "Content-Type: <contentType>" --upload-file <arquivo> "<uploadUrl>"`. Vídeo mp4/mov/webm (até 2 GB, cada rede confere o seu limite ao criar o rascunho) e imagem jpeg/png (até 8 MB). Máximo de 30 links por hora por chave (sem o contador, não gera link). Cada pedido vira um `OperationalEvent` (chave, nome, tamanho, tipo; nunca o conteúdo). Rota: `/api/mcp-media/upload-url` (só chave; pessoa logada leva 403). A rota da tela `/api/posts/upload-url` continua só da pessoa logada.
+2. `criar_rascunho_post` com o `mediaUrl` devolvido. Carrossel do Instagram: um envio por slide e `settings: {shareToFeed: true, format: "CAROUSEL", slides: [{url, bytes, contentType}]}` (mediaUrl/bytes/tipo do post = 1º slide). Os slides também têm que estar na pasta de posts do workspace. Nasce sempre RASCUNHO, sem horário. YouTube: a declaração "feito para crianças" fica em branco de propósito e `agendar_post`/`publicar_post` devolvem o que falta.
+3. `agendar_post` {postId, scheduledAt ISO com fuso} e `publicar_post` {postId}: usadas só quando o dono pede. Reaproveitam a mesma regra da tela (`lib/social/post-actions.ts`: readyProblem, claimPost, lock). Só agem em post existente do workspace da chave, em RASCUNHO ou AGENDADO. Repetir o pedido não duplica. Nunca criam nem apagam. A resposta é lida do banco depois da ação: id, rede, estado, horário de Brasília com dia da semana, legenda curta e `conferencia` ("CONFERE" ou "NÃO CONFERE"). Cada ação vira um `OperationalEvent` (chave, postId, rede, horário; sem legenda nem arquivo). Rotas: `/api/mcp-publish/[id]/schedule` e `/publish`. As da tela (`/api/posts/[id]/schedule` e `/publish`) seguem só da pessoa logada.
+
+Não há notificação ao dono (Telegram/WhatsApp) neste PR: só o registro.
+
+### Rollback
+
+- Parar de agendar/publicar pelo MCP sem novo deploy: defina `MCP_PUBLISH_DISABLED=1` no servidor e reinicie. As duas ferramentas respondem que estão desligadas.
+- Remover tudo: reverter o commit (nenhuma migração de banco). Sem o commit, o MCP volta a só criar rascunho com mídia enviada pela tela.
+- Arquivos já enviados ficam no armazenamento; apagar é manual (pasta `<workspace>/posts/`).

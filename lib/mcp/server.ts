@@ -930,19 +930,19 @@ export const TOOLS: Tool[] = [
   {
     name: "criar_rascunho_post",
     description:
-      "Cria um RASCUNHO de post na aba Posts para a rede da conta escolhida (TikTok, YouTube, Instagram Reels ou Facebook). Não agenda, não publica: agendar, publicar, cancelar e apagar são só pela tela, com o dono da conta. O vídeo não sobe por aqui: precisa já estar enviado pela aba Posts, e o mediaUrl tem que ser o endereço dele no armazenamento do Lead Engine (outro endereço é recusado). Limites de legenda: TikTok 2200, Instagram 2200, YouTube 5000 (descrição), Facebook 5000. Sem settings, nasce com o padrão mais fechado da rede (TikTok: privado; YouTube: privado). Quem finaliza as opções e escolhe a privacidade é o Matheus na tela.",
+      "Cria um RASCUNHO de post na aba Posts para a rede da conta escolhida (TikTok, YouTube, Instagram Reels ou Facebook). Não agenda, não publica: agendar, publicar, cancelar e apagar são só pela tela, com o dono da conta. O arquivo sobe antes por enviar_midia_post (ou pela aba Posts): o mediaUrl tem que ser o endereço dele no armazenamento do Lead Engine (outro endereço é recusado). Para carrossel do Instagram, mande cada slide por enviar_midia_post e use settings {format: \"CAROUSEL\", slides: [{url, bytes, contentType}], shareToFeed: true}; mediaUrl/mediaBytes/mediaContentType são os do 1º slide (image/jpeg ou image/png). O rascunho nasce sempre como RASCUNHO; só depois, a pedido do dono, agendar_post ou publicar_post. Limites de legenda: TikTok 2200, Instagram 2200, YouTube 5000 (descrição), Facebook 5000. Sem settings, nasce com o padrão mais fechado da rede (TikTok: privado; YouTube: privado). Quem finaliza as opções e escolhe a privacidade é o Matheus na tela.",
     inputSchema: {
       type: "object",
       properties: {
         socialAccountId: { ...str, description: "ID da conta (listar_contas_sociais)" },
         caption: { ...str, description: "Legenda/descrição do post (limite da rede: 2200 no TikTok e Instagram, 5000 no YouTube e Facebook)" },
-        mediaUrl: { ...str, description: "Endereço do vídeo já enviado pela aba Posts" },
-        mediaBytes: { type: "integer", description: "Tamanho do vídeo em bytes" },
-        mediaContentType: { ...str, enum: ["video/mp4", "video/quicktime", "video/webm"] },
+        mediaUrl: { ...str, description: "Endereço do arquivo já enviado (mediaUrl devolvido por enviar_midia_post)" },
+        mediaBytes: { type: "integer", description: "Tamanho do arquivo em bytes" },
+        mediaContentType: { ...str, enum: ["video/mp4", "video/quicktime", "video/webm", "image/jpeg", "image/png"] },
         settings: {
           type: "object",
           description:
-            "Opcional, depende da rede da conta. TikTok: privacyLevel (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY), allowComment, allowDuet, allowStitch, isAigc e commercial {enabled, yourBrand, brandedContent}. YouTube: title (até 100), privacyStatus (private, unlisted, public), containsSyntheticMedia, tags, categoryId; selfDeclaredMadeForKids é sempre resposta da pessoa na tela. Instagram: shareToFeed (true/false). Facebook: title (até 255, opcional). Sem isso, usa o padrão fechado da rede.",
+            "Opcional, depende da rede da conta. TikTok: privacyLevel (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY), allowComment, allowDuet, allowStitch, isAigc e commercial {enabled, yourBrand, brandedContent}. YouTube: title (até 100), privacyStatus (private, unlisted, public), containsSyntheticMedia, tags, categoryId; selfDeclaredMadeForKids é sempre resposta da pessoa na tela. Instagram: shareToFeed (true/false); carrossel: format \"CAROUSEL\" e slides (2 a 20 imagens, na ordem). Facebook: title (até 255, opcional). Sem isso, usa o padrão fechado da rede.",
         },
       },
       required: ["socialAccountId", "caption", "mediaUrl", "mediaBytes", "mediaContentType"],
@@ -951,7 +951,7 @@ export const TOOLS: Tool[] = [
       const accountId = requireString(args, "socialAccountId");
       const mediaUrl = requireString(args, "mediaUrl");
       if (!accountId) return text("Informe o socialAccountId (listar_contas_sociais).", true);
-      if (!mediaUrl) return text("Informe o mediaUrl de um vídeo já enviado pela aba Posts.", true);
+      if (!mediaUrl) return text("Informe o mediaUrl de um arquivo já enviado (enviar_midia_post).", true);
       const body: Record<string, unknown> = {
         socialAccountId: accountId,
         caption: typeof args.caption === "string" ? args.caption : "",
@@ -961,6 +961,71 @@ export const TOOLS: Tool[] = [
       };
       if (args.settings && typeof args.settings === "object") body.settings = args.settings;
       const res = await api(call, "POST", "/api/posts", body);
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "enviar_midia_post",
+    description:
+      "Pede um link de envio (PUT) para colocar um vídeo ou imagem no armazenamento do Lead Engine, para virar rascunho com criar_rascunho_post. NÃO recebe o arquivo: devolve uploadUrl (vale 15 minutos), headers e o mediaUrl final. Depois você faz o envio do arquivo com curl, exatamente assim: curl -X PUT -H \"Content-Type: <contentType>\" --upload-file <arquivo> \"<uploadUrl>\" (o tamanho tem que ser igual ao informado em bytes). Aceita vídeo mp4/quicktime/webm e imagem jpeg/png (slide de carrossel, até 8 MB). Máximo de 30 links por hora por chave; cada pedido fica no registro (nome e tamanho, nunca o conteúdo). Não cria post nenhum. Nunca invente o tamanho: use o do arquivo real.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        nome: { ...str, description: "Nome do arquivo, sem pasta (ex.: reel-final.mp4). Só para o registro." },
+        contentType: { ...str, enum: ["video/mp4", "video/quicktime", "video/webm", "image/jpeg", "image/png"] },
+        bytes: { type: "integer", description: "Tamanho exato do arquivo em bytes" },
+      },
+      required: ["nome", "contentType", "bytes"],
+    },
+    async run(args, call) {
+      const nome = requireString(args, "nome");
+      if (!nome) return text("Informe o nome do arquivo.", true);
+      if (typeof args.contentType !== "string") return text("Informe o contentType.", true);
+      if (typeof args.bytes !== "number") return text("Informe os bytes (tamanho exato do arquivo).", true);
+      const res = await api(call, "POST", "/api/mcp-media/upload-url", { name: nome, contentType: args.contentType, size: args.bytes });
+      if (!res.ok) return res.result;
+      const d = res.data as { uploadUrl: string; mediaUrl: string; mediaBytes: number; mediaContentType: string; headers: Record<string, string>; expiresAt: string };
+      return text({
+        ...d,
+        proximoPasso: `curl -X PUT -H "Content-Type: ${d.mediaContentType}" --upload-file <arquivo> "<uploadUrl>"  (depois: criar_rascunho_post com mediaUrl, mediaBytes e mediaContentType abaixo)`,
+      });
+    },
+  },
+  {
+    name: "agendar_post",
+    description:
+      "Agenda um post que JÁ existe como RASCUNHO (ou muda o horário de um AGENDADO) para a data e hora dadas. Use só quando o dono da conta pedir na conversa. Não cria post, não apaga. scheduledAt em ISO com fuso (ex.: 2026-10-28T19:30:00-03:00); sem fuso é recusado. Vale a mesma conferência da tela (conta conectada, legenda, mídia, opções completas); se faltar algo, devolve o que falta (ex.: YouTube sem a declaração de criança, que é só do dono na tela). Repetir o mesmo pedido não duplica. A resposta é lida do banco depois da ação: id, rede, estado, horário de Brasília com dia da semana, legenda curta e conferencia (CONFERE ou NÃO CONFERE; se vier NÃO CONFERE, avise o dono e não diga que agendou). Interruptor de emergência do servidor: MCP_PUBLISH_DISABLED=1.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        postId: { ...str, description: "ID do rascunho (listar_posts_agendados)" },
+        scheduledAt: { ...str, description: "Data e hora ISO com fuso, ex.: 2026-10-28T19:30:00-03:00" },
+      },
+      required: ["postId", "scheduledAt"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "postId");
+      if (!id) return text("Informe o postId (listar_posts_agendados).", true);
+      if (typeof args.scheduledAt !== "string") return text("Informe scheduledAt em ISO com fuso.", true);
+      const res = await api(call, "POST", `/api/mcp-publish/${encodeURIComponent(id)}/schedule`, { scheduledAt: args.scheduledAt });
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "publicar_post",
+    description:
+      "Publica AGORA um post que JÁ existe como RASCUNHO ou AGENDADO. Use só quando o dono da conta pedir na conversa. Não cria post, não apaga. Vale a mesma conferência da tela; se faltar algo, devolve o que falta. O envio roda em seguida e termina em PUBLICADO ou FALHOU: confira depois com ver_post_agendado. Repetir o pedido não publica de novo. A resposta é lida do banco: id, rede, estado, legenda curta e conferencia (CONFERE ou NÃO CONFERE). Interruptor de emergência do servidor: MCP_PUBLISH_DISABLED=1.",
+    inputSchema: {
+      type: "object",
+      properties: { postId: { ...str, description: "ID do rascunho ou agendado (listar_posts_agendados)" } },
+      required: ["postId"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "postId");
+      if (!id) return text("Informe o postId (listar_posts_agendados).", true);
+      const res = await api(call, "POST", `/api/mcp-publish/${encodeURIComponent(id)}/publish`, {});
       if (!res.ok) return res.result;
       return text(res.data);
     },
@@ -1875,7 +1940,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo) e lê quem recebeu (ver_destinatarios_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. Posts em TikTok, YouTube, Instagram (Reels) e Facebook (aba Posts): pela chave você lê contas e posts (listar_contas_sociais, listar_posts_agendados, ver_post_agendado) e cria só RASCUNHO (criar_rascunho_post) com vídeo já enviado pela tela; agendar, publicar, cancelar, apagar e enviar vídeo são só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo) e lê quem recebeu (ver_destinatarios_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. Posts em TikTok, YouTube, Instagram (Reels) e Facebook (aba Posts): pela chave você lê contas e posts (listar_contas_sociais, listar_posts_agendados, ver_post_agendado) e cria só RASCUNHO (criar_rascunho_post) com a mídia enviada por enviar_midia_post (link de envio; você faz o PUT do arquivo com curl). Só quando o dono pedir na conversa, agendar_post e publicar_post agendam e publicam um post que já existe como rascunho (a resposta traz a conferência lida do banco; se vier NÃO CONFERE, avise). Cancelar e apagar post, e a declaração \"para crianças\" do YouTube, são só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
       });
     }
     case "ping":

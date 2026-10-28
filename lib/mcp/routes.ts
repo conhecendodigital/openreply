@@ -32,6 +32,9 @@ import * as conversationLinkRoute from "@/app/api/conversation-links/[id]/route"
 // so listar_fluxos & co. answered 404 "No route".
 import * as socialAccountsRoute from "@/app/api/social-accounts/route";
 import * as socialPostsRoute from "@/app/api/posts/route";
+import * as mcpMediaUploadRoute from "@/app/api/mcp-media/upload-url/route";
+import * as mcpPublishScheduleRoute from "@/app/api/mcp-publish/[id]/schedule/route";
+import * as mcpPublishNowRoute from "@/app/api/mcp-publish/[id]/publish/route";
 import * as socialPostRoute from "@/app/api/posts/[id]/route";
 import * as flowsRoute from "@/app/api/flows/route";
 import * as flowRoute from "@/app/api/flows/[id]/route";
@@ -115,6 +118,11 @@ export function resolveHandler(
     // Agendamento de posts (TikTok, YouTube, Instagram, Facebook): leitura e rascunho. Schedule/publish/cancel não entram aqui.
     [/^\/api\/social-accounts$/, socialAccountsRoute],
     [/^\/api\/posts$/, socialPostsRoute],
+    // 27/10/2026: só o link de envio de mídia do MCP (enviar_midia_post). /api/posts/upload-url segue fora, só da tela.
+    [/^\/api\/mcp-media\/upload-url$/, mcpMediaUploadRoute],
+    // 27/10/2026: agendar e publicar pelo MCP, a pedido do dono (interruptor: MCP_PUBLISH_DISABLED=1). /api/posts/[id]/schedule|publish seguem fora.
+    [/^\/api\/mcp-publish\/([^/]+)\/schedule$/, mcpPublishScheduleRoute],
+    [/^\/api\/mcp-publish\/([^/]+)\/publish$/, mcpPublishNowRoute],
     [/^\/api\/posts\/([^/]+)$/, socialPostRoute],
     // Etapa 3: flows. Static paths before the [id] patterns.
     [/^\/api\/flows$/, flowsRoute],
