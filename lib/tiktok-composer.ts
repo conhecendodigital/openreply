@@ -54,6 +54,9 @@ export interface SocialAccountDTO {
   scopes: string[];
   /** YouTube: permissões pedidas que a pessoa não concedeu. */
   missingScopes: string[];
+  /** YouTube: padrão "meus vídeos não são para crianças" ligado pelo dono na tela. */
+  youtubeNotForKidsDefault?: boolean;
+  youtubeNotForKidsDefaultAt?: string | null;
 }
 
 export interface CreatorInfo {

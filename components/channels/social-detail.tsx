@@ -47,6 +47,7 @@ export function SocialChannelDetail({
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [kidsBusy, setKidsBusy] = useState(false);
 
   const canManage = role === "OWNER" || role === "ADMIN";
   const network = account.platform;
@@ -66,6 +67,18 @@ export function SocialChannelDetail({
     } else {
       setError(t("The test failed."));
     }
+  }
+
+  async function setKidsDefault(enabled: boolean) {
+    setKidsBusy(true);
+    setError(null);
+    const res = await callApi(`/api/social-accounts/${account.id}/youtube-kids-default`, { method: "PUT", body: JSON.stringify({ enabled }) });
+    setKidsBusy(false);
+    if (!res.ok) {
+      setError(t("Could not save the default."));
+      return;
+    }
+    await onChanged();
   }
 
   async function disconnect() {
@@ -141,6 +154,33 @@ export function SocialChannelDetail({
             </div>
           )}
         </div>
+
+        {network === "YOUTUBE" && !isOff && (
+          <div className="rounded-lg border border-border p-3">
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={account.youtubeNotForKidsDefault === true}
+                disabled={!canManage || kidsBusy}
+                onChange={(e) => void setKidsDefault(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-accent"
+              />
+              <span>
+                <span className="font-semibold">{t("Default: my videos are NOT made for kids")}</span>
+                <span className="mt-1 block text-xs text-muted">
+                  {t(
+                    'This is your own statement to YouTube, not ours. Turn it on only if none of your videos on this channel is made for kids. New videos then go out as "not made for kids" without asking each time. You can still mark a single video as made for kids, and that answer wins.'
+                  )}
+                </span>
+                <span className="mt-1 block text-xs text-muted">
+                  {account.youtubeNotForKidsDefault && account.youtubeNotForKidsDefaultAt
+                    ? t("Turned on on {when}", { when: dateTime(account.youtubeNotForKidsDefaultAt) })
+                    : t("Off. YouTube still asks you for every video.")}
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         {test && (
           <div

@@ -91,13 +91,13 @@ beforeEach(() => {
 describe("achar a conta nas duas tabelas", () => {
   it("TikTok e YouTube vêm de SocialAccount", async () => {
     h.prisma.socialAccount.findFirst.mockResolvedValue({ id: "acc_1", platform: "YOUTUBE" });
-    expect(await findPostableAccount("ws_A", "acc_1")).toEqual({ id: "acc_1", source: "social", platform: "YOUTUBE" });
+    expect(await findPostableAccount("ws_A", "acc_1")).toEqual({ id: "acc_1", source: "social", platform: "YOUTUBE", youtubeNotForKidsDefault: false });
     expect(h.prisma.instagramAccount.findFirst).not.toHaveBeenCalled();
   });
 
   it("Instagram e Facebook vêm do canal (InstagramAccount)", async () => {
     h.prisma.instagramAccount.findFirst.mockResolvedValue({ id: "acc_1", platform: "FACEBOOK" });
-    expect(await findPostableAccount("ws_A", "acc_1")).toEqual({ id: "acc_1", source: "channel", platform: "FACEBOOK" });
+    expect(await findPostableAccount("ws_A", "acc_1")).toEqual({ id: "acc_1", source: "channel", platform: "FACEBOOK", youtubeNotForKidsDefault: false });
     h.prisma.instagramAccount.findFirst.mockResolvedValue({ id: "acc_1", platform: "INSTAGRAM" });
     expect((await findPostableAccount("ws_A", "acc_1"))?.platform).toBe("INSTAGRAM");
   });

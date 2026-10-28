@@ -70,7 +70,7 @@ export function YouTubeTop({
   );
 }
 
-export function YouTubeFields({ form, onChange }: { form: YouTubeForm; onChange: (next: Partial<YouTubeForm>) => void }) {
+export function YouTubeFields({ form, onChange, channelDefault = false }: { form: YouTubeForm; onChange: (next: Partial<YouTubeForm>) => void; channelDefault?: boolean }) {
   const t = useT();
   return (
     <>
@@ -101,6 +101,7 @@ export function YouTubeFields({ form, onChange }: { form: YouTubeForm; onChange:
           </label>
         </div>
         <p className="text-xs text-muted">{t("YouTube requires this answer for every video. It is your decision.")}</p>
+        {channelDefault && <p className="text-xs font-semibold text-foreground/80">{t("Channel default: not made for kids (you can change it for this video)")}</p>}
       </fieldset>
 
       <label className="flex items-start gap-3 text-sm">

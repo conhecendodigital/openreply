@@ -6,6 +6,7 @@ import { providerFor } from "@/lib/social/providers";
 import { createPostSchema, mediaLimitsProblem, mediaUrlProblem, POST_INCLUDE, validateDraftSettings } from "@/lib/social/posts-api";
 import { postDto } from "@/lib/tiktok/dto";
 import { getApiCaller } from "@/lib/auth";
+import { stripKidsAnswer, withKidsDefault } from "@/lib/social/youtube-kids-default";
 
 export const dynamic = "force-dynamic";
 
@@ -47,9 +48,12 @@ export async function POST(request: NextRequest) {
   if (urlProblem) return fail(urlProblem, 400, { code: "invalid_media" });
   const limits = mediaLimitsProblem(provider, data);
   if (limits) return fail(limits, 400, { code: "invalid_media" });
+  const caller = await getApiCaller();
   let settings: unknown = provider.defaultSettings;
   if (data.settings) {
-    const checked = validateDraftSettings(provider, data.settings);
+    // A declaração "para crianças" é só da pessoa na tela: chave de API/MCP não consegue mandar.
+    const incoming = caller.kind === "token" ? stripKidsAnswer(data.settings) : data.settings;
+    const checked = validateDraftSettings(provider, incoming);
     if (!checked.ok) return fail("Invalid body", 400, { code: "invalid_body", issues: checked.issues });
     settings = checked.data;
     // Slides do carrossel (27/10): também têm que estar na pasta de posts deste workspace, já no rascunho.
@@ -60,7 +64,9 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const caller = await getApiCaller();
+  // Padrão do canal (ligado pelo dono na tela): rascunho do YouTube sem resposta própria nasce "não é para crianças".
+  if (account.platform === "YOUTUBE") settings = withKidsDefault(settings, account.youtubeNotForKidsDefault);
+
   const created = await prisma.scheduledPost.create({
     data: {
       workspaceId: auth.context.workspaceId,
