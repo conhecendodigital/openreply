@@ -371,6 +371,10 @@ export const pt: Record<string, string> = {
   "Pending invites": "Convites pendentes",
   "teammate@agency.com": "pessoa@empresa.com",
   Member: "Membro",
+  Owner: "Dono",
+  "Remove {name} from the workspace? They lose access right away; their account and data are not deleted.":
+    "Remover {name} do workspace? A pessoa perde o acesso na hora; a conta e os dados dela não são apagados.",
+  "Could not remove member.": "Não foi possível remover o membro.",
   Admin: "Admin",
   Invite: "Convidar",
   "Inviting...": "Convidando...",

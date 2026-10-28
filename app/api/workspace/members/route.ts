@@ -12,6 +12,7 @@ import {
   canManageWorkspace,
   getCurrentWorkspaceContext,
 } from "@/lib/workspace-access";
+import { canRemoveMember } from "@/lib/workspace-member-rules";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -44,7 +45,7 @@ async function blockApiKey() {
 async function getMemberPayload(
   workspaceId: string,
   currentUserRole?: "OWNER" | "ADMIN" | "MEMBER",
-  options: { hideInviteLinks?: boolean } = {}
+  options: { hideInviteLinks?: boolean; currentUserId?: string } = {}
 ) {
   const [members, invitations] = await Promise.all([
     prisma.workspaceMember.findMany({
@@ -79,6 +80,7 @@ async function getMemberPayload(
 
   return {
     ...(currentUserRole ? { currentUserRole } : {}),
+    ...(options.currentUserId ? { currentUserId: options.currentUserId } : {}),
     members,
     invitations: invitations.map(({ token, ...invitation }) =>
       // The invite link lets anyone join: never hand it to an API key.
@@ -102,6 +104,7 @@ export async function GET() {
     success: true,
     data: {
       ...(await getMemberPayload(context.workspaceId, context.role, {
+        currentUserId: context.userId,
         hideInviteLinks: await isApiTokenRequest(),
       })),
     },
@@ -204,7 +207,9 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    data: await getMemberPayload(context.workspaceId, context.role),
+    data: await getMemberPayload(context.workspaceId, context.role, {
+      currentUserId: context.userId,
+    }),
   });
 }
 
@@ -250,7 +255,9 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    data: await getMemberPayload(context.workspaceId, context.role),
+    data: await getMemberPayload(context.workspaceId, context.role, {
+      currentUserId: context.userId,
+    }),
   });
 }
 
@@ -283,14 +290,39 @@ export async function DELETE(request: NextRequest) {
     const member = await prisma.workspaceMember.findFirst({
       where: { id: parsed.data.memberId, workspaceId: context.workspaceId },
     });
-    if (!member || member.role === "OWNER" || member.userId === context.userId) {
+    if (
+      !member ||
+      !canRemoveMember(
+        { role: context.role, userId: context.userId },
+        { role: member.role, userId: member.userId }
+      )
+    ) {
       return NextResponse.json(
         { success: false, error: "Member cannot be removed" },
         { status: 400 }
       );
     }
 
+    // Só a membership sai: o usuário e os dados dele ficam intactos.
     await prisma.workspaceMember.delete({ where: { id: member.id } });
+    try {
+      await prisma.operationalEvent.create({
+        data: {
+          workspaceId: context.workspaceId,
+          source: "SYSTEM",
+          level: "INFO",
+          message: "Member removed from workspace",
+          payload: {
+            removedUserId: member.userId,
+            removedRole: member.role,
+            removedByUserId: context.userId,
+            removedByRole: context.role,
+          },
+        },
+      });
+    } catch {
+      // Auditoria nunca desfaz a remoção.
+    }
   }
 
   if (parsed.data.invitationId) {
@@ -306,6 +338,8 @@ export async function DELETE(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    data: await getMemberPayload(context.workspaceId, context.role),
+    data: await getMemberPayload(context.workspaceId, context.role, {
+      currentUserId: context.userId,
+    }),
   });
 }
