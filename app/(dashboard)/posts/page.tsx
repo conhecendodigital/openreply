@@ -11,8 +11,10 @@ import { useT } from "@/components/lang-provider";
 import { callApi } from "@/components/posts/api";
 import { AccountsBar, btnPrimary } from "@/components/posts/accounts-bar";
 import { PostComposer } from "@/components/posts/post-composer";
+import { PostCalendar } from "@/components/posts/post-calendar";
 import { PostList } from "@/components/posts/post-list";
 import { ConnectNotice } from "@/components/posts/connect-notice";
+import { localValue, soonestTime } from "@/lib/posts/calendar";
 import type { PostDTO, SocialAccountDTO } from "@/lib/tiktok-composer";
 
 export default function PostsPage() {
@@ -22,7 +24,8 @@ export default function PostsPage() {
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [postsError, setPostsError] = useState(false);
-  const [composer, setComposer] = useState<{ post: PostDTO | null; mode: "draft" | "schedule" } | null>(null);
+  const [composer, setComposer] = useState<{ post: PostDTO | null; mode: "draft" | "schedule"; local?: string } | null>(null);
+  const [calendarToken, setCalendarToken] = useState(0);
 
   const loadAccounts = useCallback(async () => {
     const res = await callApi<SocialAccountDTO[]>("/api/social-accounts");
@@ -39,6 +42,7 @@ export default function PostsPage() {
       setPostsError(true);
     }
     setLoadingPosts(false);
+    setCalendarToken((n) => n + 1);
   }, []);
 
   useEffect(() => {
@@ -75,14 +79,29 @@ export default function PostsPage() {
 
       {composer && (
         <PostComposer
-          key={composer.post?.id ?? "new"}
+          key={composer.post?.id ?? `new-${composer.local ?? ""}`}
           accounts={accounts}
           post={composer.post}
           initialMode={composer.mode}
+          initialScheduledLocal={composer.local}
           onClose={() => setComposer(null)}
           onSaved={loadPosts}
         />
       )}
+
+      <PostCalendar
+        reloadToken={calendarToken}
+        canCreate={hasActive}
+        onCreate={(key, time) => {
+          setComposer({ post: null, mode: "schedule", local: localValue(key, time ?? soonestTime()) });
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        onEdit={(post) => {
+          setComposer({ post, mode: post.status === "SCHEDULED" ? "schedule" : "draft" });
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        onChanged={loadPosts}
+      />
 
       <section aria-label={t("Posts")} className="space-y-3">
         <h2 className="text-sm font-semibold">{t("Posts")}</h2>

@@ -95,4 +95,23 @@ export const ptTiktok: Record<string, string> = {
   "Posting through Zernio: the video goes out Public, or as a draft in the TikTok app, where you choose the audience. In a draft, the caption does not come along.":
     "Publicando pela Zernio: o vídeo sai Público ou como rascunho no app do TikTok, onde você escolhe o público. No rascunho, a legenda não vai junto.",
   "Commercial content is not available when publishing through Zernio.": "Conteúdo comercial não está disponível ao publicar pela Zernio.",
+  // Calendário da aba Posts (28/10/2026)
+  Calendar: "Calendário",
+  Month: "Mês",
+  Week: "Semana",
+  Legend: "Legenda",
+  "Previous month": "Mês anterior",
+  "Next month": "Próximo mês",
+  "Previous week": "Semana anterior",
+  "Next week": "Próxima semana",
+  "Calendar view": "Visão do calendário",
+  "Times are in Brasília.": "Horários de Brasília.",
+  "Drag a draft to a day to schedule it, or click it to edit.": "Arraste um rascunho até um dia para agendar, ou clique para editar.",
+  "That day has already passed. Pick today or a later day.": "Esse dia já passou. Escolha hoje ou um dia à frente.",
+  "That time has passed or no time is free that day. Open the post and pick a time.": "Esse horário já passou ou não sobrou horário livre nesse dia. Abra o post e escolha um horário.",
+  "No suggested time is left today. Pick a time in the form.": "Hoje não sobrou horário sugerido. Escolha o horário no formulário.",
+  "Post moved.": "Post movido.",
+  "Could not move the post. Open it and check the fields.": "Não deu pra mover o post. Abra ele e confira os campos.",
+  "Schedule a post on {day}": "Agendar um post em {day}",
+  "Show {n} more posts on {day}": "Ver mais {n} posts em {day}",
 };
