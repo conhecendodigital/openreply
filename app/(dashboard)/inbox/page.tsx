@@ -23,6 +23,11 @@ import type { ThreadMessage } from "@/app/api/instagram/conversations/[id]/route
 
 import { ContactName } from "@/components/contact-ui";
 import { useT } from "@/components/lang-provider";
+import {
+  canReplyToSavedOnly,
+  isSavedConversationId,
+  mergeResolved,
+} from "@/lib/inbox/saved-conversation";
 import { conversationPreviewText, UNKNOWN_MESSAGE_PREVIEW } from "@/lib/dm/message-preview";
 import {
   DraftCard,
@@ -192,7 +197,9 @@ export default function InboxPage() {
   // Deep link from a contact (/inbox?account=<id>&contact=<igsid>): pick that
   // account and open the person's conversation once the list loads.
   const deepLinkRef = useRef<{ account: string | null; contact: string } | null>(null);
-  const [deepLinkMissing, setDeepLinkMissing] = useState(false);
+  const [deepLinkMissing, setDeepLinkMissing] = useState<{ profileUrl: string | null } | null>(null);
+  // The conversation a deep link resolved outside Instagram's recent list; kept in the list across refreshes.
+  const pinnedRef = useRef<ConversationListItem | null>(null);
 
   // Accounts for the selector; default to the first connected account. Uses the
   // lightweight accounts endpoint (one query) rather than the heavy dashboard
@@ -241,7 +248,7 @@ export default function InboxPage() {
         );
         const data = await res.json();
         if (data.success) {
-          setConversations(data.data.conversations);
+          setConversations(mergeResolved(data.data.conversations as ConversationListItem[], pinnedRef.current));
           writeCache(convCacheKey(selectedAccountId), data.data.conversations);
           setConvError(null);
         } else if (!silent) {
@@ -294,6 +301,7 @@ export default function InboxPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveId(null);
     setMessages([]);
+    pinnedRef.current = null;
     const cached = readCache<ConversationListItem[]>(
       convCacheKey(selectedAccountId),
       CACHE_MAX_AGE_MS
@@ -446,20 +454,42 @@ export default function InboxPage() {
     if (link.account && link.account !== selectedAccountId) return;
     const match = conversations.find((c) => c.contact.id === link.contact);
     if (!match) {
-      // The list may still be the cached copy; wait for the fresh fetch.
-      if (conversations.length === 0) return;
       deepLinkRef.current = null;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off notice for a deep link
-      setDeepLinkMissing(true);
+      // Not among Instagram's recent conversations: ask the server (Meta by
+      // user, then our saved messages) instead of giving up.
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/instagram/conversations/resolve?instagramAccountId=${encodeURIComponent(selectedAccountId)}&contactId=${encodeURIComponent(link.contact)}`,
+            { cache: "no-store" }
+          );
+          const data = await res.json();
+          if (data.success && data.data.conversation) {
+            const conv = data.data.conversation as ConversationListItem;
+            pinnedRef.current = conv;
+            setConversations((prev) => mergeResolved(prev, conv));
+            openConversation(conv.id);
+          } else {
+            setDeepLinkMissing({ profileUrl: data.data?.profileUrl ?? null });
+          }
+        } catch {
+          setDeepLinkMissing({ profileUrl: null });
+        }
+      })();
       return;
     }
     deepLinkRef.current = null;
     openConversation(match.id);
   }, [conversations, convLoading, selectedAccountId]);
 
+  // A conversation Instagram does not list: only our saved messages, and a
+  // reply only while the 24 h window is open.
+  const savedOnly = isSavedConversationId(activeId);
+  const replyBlocked = savedOnly && !canReplyToSavedOnly(headerContact?.window);
+
   async function handleSend() {
     const text = draft.trim();
-    if (!text || !active?.contact.id || sending) return;
+    if (!text || !active?.contact.id || sending || replyBlocked) return;
     setSending(true);
     setSendError(null);
 
@@ -544,7 +574,15 @@ export default function InboxPage() {
           </div>
           {deepLinkMissing && (
             <p className="shrink-0 border-b border-border bg-surface-hover px-4 py-2 text-xs text-muted">
-              {t("This person's conversation is not among the recent ones Instagram returns.")}
+              {t("No messages from this person are saved here, and Instagram does not show this conversation.")}
+              {deepLinkMissing.profileUrl && (
+                <>
+                  {" "}
+                  <a href={deepLinkMissing.profileUrl} target="_blank" rel="noreferrer" className="font-semibold text-accent hover:underline">
+                    {t("Open the profile on Instagram")}
+                  </a>
+                </>
+              )}
             </p>
           )}
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -637,6 +675,12 @@ export default function InboxPage() {
                   />
                 )}
               </div>
+              {savedOnly && (
+                <p className="shrink-0 border-b border-border bg-surface-hover px-4 py-2 text-xs text-muted">
+                  {t("Showing saved messages; Instagram does not list this conversation among the recent ones.")}
+                  {replyBlocked && ` ${t("The 24-hour window is closed, so you can't reply here.")}`}
+                </p>
+              )}
               {headerContact?.takeover?.active && (
                 <p className="shrink-0 border-b border-border bg-surface-hover px-4 py-2 text-xs text-muted">
                   {t("You're answering this person. Campaigns, follow-ups, sequences and the AI stay quiet until you hand it back.")}
@@ -740,13 +784,14 @@ export default function InboxPage() {
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={handleKeyDown}
                     rows={1}
+                    disabled={replyBlocked}
                     placeholder={t("Write a reply… (Enter to send, Shift+Enter for a new line)")}
                     className="max-h-32 min-h-[40px] flex-1 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => void handleSend()}
-                    disabled={sending || !draft.trim()}
+                    disabled={sending || !draft.trim() || replyBlocked}
                     className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
                   >
                     {sending ? t("Sending…") : t("Send")}
