@@ -21,6 +21,7 @@ import { VideoPicker, type MediaState, type UploadState } from "@/components/pos
 import { BrandIcon } from "@/components/social/brand-icon";
 import { ChipsInput } from "@/components/posts/chips-input";
 import { cleanHashtag, countHashtags, INSTAGRAM_HASHTAG_MAX, joinCaptionHashtags, splitCaptionHashtags } from "@/lib/social/text-fields";
+import { timeProblem } from "@/lib/posts/calendar";
 import { NETWORK_LIMITS } from "@/lib/social/limits";
 import {
   channelKey,
@@ -69,12 +70,15 @@ export function PostComposer({
   accounts,
   post,
   initialMode,
+  initialScheduledLocal,
   onClose,
   onSaved,
 }: {
   accounts: SocialAccountDTO[];
   post: PostDTO | null;
   initialMode: "draft" | "schedule";
+  /** Calendário: "AAAA-MM-DDTHH:mm" (Brasília) já preenchido ao clicar num dia. */
+  initialScheduledLocal?: string;
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 }) {
@@ -117,7 +121,7 @@ export function PostComposer({
   const [durationSec, setDurationSec] = useState<number | null>(null);
   const [upload, setUpload] = useState<UploadState>(null);
   const [mode, setMode] = useState<"now" | "schedule">(initialMode === "schedule" || post?.status === "SCHEDULED" ? "schedule" : "now");
-  const [scheduledLocal, setScheduledLocal] = useState(isoToBrasiliaLocal(post?.scheduledAt));
+  const [scheduledLocal, setScheduledLocal] = useState(post ? isoToBrasiliaLocal(post.scheduledAt) : initialScheduledLocal ?? "");
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState<ComposerAction | null>(null);
   const [postId, setPostId] = useState<string | null>(post?.id ?? null);
@@ -269,6 +273,8 @@ export function PostComposer({
     const global: string[] = [];
     if (!chosen.length) global.push("Pick the account.");
     if ((upload && !upload.error) || slidesBusy) global.push("Wait for the upload to finish.");
+    // Mesma regra do /schedule: horário >= agora + 60 s (o servidor também confere).
+    if (action === "schedule" && brasiliaLocalToIso(scheduledLocal) && timeProblem(brasiliaLocalToIso(scheduledLocal))) global.push("Pick a time in the future.");
     // Cada canal é conferido sozinho: o que está certo segue, o que não está é avisado pelo nome.
     const problems: string[] = [];
     const ready: Channel[] = [];

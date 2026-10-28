@@ -6,23 +6,35 @@ import { providerFor } from "@/lib/social/providers";
 import { createPostSchema, mediaLimitsProblem, mediaUrlProblem, POST_INCLUDE, validateDraftSettings } from "@/lib/social/posts-api";
 import { postDto } from "@/lib/tiktok/dto";
 import { getApiCaller } from "@/lib/auth";
+import { parseListQuery } from "@/lib/posts/list-query";
 import { stripKidsAnswer, withKidsDefault } from "@/lib/social/youtube-kids-default";
 
 export const dynamic = "force-dynamic";
 
 const STATUSES = ["DRAFT", "SCHEDULED", "PUBLISHING", "PUBLISHED", "FAILED", "CANCELED"];
 
-/** 23/10/2026: lista os posts da aba Posts. `?status=` filtra. */
+/**
+ * 23/10/2026: lista os posts da aba Posts. `?status=` filtra.
+ * 28/10/2026 (calendário, aditivo): `?from=&to=` (to exclusivo) traz só os posts agendados ou
+ * publicados dentro do intervalo; `?limit=` (1 a 500, padrão 200). Mesma auth e mesmo workspace.
+ */
 export async function GET(request: NextRequest) {
   const auth = await requireContext();
   if ("response" in auth) return auth.response;
   const status = request.nextUrl.searchParams.get("status");
   if (status && !STATUSES.includes(status)) return fail("Invalid status", 400);
+  const query = parseListQuery(request.nextUrl.searchParams);
+  if (!query.ok) return fail(query.message, 400, { code: "invalid_query" });
+  const range = query.from && query.to ? { gte: query.from, lt: query.to } : null;
   const rows = await prisma.scheduledPost.findMany({
-    where: { workspaceId: auth.context.workspaceId, ...(status ? { status: status as never } : {}) },
+    where: {
+      workspaceId: auth.context.workspaceId,
+      ...(status ? { status: status as never } : {}),
+      ...(range ? { OR: [{ scheduledAt: range }, { publishedAt: range }] } : {}),
+    },
     include: POST_INCLUDE,
     orderBy: [{ scheduledAt: "asc" }, { createdAt: "desc" }],
-    take: 200,
+    take: query.limit,
   });
   return ok((rows ?? []).map(postDto));
 }
