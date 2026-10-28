@@ -118,8 +118,8 @@ export const ptSite: Record<string, string> = {
   "or": "ou",
   "Get to know Lead Engine": "Conhecer o Lead Engine",
   "First time here?": "Primeira vez aqui?",
-  "The same link creates your account if your email has access.":
-    "O mesmo link cria sua conta se o seu e-mail tiver acesso liberado.",
+  "The same link creates your account.":
+    "O mesmo link cria sua conta.",
   "Use another email": "Usar outro e-mail",
   "Language": "Idioma",
   "Check your email - Lead Engine": "Confira seu e-mail - Lead Engine",

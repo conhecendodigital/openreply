@@ -82,7 +82,7 @@ export default async function AdminPage() {
         summary={allowlist.length === 1 ? t("1 email on the list") : t("{n} emails on the list", { n: allowlist.length })}
       >
         <p className="mb-4 text-sm text-muted">
-          {t("Only these emails get in, plus ALLOWED_EMAILS and whoever was invited to a workspace. Up to {n} in the beta.", {
+          {t("Login is open to any email. If SIGNIN_RESTRICTED=1 is set, only these emails get in, plus ALLOWED_EMAILS and whoever was invited to a workspace. Up to {n} in the beta.", {
             n: BETA_ALLOWLIST_LIMIT,
           })}
         </p>

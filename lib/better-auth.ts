@@ -6,8 +6,8 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { getPrisma } from "@/lib/db/client";
 import { createAuth, type LeadEngineAuth } from "@/lib/auth-config";
 import { allowSignIn } from "@/lib/auth-signin";
-import { sendLoginEmail } from "@/lib/auth-email";
-import { hitRateLimit, MAGIC_LINK_LIMIT, PASSWORD_LIMIT } from "@/lib/http-rate-limit";
+import { sendLoginEmailLogged } from "@/lib/auth-email";
+import { hitRateLimit, MAGIC_LINK_IP_LIMIT, MAGIC_LINK_LIMIT, PASSWORD_LIMIT } from "@/lib/http-rate-limit";
 import { ensureWorkspaceForUser } from "@/lib/workspace";
 
 const globalForAuth = globalThis as unknown as { leadEngineAuth?: LeadEngineAuth };
@@ -41,10 +41,12 @@ export function getAuth(): LeadEngineAuth {
     baseURL,
     trustedOrigins: [baseURL],
     useNextCookies: true,
-    sendMagicLink: sendLoginEmail,
+    sendMagicLink: sendLoginEmailLogged,
     canSignIn: (email) => allowSignIn({ user: { email } }),
     canSendMagicLink: async (email) =>
       (await hitRateLimit("magic-link", email, MAGIC_LINK_LIMIT.limit, MAGIC_LINK_LIMIT.windowSeconds)).allowed,
+    canSendMagicLinkFromIp: async (ip) =>
+      (await hitRateLimit("magic-link-ip", ip, MAGIC_LINK_IP_LIMIT.limit, MAGIC_LINK_IP_LIMIT.windowSeconds)).allowed,
     canTryPassword: async (email) =>
       (await hitRateLimit("password", email, PASSWORD_LIMIT.limit, PASSWORD_LIMIT.windowSeconds)).allowed,
     emailTakenInsensitive: async (email) =>

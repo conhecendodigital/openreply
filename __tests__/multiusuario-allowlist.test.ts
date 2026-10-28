@@ -39,12 +39,22 @@ beforeEach(() => {
 
 const as = (email: string | null) => allowSignIn({ user: { email } });
 
-describe("allowlist do beta", () => {
-  it("sem nenhuma lista, fica aberto como antes", async () => {
+describe("login aberto (28/10/2026) e allowlist do beta atrás do interruptor", () => {
+  it("sem nenhuma lista, qualquer e-mail entra", async () => {
     expect(await as("qualquer@ex.com")).toBe(true);
   });
 
-  it("uma linha na BetaAllowlist fecha o login pros outros", async () => {
+  it("aberto mesmo com BetaAllowlist, ALLOWED_EMAILS e banco fora do ar", async () => {
+    vi.stubEnv("ALLOWED_EMAILS", "matheus@ex.com");
+    h.beta = new Set(["bia@ex.com"]);
+    h.dbDown = true;
+    expect(await as("intruso@ex.com")).toBe(true);
+    expect(await as(null)).toBe(false);
+    expect(await as("   ")).toBe(false);
+  });
+
+  it("SIGNIN_RESTRICTED=1 fecha: uma linha na BetaAllowlist barra os outros", async () => {
+    vi.stubEnv("SIGNIN_RESTRICTED", "1");
     h.beta = new Set(["bia@ex.com"]);
     expect(await as("bia@ex.com")).toBe(true);
     expect(await as("Bia@Ex.com")).toBe(true);
@@ -52,7 +62,8 @@ describe("allowlist do beta", () => {
     expect(await as(null)).toBe(false);
   });
 
-  it("ALLOWED_EMAILS e BetaAllowlist somam", async () => {
+  it("SIGNIN_RESTRICTED=1: ALLOWED_EMAILS e BetaAllowlist somam", async () => {
+    vi.stubEnv("SIGNIN_RESTRICTED", "true");
     vi.stubEnv("ALLOWED_EMAILS", "matheus@ex.com");
     h.beta = new Set(["bia@ex.com"]);
     expect(await as("matheus@ex.com")).toBe(true);
@@ -60,9 +71,18 @@ describe("allowlist do beta", () => {
     expect(await as("intruso@ex.com")).toBe(false);
   });
 
-  it("banco fora do ar = fechado", async () => {
+  it("SIGNIN_RESTRICTED=1: banco fora do ar = fechado", async () => {
+    vi.stubEnv("SIGNIN_RESTRICTED", "1");
     h.dbDown = true;
     expect(await as("qualquer@ex.com")).toBe(false);
+  });
+
+  it("valores que não ligam o interruptor", async () => {
+    for (const v of ["", "0", "false", "no"]) {
+      vi.stubEnv("SIGNIN_RESTRICTED", v);
+      h.beta = new Set(["bia@ex.com"]);
+      expect(await as("intruso@ex.com")).toBe(true);
+    }
   });
 
   it("e-mail da allowlist é sempre normalizado", async () => {
@@ -90,5 +110,24 @@ describe("proxy com o cookie do login novo", () => {
   it("/admin e /account também pedem login", async () => {
     expect((await proxy(req("/admin"))).headers.get("location")).toContain("/login");
     expect((await proxy(req("/account/two-factor"))).headers.get("location")).toContain("/login");
+  });
+});
+
+describe("e-mail do login: falha no envio vai pro log sem vazar", () => {
+  it("registra a falha com e-mail mascarado, sem chave nem endereço completo", async () => {
+    const { sendLoginEmailLogged, maskEmail } = await import("../lib/auth-email");
+    expect(maskEmail("robério@ex.com")).toBe("r***@ex.com");
+    vi.stubEnv("RESEND_API_KEY", "re_SEGREDO123");
+    vi.stubEnv("EMAIL_SERVER", "");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("no", { status: 403 })));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(sendLoginEmailLogged("roberio@ex.com", "https://x/link")).rejects.toThrow(/403/);
+    const logged = spy.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(logged).toContain("r***@ex.com");
+    expect(logged).toContain("403");
+    expect(logged).not.toContain("roberio@ex.com");
+    expect(logged).not.toContain("re_SEGREDO123");
+    spy.mockRestore();
+    vi.unstubAllGlobals();
   });
 });

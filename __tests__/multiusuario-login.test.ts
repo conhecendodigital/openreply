@@ -184,6 +184,28 @@ describe("senha", () => {
     expect(cookiesFrom(res)).not.toContain("session_token");
   });
 
+  it("limite de links por IP: barra com 429 e usa o último item do x-forwarded-for", async () => {
+    const ctx = setup();
+    const seen: string[] = [];
+    const auth = createAuth({
+      ...ctx.deps,
+      canSendMagicLinkFromIp: async (ip) => {
+        seen.push(ip);
+        return ip !== "9.9.9.9";
+      },
+    });
+    const req = (ip: string) =>
+      new Request(`${BASE}/api/auth/sign-in/magic-link`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: BASE, "x-forwarded-for": ip },
+        body: JSON.stringify({ email: "matheus@ex.com", callbackURL: "/dashboard" }),
+      });
+    expect((await auth.handler(req("1.1.1.1, 2.2.2.2"))).status).toBe(200);
+    expect(seen).toContain("2.2.2.2");
+    expect((await auth.handler(req("9.9.9.9"))).status).toBe(429);
+    expect(ctx.mails).toHaveLength(1);
+  });
+
   it("limite de tentativas de senha", async () => {
     const ctx = setup();
     const auth = createAuth({ ...ctx.deps, canTryPassword: async () => false });

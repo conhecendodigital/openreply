@@ -4,8 +4,8 @@
  */
 export const ptAuth: Record<string, string> = {
   // Login
-  "Ask for the link by email or use Google. If your email has access, your account is created on the spot.":
-    "Peça o link por e-mail ou use o Google. Se o seu e-mail tiver acesso, sua conta é criada na hora.",
+  "Ask for the link by email or use Google. Your account is created on the spot.":
+    "Peça o link por e-mail ou use o Google. Sua conta é criada na hora.",
   "Continue with Google": "Continuar com o Google",
   Password: "Senha",
   "Sign in": "Entrar",
@@ -14,8 +14,8 @@ export const ptAuth: Record<string, string> = {
     "Ainda não tem senha ou esqueceu? Entre pelo link do e-mail e crie uma em Configurações, Segurança.",
   "Get a link by email instead": "Prefiro receber um link por e-mail",
   "Sign in with password": "Entrar com senha",
-  "If your email has access, the link arrives in a few seconds. It is valid for 15 minutes.":
-    "Se o seu e-mail tiver acesso, o link chega em alguns segundos. Ele vale por 15 minutos.",
+  "The link arrives in a few seconds. It is valid for 15 minutes.":
+    "O link chega em alguns segundos. Ele vale por 15 minutos.",
   // Erros do login
   "Wrong email or password.": "E-mail ou senha errados.",
   "This email does not have access to Lead Engine.": "Este e-mail não tem acesso ao Lead Engine.",
@@ -109,8 +109,8 @@ export const ptAuth: Record<string, string> = {
   "Admin - Lead Engine": "Admin - Lead Engine",
   "Back to the panel": "Voltar pro painel",
   "Beta access": "Acesso ao beta",
-  "Only these emails get in, plus ALLOWED_EMAILS and whoever was invited to a workspace. Up to {n} in the beta.":
-    "Só entram estes e-mails, mais o ALLOWED_EMAILS e quem foi convidado pra um workspace. Até {n} no beta.",
+  "Login is open to any email. If SIGNIN_RESTRICTED=1 is set, only these emails get in, plus ALLOWED_EMAILS and whoever was invited to a workspace. Up to {n} in the beta.":
+    "O login é aberto a qualquer e-mail. Com SIGNIN_RESTRICTED=1, só entram estes e-mails, mais o ALLOWED_EMAILS e quem foi convidado pra um workspace. Até {n} no beta.",
   "No email on the list yet.": "Nenhum e-mail na lista ainda.",
   "person@email.com": "pessoa@email.com",
   "Note (optional)": "Observação (opcional)",
