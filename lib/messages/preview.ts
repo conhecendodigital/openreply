@@ -10,6 +10,7 @@
  * (OutboundMessage.text). Looked up by message id, never a Meta call.
  */
 import { prisma } from "@/lib/db/client";
+import { messagePreviewText, templatePreview } from "@/lib/dm/message-preview";
 
 /** The text shown for a stored template: its title, else its first button. */
 export function templatePreviewText(template: unknown): string | null {
@@ -38,10 +39,22 @@ export async function previewTextsByMid(
   try {
     const stored = await prisma.directMessage.findMany({
       where: { accountId: account.instagramId, mid: { in: wanted } },
-      select: { mid: true, text: true, template: true },
+      select: {
+        mid: true,
+        text: true,
+        template: true,
+        fromMe: true,
+        deleted: true,
+        storyReply: true,
+        storyKind: true,
+        attachmentKinds: true,
+        media: { select: { type: true } },
+      },
     });
     for (const m of stored) {
-      const text = m.text?.trim() || templatePreviewText(m.template);
+      // Text, card + buttons, or a label ("📷 Foto"); a stored message with
+      // nothing recognisable gets the generic "open on Instagram" line.
+      const text = m.text?.trim() || templatePreview(m.template) || messagePreviewText({ ...m, media: m.media ?? [] });
       if (text) out.set(m.mid, text);
     }
     const missing = wanted.filter((mid) => !out.has(mid));

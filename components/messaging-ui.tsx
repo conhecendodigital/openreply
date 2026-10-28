@@ -36,7 +36,16 @@ export interface DraftContact {
   tags: string[];
   window: MessagingWindow;
   takeover: TakeoverState;
-  lastMessages: { mid: string; fromMe: boolean; text: string | null; sentAt: string; storyReply: boolean }[];
+  lastMessages: {
+    mid: string;
+    fromMe: boolean;
+    text: string | null;
+    /** Always filled: text, card + buttons or a label ("📷 Foto"). */
+    preview?: string;
+    sentAt: string;
+    storyReply: boolean;
+    storyKind?: string | null;
+  }[];
 }
 
 export interface Draft {

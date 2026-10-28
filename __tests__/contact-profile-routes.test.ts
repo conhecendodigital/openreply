@@ -118,10 +118,11 @@ describe("conversations list: campaign card preview (06/10)", () => {
     const res = await conversations(new NextRequest(new URL("/api/instagram/conversations", "http://localhost")));
     const list = (await res.json()).data.conversations as { lastMessage: { text: string } }[];
     expect(list.map((c) => c.lastMessage.text)).toEqual([
-      "Oi ana, pega o material",
+      "Oi ana, pega o material [botões: Acessar]",
       "Aqui está o link",
       "Oi, tudo bem?",
-      "",
+      // unreadable attachment: a clear line, never blank (19/10)
+      "Mensagem sem texto (anexo). Abra no Instagram para ver.",
     ]);
     // Only the blank ones are looked up, scoped to this account.
     expect(h.prisma.directMessage.findMany).toHaveBeenCalledWith(
@@ -138,7 +139,9 @@ describe("conversations list: campaign card preview (06/10)", () => {
     h.prisma.directMessage.findMany.mockRejectedValueOnce(new Error("db"));
     const res = await conversations(new NextRequest(new URL("/api/instagram/conversations", "http://localhost")));
     expect(res.status).toBe(200);
-    expect((await res.json()).data.conversations[0].lastMessage.text).toBe("");
+    expect((await res.json()).data.conversations[0].lastMessage.text).toBe(
+      "Mensagem sem texto (anexo). Abra no Instagram para ver."
+    );
   });
 });
 

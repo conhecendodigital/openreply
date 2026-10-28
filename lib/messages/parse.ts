@@ -37,6 +37,8 @@ export interface ParsedDirectMessage {
   /** Our story's id (reply only). */
   storyId: string | null;
   deleted: boolean;
+  /** Attachment types the webhook reported (even with no URL), plus "unsupported". */
+  attachmentKinds: string[];
   /** Echo only: the custom string we sent as message.metadata ("le:..."). */
   metadata: string | null;
   /** Echo only, when Meta includes it: the app that sent the message. */
@@ -113,8 +115,10 @@ export function parseDirectMessages(payload: unknown): ParsedDirectMessage[] {
       if (!accountId || contactId === accountId) continue;
 
       const media: ParsedDirectMedia[] = [];
+      const attachmentKinds: string[] = [];
       let tpl: ParsedTemplate | null = null;
       for (const a of msg.attachments ?? []) {
+        if (a.type && a.type !== "template" && !attachmentKinds.includes(a.type)) attachmentKinds.push(a.type);
         if (a.type === "template") {
           tpl = template(a) ?? tpl;
           continue;
@@ -124,6 +128,7 @@ export function parseDirectMessages(payload: unknown): ParsedDirectMessage[] {
           media.push({ type, url: a.payload.url, download: type !== "share" });
         }
       }
+      if (msg.is_unsupported) attachmentKinds.push("unsupported");
       const storyUrl = msg.reply_to?.story?.url;
       if (storyUrl) media.push({ type: "story", url: storyUrl, download: true });
       const storyKind: ParsedDirectMessage["storyKind"] = msg.reply_to?.story
@@ -146,6 +151,7 @@ export function parseDirectMessages(payload: unknown): ParsedDirectMessage[] {
         storyKind,
         storyId,
         deleted: Boolean(msg.is_deleted),
+        attachmentKinds,
         metadata: typeof msg.metadata === "string" && msg.metadata ? msg.metadata : null,
         appId: msg.app_id !== undefined && msg.app_id !== null ? String(msg.app_id) : null,
       });

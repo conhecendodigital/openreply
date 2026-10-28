@@ -5,6 +5,7 @@
  */
 import { prisma } from "@/lib/db/client";
 import { isTakeoverActive } from "@/lib/messaging/takeover";
+import { messagePreviewText } from "@/lib/dm/message-preview";
 import { windowClosesAt, windowRemainingMs } from "@/lib/messaging/window";
 
 export type ContextContact = {
@@ -41,7 +42,22 @@ export const CONTEXT_CONTACT_SELECT = {
   tags: { select: { name: true }, orderBy: { createdAt: "asc" } },
 } as const;
 
-export type StoredMessage = { mid: string; fromMe: boolean; text: string | null; sentAt: Date; storyReply: boolean };
+export type StoredMessage = {
+  mid: string;
+  fromMe: boolean;
+  /** Raw text, or the card's title for a button card (never the media label). */
+  text: string | null;
+  /** What a human reads: text, card + buttons, or a label like "📷 Foto". Never empty. */
+  preview: string;
+  sentAt: Date;
+  storyReply: boolean;
+  storyKind: string | null;
+};
+
+function templateTitle(template: unknown): string | null {
+  const t = template as { title?: unknown } | null;
+  return t && typeof t.title === "string" && t.title.trim() ? t.title.trim() : null;
+}
 
 export async function lastMessages(
   instagramId: string,
@@ -52,9 +68,31 @@ export async function lastMessages(
     where: { accountId: instagramId, contactId: igUserId, deleted: false },
     orderBy: { sentAt: "desc" },
     take,
-    select: { mid: true, fromMe: true, text: true, sentAt: true, storyReply: true },
+    select: {
+      mid: true,
+      fromMe: true,
+      text: true,
+      template: true,
+      sentAt: true,
+      storyReply: true,
+      storyKind: true,
+      attachmentKinds: true,
+      media: { select: { type: true } },
+    },
   });
-  return rows.reverse();
+  return rows.reverse().map((r) => {
+    const preview = messagePreviewText({ ...r, deleted: false });
+    const cardTitle = r.template ? templateTitle(r.template) : null;
+    return {
+      mid: r.mid,
+      fromMe: r.fromMe,
+      text: r.text?.trim() ? r.text : cardTitle,
+      preview,
+      sentAt: r.sentAt,
+      storyReply: r.storyReply,
+      storyKind: r.storyKind ?? null,
+    };
+  });
 }
 
 export function describeWindow(contact: { lastInboundAt: Date | null }, now: Date = new Date()) {

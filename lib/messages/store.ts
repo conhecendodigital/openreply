@@ -57,6 +57,7 @@ export async function storeParsedDirectMessages(
         storyKind: m.storyKind ?? null,
         storyId: m.storyId ?? null,
         deleted: m.deleted,
+        attachmentKinds: m.attachmentKinds ?? [],
         sentAt: m.sentAt,
       },
       update: m.deleted ? { deleted: true } : {},

@@ -23,6 +23,7 @@ import type { ThreadMessage } from "@/app/api/instagram/conversations/[id]/route
 
 import { ContactName } from "@/components/contact-ui";
 import { useT } from "@/components/lang-provider";
+import { conversationPreviewText, UNKNOWN_MESSAGE_PREVIEW } from "@/lib/dm/message-preview";
 import {
   DraftCard,
   TakeoverToggle,
@@ -584,12 +585,10 @@ export default function InboxPage() {
                         {formatTime(c.updatedTime)}
                       </span>
                     </div>
-                    {c.lastMessage && (
-                      <p className="mt-0.5 truncate text-xs text-muted">
-                        {c.lastMessage.fromMe ? t("You:") : ""}
-                        {c.lastMessage.text || t("(no text)")}
-                      </p>
-                    )}
+                    <p className="mt-0.5 truncate text-xs text-muted">
+                      {c.lastMessage?.fromMe ? t("You:") : ""}
+                      {conversationPreviewText(c.lastMessage ? { text: c.lastMessage.text } : null)}
+                    </p>
                   </button>
                 );
               })
@@ -661,7 +660,11 @@ export default function InboxPage() {
                       >
                         {m.storyReply && (
                           <p className="px-1 text-[11px] text-zinc-500">
-                            {m.fromMe ? t("You replied to their story") : t("Replied to your story")}
+                            {m.storyKind === "mention"
+                              ? t("Mentioned you in their story")
+                              : m.fromMe
+                                ? t("You replied to their story")
+                                : t("Replied to your story")}
                           </p>
                         )}
                         {/* Like the Instagram app: photos/videos/audio sit outside the bubble */}
@@ -704,7 +707,7 @@ export default function InboxPage() {
                             ) : m.text ? (
                               <p className="whitespace-pre-wrap break-words">{m.text}</p>
                             ) : vazia ? (
-                              <p className="italic opacity-70">{t("Message without text (sticker, reaction or a format Meta doesn't deliver)")}</p>
+                              <p className="italic opacity-70">{m.preview ?? UNKNOWN_MESSAGE_PREVIEW}</p>
                             ) : null}
                             {links.length > 0 && <MessageMediaList media={links} fromMe={m.fromMe} />}
                           </div>

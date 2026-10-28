@@ -14,6 +14,7 @@ import {
 } from "@/lib/meta/client";
 import { decryptToken } from "@/lib/meta/oauth";
 import { extractMessageMedia, mediaLabel } from "@/lib/meta/message-media";
+import { UNKNOWN_MESSAGE_PREVIEW } from "@/lib/dm/message-preview";
 import { previewTextsByMid } from "@/lib/messages/preview";
 
 export interface ConversationListItem {
@@ -94,6 +95,11 @@ export async function GET(request: NextRequest) {
         const preview = conversations[i].lastMessage;
         if (text && preview) preview.text = text;
       }
+    }
+
+    // Whatever is still blank is a message with an attachment we cannot read.
+    for (const c of conversations) {
+      if (c.lastMessage && !c.lastMessage.text) c.lastMessage.text = UNKNOWN_MESSAGE_PREVIEW;
     }
 
     // The participants already carry the @: save it on contacts that have
