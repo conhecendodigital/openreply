@@ -83,6 +83,8 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
  * responde 403 human_only (withPainel), então são duas travas.
  */
 export const API_KEY_GET_ONLY_ROUTES: readonly RegExp[] = [
+  // 2026-10-28: vendas_por_origem (MCP), só leitura. Admin/dono confere dentro da rota.
+  /^\/api\/reports\/vendas$/,
   // 2026-10-23: contas de redes sociais conectadas (sem token).
   /^\/api\/social-accounts$/,
   // 2026-10-16: leads do quiz só leitura (listar_leads_quiz), a pedido do Matheus. Export CSV segue só na tela.

@@ -8,6 +8,7 @@
  * The public share links of a campaign report stay at /reports/<slug>.
  */
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useLang, useT } from "@/components/lang-provider";
 import { flowApi } from "@/components/flows/flow-shared";
@@ -311,6 +312,9 @@ export default function ReportsPage() {
               </button>
             ))}
           </div>
+          <Link href="/reports/vendas" className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-surface-hover">
+            Vendas por origem
+          </Link>
           <a href={exportHref(days, "all")} download className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-surface-hover">
             {t("Export CSV")}
           </a>

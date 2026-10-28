@@ -6,6 +6,7 @@
 
 import { AUTOMATION_TRIGGERS, triggerLabel, type AutomationTriggerValue } from "@/lib/automations/trigger";
 import { FUNNEL_TOOLS } from "@/lib/mcp/funnel-tools";
+import { VENDAS_TOOLS } from "@/lib/mcp/vendas-tools";
 
 export type InternalCall = (
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
@@ -1812,6 +1813,8 @@ export const TOOLS: Tool[] = [
   // ─── Etapa 6: quiz (funis) ─────────────────────────────────────────────────
   // Pela chave: criar e editar RASCUNHO e ler números. Publicar é só pela tela.
   ...FUNNEL_TOOLS,
+  // Vendas por origem (somente leitura).
+  ...VENDAS_TOOLS,
 ];
 
 type CtrRowData = { name: string; sent: number; clicks: number; ctr: number };
