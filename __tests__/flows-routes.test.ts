@@ -337,7 +337,8 @@ describe("MCP flow tools", () => {
   it("lists, reads, creates and edits drafts, and never calls publish or turn-on", async () => {
     const names = TOOLS.map((t) => t.name);
     expect(names).toEqual(expect.arrayContaining(["listar_fluxos", "ver_fluxo", "criar_fluxo", "editar_fluxo", "abrir_campanha_como_fluxo"]));
-    expect(names.some((n) => /publicar_fluxo|ativar_fluxo|ligar_fluxo/.test(n))).toBe(false);
+    // 28/10: publicar_fluxo/ligar_fluxo/desligar_fluxo existem (pedido do dono), por rotas próprias /api/mcp-fluxos; aqui, as rotas da tela seguem human_only.
+    expect(names).toEqual(expect.arrayContaining(["publicar_fluxo", "ligar_fluxo", "desligar_fluxo"]));
 
     await callTool("listar_fluxos", {});
     await callTool("ver_fluxo", { id: "f_1" });

@@ -275,31 +275,26 @@ export const TOOLS: Tool[] = [
   {
     name: "ativar_automacao",
     description:
-      "Não liga nada: ligar uma automação é sempre do dono, no Lead Engine. Devolve o caminho pra ele ligar.",
+      "LIGA uma campanha (automação de comentário/DM/story) que JÁ existe. O dono autorizou: use quando ele pedir. Não cria, não apaga. Antes de ligar, detecta fluxos e campanhas JÁ LIGADOS no mesmo gatilho (mesmo post e palavras), que mandariam DM duplicada: nesse caso NÃO liga e devolve a lista em conflitantes. Para desligar esses (nunca apaga) e ligar esta, repita com desligarConflitantes:true. Repetir quando já está ligada não faz nada. Resposta lida do banco: nome, ligada, gatilho, palavras e conferencia (CONFERE ou NÃO CONFERE; se NÃO CONFERE, avise o dono). Cada ação fica no registro. Interruptor de emergência: MCP_FLUXOS_DISABLED=1.",
     inputSchema: {
       type: "object",
-      properties: { id: { ...str, description: "ID da automação" } },
+      properties: {
+        id: { ...str, description: "ID da automação (listar_automacoes)" },
+        desligarConflitantes: { type: "boolean", description: "true: desliga (nunca apaga) fluxos/campanhas ligados no mesmo gatilho antes de ligar" },
+      },
       required: ["id"],
     },
-    // Owner's rule: the AI never turns a campaign on. The API refuses it for
-    // any key (403 human_only); this tool only tells where a human does it.
-    async run(args) {
+    async run(args, call) {
       const id = requireString(args, "id");
       if (!id) return text("Informe o id.", true);
-      return text(
-        {
-          id,
-          ligada: false,
-          aviso: "Chave de API não liga automação. Peça pro dono ligar no Lead Engine.",
-          caminho: `/campaigns/${encodeURIComponent(id)}`,
-        },
-        true
-      );
+      const res = await api(call, "POST", `/api/mcp-automacoes/${encodeURIComponent(id)}/ligar`, { desligarConflitantes: args.desligarConflitantes === true });
+      if (!res.ok) return res.result;
+      return text(res.data);
     },
   },
   {
     name: "desativar_automacao",
-    description: "DESLIGA uma automação. Ela para de responder na hora.",
+    description: "DESLIGA uma campanha (automação). Ela para de responder na hora. Não apaga. Resposta lida do banco com conferencia (CONFERE ou NÃO CONFERE).",
     inputSchema: {
       type: "object",
       properties: { id: { ...str, description: "ID da automação" } },
@@ -308,11 +303,9 @@ export const TOOLS: Tool[] = [
     async run(args, call) {
       const id = requireString(args, "id");
       if (!id) return text("Informe o id.", true);
-      const res = await api(call, "PATCH", `/api/automations?id=${encodeURIComponent(id)}`, {
-        isActive: false,
-      });
+      const res = await api(call, "POST", `/api/mcp-automacoes/${encodeURIComponent(id)}/desligar`, {});
       if (!res.ok) return res.result;
-      return text({ id, ligada: false });
+      return text(res.data);
     },
   },
   {
@@ -1146,9 +1139,9 @@ export const TOOLS: Tool[] = [
     },
   },
   // ─── Etapa 3: fluxos ───────────────────────────────────────────────────────
-  // Pela chave de API só dá pra ler, criar e editar RASCUNHO. Publicar e
-  // ligar um fluxo é só pela tela, com o Matheus logado (a API responde 403
-  // human_only pra chave).
+  // Rotas da tela (/api/flows/[id]/publish e /active): publicar e ligar seguem
+  // human_only pra chave. Desde 28/10 o dono autorizou publicar/ligar/desligar
+  // pelas ferramentas publicar_fluxo, ligar_fluxo e desligar_fluxo (/api/mcp-fluxos).
   {
     name: "listar_fluxos",
     description:
@@ -1192,9 +1185,63 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "publicar_fluxo",
+    description:
+      "PUBLICA o rascunho de um fluxo que JÁ existe (o rascunho vira o que roda). O dono autorizou: use quando ele pedir. Só publica se a validação passar; senão devolve oQueFalta e não muda nada. Sem mudanças desde a última publicação, não cria versão nova. Não liga (ligar_fluxo), não apaga. Resposta lida do banco: nome, publicado, versao, ligado, gatilho e conferencia (CONFERE ou NÃO CONFERE; se NÃO CONFERE, avise o dono). Interruptor de emergência: MCP_FLUXOS_DISABLED=1.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { ...str, description: "ID do fluxo (listar_fluxos)" } },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const res = await api(call, "POST", `/api/mcp-fluxos/${encodeURIComponent(id)}/publish`, {});
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "ligar_fluxo",
+    description:
+      "LIGA um fluxo JÁ PUBLICADO (publicar_fluxo antes). O dono autorizou: use quando ele pedir. ATENÇÃO: dois itens ligados no MESMO gatilho (mesmo post e palavras) mandam DM duplicada. Por isso, antes de ligar, detecta fluxos e campanhas ligados nesse gatilho: se houver, NÃO liga e devolve a lista em conflitantes. Para desligar esses (nunca apaga) e ligar este, repita com desligarConflitantes:true. Já ligado: não faz nada. Resposta lida do banco: nome, publicado, versao, ligado, gatilho e conferencia (CONFERE ou NÃO CONFERE). Cada ação fica no registro. Interruptor de emergência: MCP_FLUXOS_DISABLED=1.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { ...str, description: "ID do fluxo (listar_fluxos)" },
+        desligarConflitantes: { type: "boolean", description: "true: desliga (nunca apaga) fluxos/campanhas ligados no mesmo gatilho antes de ligar" },
+      },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const res = await api(call, "POST", `/api/mcp-fluxos/${encodeURIComponent(id)}/ligar`, { desligarConflitantes: args.desligarConflitantes === true });
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
+    name: "desligar_fluxo",
+    description:
+      "DESLIGA um fluxo (para de entrar gente nova; quem já está dentro para no próximo passo). Não apaga, não despublica. Já desligado: não faz nada. Resposta lida do banco com conferencia (CONFERE ou NÃO CONFERE). Interruptor de emergência: MCP_FLUXOS_DISABLED=1.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { ...str, description: "ID do fluxo" } },
+      required: ["id"],
+    },
+    async run(args, call) {
+      const id = requireString(args, "id");
+      if (!id) return text("Informe o id.", true);
+      const res = await api(call, "POST", `/api/mcp-fluxos/${encodeURIComponent(id)}/desligar`, {});
+      if (!res.ok) return res.result;
+      return text(res.data);
+    },
+  },
+  {
     name: "criar_fluxo",
     description:
-      "Cria um fluxo SEMPRE DESLIGADO e só como rascunho. Publicar e ligar é só pela tela do Lead Engine, com o dono da conta. " +
+      "Cria um fluxo SEMPRE DESLIGADO e só como rascunho. Para publicar e ligar, quando o dono pedir: publicar_fluxo e ligar_fluxo. " +
       FLOW_DRAFT_HELP,
     inputSchema: {
       type: "object",
@@ -1228,14 +1275,14 @@ export const TOOLS: Tool[] = [
         id: created.id,
         nome: created.name,
         oQueFaltaPraPublicar: created.validation ?? null,
-        aviso: "Publicar e ligar só pela tela, com o dono da conta.",
+        aviso: "Para publicar e ligar, quando o dono pedir: publicar_fluxo e ligar_fluxo.",
       });
     },
   },
   {
     name: "editar_fluxo",
     description:
-      "Altera o nome ou o RASCUNHO de um fluxo (troca a definição inteira). Não publica, não liga, não desliga: o que está rodando não muda até um humano publicar na tela. " +
+      "Altera o nome ou o RASCUNHO de um fluxo (troca a definição inteira). Não publica, não liga, não desliga: o que está rodando não muda até publicar_fluxo. " +
       FLOW_DRAFT_HELP,
     inputSchema: {
       type: "object",
@@ -1943,7 +1990,7 @@ export async function handleMcpMessage(
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; ligar só com o ok do dono da conta. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você só lê, cria e edita rascunho; publicar e ligar um fluxo é só pela tela, com o dono da conta. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo) e lê quem recebeu (ver_destinatarios_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. Posts em TikTok, YouTube, Instagram (Reels) e Facebook (aba Posts): pela chave você lê contas e posts (listar_contas_sociais, listar_posts_agendados, ver_post_agendado) e cria só RASCUNHO (criar_rascunho_post) com a mídia enviada por enviar_midia_post (link de envio; você faz o PUT do arquivo com curl). Só quando o dono pedir na conversa, agendar_post e publicar_post agendam e publicam um post que já existe como rascunho (a resposta traz a conferência lida do banco; se vier NÃO CONFERE, avise). Cancelar e apagar post, e a declaração \"para crianças\" do YouTube (inclusive ligar o padrão \"não é para crianças\" do canal), são só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
+          "Lead Engine do @omatheus.ai pela API oficial do Instagram. DM escrita por IA nunca sai sem aprovação humana: use propor_resposta (cria um rascunho, não envia) e espere o Matheus aprovar. Não existe ferramenta pra enviar DM direto. Quem o Matheus assumiu fica fora (listar_dms_sem_resposta não mostra). Automações nascem desligadas; o dono autorizou o Claude a ligar e desligar campanhas (ativar_automacao, desativar_automacao) quando ele pedir. A moderação de comentários nasce no modo observar; esconder comentários só com o ok do dono da conta. Fluxos (construtor visual): pela chave você lê, cria e edita rascunho e, quando o dono pedir, publica (publicar_fluxo), liga (ligar_fluxo) e desliga (desligar_fluxo); nunca apaga. Dois itens ligados no mesmo gatilho (fluxo ou campanha, mesmo post e palavras) mandam DM duplicada: ligar_fluxo e ativar_automacao detectam e devolvem a lista; desligarConflitantes:true desliga os conflitantes antes. Se a resposta vier NÃO CONFERE, avise o dono. Disparos: pela chave você só cria RASCUNHO (criar_rascunho_disparo) e lê quem recebeu (ver_destinatarios_disparo); enviar ou agendar é só pela tela, com o dono da conta, e só recebe quem falou com a conta nas últimas 24h. ver_relatorio e listar_segmentos são só leitura. listar_disparos e ver_disparo são só leitura dos disparos. Quiz (funis): pela chave você cria e edita RASCUNHO; publicar é só pela tela, com o dono da conta. Posts em TikTok, YouTube, Instagram (Reels) e Facebook (aba Posts): pela chave você lê contas e posts (listar_contas_sociais, listar_posts_agendados, ver_post_agendado) e cria só RASCUNHO (criar_rascunho_post) com a mídia enviada por enviar_midia_post (link de envio; você faz o PUT do arquivo com curl). Só quando o dono pedir na conversa, agendar_post e publicar_post agendam e publicam um post que já existe como rascunho (a resposta traz a conferência lida do banco; se vier NÃO CONFERE, avise). Cancelar e apagar post, e a declaração \"para crianças\" do YouTube (inclusive ligar o padrão \"não é para crianças\" do canal), são só pela tela, com o dono da conta. WhatsApp: pela chave você só LÊ (listar_conversas_whatsapp, ler_conversa_whatsapp, ver_numeros_whatsapp, ver_agentes_whatsapp, ver_status_whatsapp, listar_leads_whatsapp, listar_programados_whatsapp, ver_whatsapp_programados). Enviar, programar, conectar número, enquetes, grupos, agentes e mexer em lead são só pela tela, com o dono da conta. Nunca invente preço, depoimento, número ou prazo: deixe [colchetes] e avise o que falta.",
       });
     }
     case "ping":

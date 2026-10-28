@@ -228,7 +228,7 @@ describe("aceite: Claude monta o quiz Chat Sem Frescura pelo MCP", () => {
 
     const list = (await handleMcpMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, internalCall)) as { result: { tools: { name: string }[] } };
     // publicar_post (27/10, a pedido do dono) é de posts da aba Posts, não de quiz.
-    expect(list.result.tools.some((t) => /publi|publish/i.test(t.name) && t.name !== "publicar_post")).toBe(false);
+    expect(list.result.tools.some((t) => /publi|publish/i.test(t.name) && !["publicar_post", "publicar_fluxo"].includes(t.name))).toBe(false);
 
     // Tentar mandar status pelo editar_funil / criar_funil não passa.
     await tool("editar_funil", { id, nome: "Chat Sem Frescura", status: "PUBLISHED" });

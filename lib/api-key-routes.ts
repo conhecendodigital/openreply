@@ -75,6 +75,9 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   /^\/api\/mcp-media\/upload-url$/,
   // 2026-10-27: agendar_post e publicar_post (MCP), pedido do dono. Interruptor: MCP_PUBLISH_DISABLED=1.
   /^\/api\/mcp-publish\/[^/]+\/(schedule|publish)$/,
+  // 2026-10-28: publicar_fluxo, ligar_fluxo, desligar_fluxo, ativar_automacao, desativar_automacao (MCP), pedido do dono. Interruptor: MCP_FLUXOS_DISABLED=1.
+  /^\/api\/mcp-fluxos\/[^/]+\/(publish|ligar|desligar)$/,
+  /^\/api\/mcp-automacoes\/[^/]+\/(ligar|desligar)$/,
 ];
 
 /**

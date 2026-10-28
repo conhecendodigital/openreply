@@ -35,6 +35,11 @@ import * as socialPostsRoute from "@/app/api/posts/route";
 import * as mcpMediaUploadRoute from "@/app/api/mcp-media/upload-url/route";
 import * as mcpPublishScheduleRoute from "@/app/api/mcp-publish/[id]/schedule/route";
 import * as mcpPublishNowRoute from "@/app/api/mcp-publish/[id]/publish/route";
+import * as mcpFlowPublishRoute from "@/app/api/mcp-fluxos/[id]/publish/route";
+import * as mcpFlowOnRoute from "@/app/api/mcp-fluxos/[id]/ligar/route";
+import * as mcpFlowOffRoute from "@/app/api/mcp-fluxos/[id]/desligar/route";
+import * as mcpCampaignOnRoute from "@/app/api/mcp-automacoes/[id]/ligar/route";
+import * as mcpCampaignOffRoute from "@/app/api/mcp-automacoes/[id]/desligar/route";
 import * as socialPostRoute from "@/app/api/posts/[id]/route";
 import * as flowsRoute from "@/app/api/flows/route";
 import * as flowRoute from "@/app/api/flows/[id]/route";
@@ -125,6 +130,12 @@ export function resolveHandler(
     [/^\/api\/mcp-publish\/([^/]+)\/schedule$/, mcpPublishScheduleRoute],
     [/^\/api\/mcp-publish\/([^/]+)\/publish$/, mcpPublishNowRoute],
     [/^\/api\/posts\/([^/]+)$/, socialPostRoute],
+    // 28/10/2026: publicar/ligar/desligar fluxo e ligar/desligar campanha pelo MCP, a pedido do dono (interruptor: MCP_FLUXOS_DISABLED=1). /api/flows/[id]/publish|active seguem como estão na tela.
+    [/^\/api\/mcp-fluxos\/([^/]+)\/publish$/, mcpFlowPublishRoute],
+    [/^\/api\/mcp-fluxos\/([^/]+)\/ligar$/, mcpFlowOnRoute],
+    [/^\/api\/mcp-fluxos\/([^/]+)\/desligar$/, mcpFlowOffRoute],
+    [/^\/api\/mcp-automacoes\/([^/]+)\/ligar$/, mcpCampaignOnRoute],
+    [/^\/api\/mcp-automacoes\/([^/]+)\/desligar$/, mcpCampaignOffRoute],
     // Etapa 3: flows. Static paths before the [id] patterns.
     [/^\/api\/flows$/, flowsRoute],
     [/^\/api\/flows\/from-campaign\/([^/]+)$/, flowFromCampaignRoute, "automationId"],
