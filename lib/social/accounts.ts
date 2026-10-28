@@ -25,6 +25,9 @@ export interface PostableAccount {
   scopes: string[];
   /** YouTube: permissões pedidas que a pessoa não concedeu. Vazio = tudo certo. */
   missingScopes: string[];
+  /** YouTube: padrão "meus vídeos não são para crianças" ligado pelo dono na tela. */
+  youtubeNotForKidsDefault: boolean;
+  youtubeNotForKidsDefaultAt: string | null;
 }
 
 export async function listPostableAccounts(workspaceId: string): Promise<PostableAccount[]> {
@@ -49,6 +52,8 @@ export async function listPostableAccounts(workspaceId: string): Promise<Postabl
       canDisconnect: true,
       scopes: a.scopes ?? [],
       missingScopes: a.platform === "YOUTUBE" ? missingYouTubeScopes(a.scopes ?? []) : [],
+      youtubeNotForKidsDefault: a.platform === "YOUTUBE" && a.youtubeNotForKidsDefault === true,
+      youtubeNotForKidsDefaultAt: a.youtubeNotForKidsDefaultAt?.toISOString() ?? null,
     });
   }
   for (const c of channels ?? []) {
@@ -67,22 +72,26 @@ export async function listPostableAccounts(workspaceId: string): Promise<Postabl
       canDisconnect: false,
       scopes: [],
       missingScopes: [],
+      youtubeNotForKidsDefault: false,
+      youtubeNotForKidsDefaultAt: null,
     });
   }
   return out;
 }
 
 /** Conta do workspace (conectada ou precisando reconectar) pelo id, nas duas tabelas. */
-export async function findPostableAccount(workspaceId: string, id: string): Promise<{ id: string; source: "social" | "channel"; platform: SocialPlatform } | null> {
+export async function findPostableAccount(workspaceId: string, id: string): Promise<{ id: string; source: "social" | "channel"; platform: SocialPlatform; youtubeNotForKidsDefault: boolean } | null> {
   const social = await prisma.socialAccount.findFirst({
     where: { id, workspaceId, status: { not: "DISCONNECTED" } },
-    select: { id: true, platform: true },
+    select: { id: true, platform: true, youtubeNotForKidsDefault: true },
   });
-  if (social && isSocialPlatform(social.platform)) return { id: social.id, source: "social", platform: social.platform };
+  if (social && isSocialPlatform(social.platform)) {
+    return { id: social.id, source: "social", platform: social.platform, youtubeNotForKidsDefault: social.youtubeNotForKidsDefault === true };
+  }
   const channel = await prisma.instagramAccount.findFirst({
     where: { id, workspaceId, status: { not: "DISCONNECTED" } },
     select: { id: true, platform: true },
   });
-  if (channel) return { id: channel.id, source: "channel", platform: channel.platform === "FACEBOOK" ? "FACEBOOK" : "INSTAGRAM" };
+  if (channel) return { id: channel.id, source: "channel", platform: channel.platform === "FACEBOOK" ? "FACEBOOK" : "INSTAGRAM", youtubeNotForKidsDefault: false };
   return null;
 }

@@ -100,7 +100,10 @@ export function PostComposer({
   const [caption, setCaption] = useState(initialText.caption);
   const [hashtags, setHashtags] = useState<string[]>(initialText.hashtags);
   const [tiktok, setTiktok] = useState<TikTokSettings>(post?.platform === "TIKTOK" ? (post.settings as unknown as TikTokSettings) : emptySettings());
-  const [youtube, setYoutube] = useState<YouTubeForm>(post?.platform === "YOUTUBE" ? youTubeFormFromSettings(post.settings, post.caption ?? "") : emptyYouTubeForm());
+  const [youtubeRaw, setYoutube] = useState<YouTubeForm>(post?.platform === "YOUTUBE" ? youTubeFormFromSettings(post.settings, post.caption ?? "") : emptyYouTubeForm());
+  // Padrão do canal (ligado pelo dono em Canais): sem resposta própria neste vídeo, vale "não é para crianças".
+  const kidsDefault = chosen.some((c) => c.platform === "YOUTUBE" && accounts.find((a) => a.id === c.accountId)?.youtubeNotForKidsDefault === true);
+  const youtube: YouTubeForm = kidsDefault && youtubeRaw.madeForKids === null ? { ...youtubeRaw, madeForKids: false } : youtubeRaw;
   const [instagram, setInstagram] = useState<InstagramForm>(post?.platform === "INSTAGRAM" ? instagramFormFromSettings(post.settings) : emptyInstagramForm());
   const [facebook, setFacebook] = useState<FacebookForm>(post?.platform === "FACEBOOK" ? facebookFormFromSettings(post.settings) : emptyFacebookForm());
   const [media, setMedia] = useState<MediaState>({
@@ -430,7 +433,7 @@ export function PostComposer({
             <div key={n} className={`space-y-4 ${i > 0 || optionNetworks.length > 1 ? "border-t border-border pt-5" : ""}`}>
               {optionNetworks.length > 1 && <NetworkHeading network={n} />}
               {n === "TIKTOK" && <TikTokFields settings={tiktok} info={infoData} patch={patchTikTok} />}
-              {n === "YOUTUBE" && <YouTubeFields form={youtube} onChange={(f2) => setYoutube((f) => ({ ...f, ...f2 }))} />}
+              {n === "YOUTUBE" && <YouTubeFields form={youtube} channelDefault={kidsDefault} onChange={(f2) => setYoutube((f) => ({ ...f, ...f2 }))} />}
               {n === "INSTAGRAM" && <InstagramFields form={instagram} onChange={(f2) => setInstagram((f) => ({ ...f, ...f2 }))} locked={Boolean(post || postId)} />}
             </div>
           ))}

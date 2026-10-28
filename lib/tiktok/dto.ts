@@ -18,6 +18,8 @@ export function socialAccountDto(a: SocialAccount): Omit<PostableAccount, "sourc
     canDisconnect: true,
     scopes: a.scopes ?? [],
     missingScopes: a.platform === "YOUTUBE" ? missingYouTubeScopes(a.scopes ?? []) : [],
+    youtubeNotForKidsDefault: a.platform === "YOUTUBE" && a.youtubeNotForKidsDefault === true,
+    youtubeNotForKidsDefaultAt: a.youtubeNotForKidsDefaultAt?.toISOString() ?? null,
   };
 }
 

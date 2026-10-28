@@ -6,6 +6,8 @@ import { findPostableAccount } from "@/lib/social/accounts";
 import { providerFor } from "@/lib/social/providers";
 import { EDITABLE, findPost, mediaLimitsProblem, mediaUrlProblem, POST_INCLUDE, updatePostSchema, validateDraftSettings } from "@/lib/social/posts-api";
 import { postDto } from "@/lib/tiktok/dto";
+import { getApiCaller } from "@/lib/auth";
+import { KIDS_FIELD, stripKidsAnswer } from "@/lib/social/youtube-kids-default";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +67,14 @@ export async function PATCH(request: NextRequest, { params }: RouteProps) {
   if (limits) return fail(limits, 400, { code: "invalid_media" });
   let settings: unknown;
   if (data.settings) {
-    const checked = validateDraftSettings(provider, data.settings);
+    // A declaração "para crianças" é só da pessoa na tela: chave de API/MCP não muda; fica o que o vídeo já tinha.
+    let incoming: Record<string, unknown> = data.settings;
+    if ((await getApiCaller()).kind === "token") {
+      incoming = stripKidsAnswer(incoming);
+      const current = (post.settings as Record<string, unknown> | null)?.[KIDS_FIELD];
+      if (typeof current === "boolean" && (account?.platform ?? post.platform) === "YOUTUBE") incoming = { ...incoming, [KIDS_FIELD]: current };
+    }
+    const checked = validateDraftSettings(provider, incoming);
     if (!checked.ok) return fail("Invalid body", 400, { code: "invalid_body", issues: checked.issues });
     settings = checked.data;
   } else if (account && account.platform !== (post.platform ?? "TIKTOK")) {

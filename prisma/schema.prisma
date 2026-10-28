@@ -2596,6 +2596,11 @@ model SocialAccount {
   connectedAt      DateTime            @default(now())
   disconnectedAt   DateTime?
   updatedAt        DateTime            @updatedAt
+  /// YouTube: declaração do DONO ao YouTube ("meus vídeos não são para crianças"). Só a tela liga (sessão humana).
+  youtubeNotForKidsDefault   Boolean   @default(false)
+  youtubeNotForKidsDefaultAt DateTime?
+  /// userId de quem ligou/desligou (sem dado sensível).
+  youtubeNotForKidsDefaultBy String?
 
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   posts     ScheduledPost[]
