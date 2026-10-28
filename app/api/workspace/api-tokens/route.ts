@@ -12,6 +12,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const MAX_ACTIVE_KEYS = 25;
+
 const createSchema = z.object({
   name: z.string().trim().min(1).max(60),
   // "drafts:approve" only for deterministic code (e.g. the Telegram bot's
@@ -63,6 +65,8 @@ export async function GET() {
       data: {
         tokens,
         mcpUrl: `${getBaseUrl().replace(/\/$/, "")}/api/mcp`,
+        // Informativo: o ID do workspace não é segredo e não substitui a chave.
+        workspaceId: context.workspaceId,
         envTokenConfigured: Boolean(process.env.OPENREPLY_API_TOKEN),
         availableScopes: API_TOKEN_SCOPES,
       },
@@ -80,6 +84,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { success: false, error: "Give the key a name (up to 60 characters)" },
       { status: 400 }
+    );
+  }
+
+  // Teto de chaves ativas por workspace (28/10): uma chave esquecida por cliente de IA é normal, cem não.
+  const active = await prisma.apiToken.count({
+    where: { workspaceId: context.workspaceId, revokedAt: null },
+  });
+  if (active >= MAX_ACTIVE_KEYS) {
+    return NextResponse.json(
+      { success: false, error: "Too many active keys. Revoke the ones you no longer use." },
+      { status: 409 }
     );
   }
 

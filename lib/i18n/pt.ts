@@ -26,6 +26,7 @@ import { ptTiktok } from "@/lib/i18n/pt-tiktok";
 import { ptTiktokSite } from "@/lib/i18n/pt-tiktok-site";
 import { ptSecoes } from "@/lib/i18n/pt-secoes";
 import { ptAbas } from "@/lib/i18n/pt-abas";
+import { ptMcp } from "@/lib/i18n/pt-mcp";
 import { ptLinks } from "@/lib/i18n/pt-links";
 import { ptFunisAdmin } from "@/lib/i18n/pt-funis-admin";
 import { ptSocial } from "@/lib/i18n/pt-social";
@@ -41,6 +42,7 @@ export const pt: Record<string, string> = {
   // 2026-10-06: seções recolhíveis, índice e resumos em todo o painel, em lib/i18n/pt-secoes.ts.
   ...ptSecoes,
   ...ptAbas,
+  ...ptMcp,
   ...ptWaPalavra,
   ...ptVendedor,
   ...ptFacebook,

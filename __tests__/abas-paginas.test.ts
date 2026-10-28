@@ -413,8 +413,8 @@ describe("Canais, Configurações e /admin em abas", () => {
     window.history.replaceState(null, "", "/settings?aba=uso");
     const { default: Page } = await import("../app/(dashboard)/settings/page");
     await render(h(Page));
-    expect(tabLabels()).toEqual(["Instagram", "Equipe", "Segurança", "Gasto de IA", "Pixel", "API e MCP", "Uso"]);
-    for (const id of ["instagram", "equipe", "seguranca", "gastos-ia", "pixel-meta", "api-mcp", "uso"]) {
+    expect(tabLabels()).toEqual(["Instagram", "Equipe", "Segurança", "Gasto de IA", "Pixel", "MCP", "API e MCP", "Uso"]);
+    for (const id of ["instagram", "equipe", "seguranca", "gastos-ia", "pixel-meta", "mcp", "api-mcp", "uso"]) {
       expect(document.getElementById(id)?.closest("[data-aba-painel]")?.getAttribute("data-aba-painel"), id).toBe(id);
     }
     expect(visiblePanels()).toEqual(["uso"]);
