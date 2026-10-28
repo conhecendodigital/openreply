@@ -3,6 +3,8 @@ import type { RawMessageMediaFields } from "@/lib/meta/message-media";
 import { WEBHOOK_SUBSCRIBED_FIELDS } from "@/lib/meta/webhook-fields";
 import { isFacebookPageToken } from "@/lib/meta/platform";
 
+const INSTAGRAM_UNVERSIONED_GRAPH = "https://graph.instagram.com";
+
 function instagramGraphBase() {
   return `https://graph.instagram.com/${getMetaGraphApiVersion()}`;
 }
@@ -1142,7 +1144,9 @@ export async function getFollowerCountSeries(
 export async function getLongLivedToken(
   shortLivedToken: string
 ): Promise<{ accessToken: string; expiresIn: number }> {
-  const url = new URL(`${instagramGraphBase()}/access_token`);
+  // 28/10/2026: a troca pelo token longo é GET em graph.instagram.com/access_token, SEM versão
+  // (doc da Meta); com /v21.0/ a Meta responde "Unsupported request - method type: get".
+  const url = new URL(`${INSTAGRAM_UNVERSIONED_GRAPH}/access_token`);
   url.searchParams.set("grant_type", "ig_exchange_token");
   url.searchParams.set("client_secret", requireEnv("INSTAGRAM_APP_SECRET"));
   url.searchParams.set("access_token", shortLivedToken);
@@ -1159,7 +1163,7 @@ export async function getLongLivedToken(
 export async function refreshLongLivedToken(
   longLivedToken: string
 ): Promise<{ accessToken: string; expiresIn: number }> {
-  const url = new URL(`${instagramGraphBase()}/refresh_access_token`);
+  const url = new URL(`${INSTAGRAM_UNVERSIONED_GRAPH}/refresh_access_token`);
   url.searchParams.set("grant_type", "ig_refresh_token");
   url.searchParams.set("access_token", longLivedToken);
 
