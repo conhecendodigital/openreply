@@ -1,0 +1,216 @@
+/**
+ * Quebra a resposta em bolhas curtas e sorteia o ritmo humano.
+ * Módulo COMPARTILHADO (28/10/2026): o agente de WhatsApp e o vendedor do
+ * Instagram usam a mesma divisão. lib/whatsapp/agentes/bolhas.ts só reexporta.
+ *
+ * - 1 a 3 bolhas, cada uma com até ~220 caracteres (quebra por frase, nunca
+ *   no meio de uma frase nem num número como "R$ 1.500" ou num link).
+ * - A pergunta vai sempre na última bolha (quem lê responde a última coisa).
+ * - Tira marcas de texto de robô: travessão, negrito em markdown, marcador de lista,
+ *   frase pronta de chatbot ("Ótima pergunta!", "Espero ter ajudado") e emoji além
+ *   do primeiro. Só tira, nunca acrescenta palavra (regra de não inventar).
+ * - Atraso inicial de 20 a 90 s, "digitando..." de 4 a 7 caracteres por
+ *   segundo, pausa de 1 a 4 s entre bolhas.
+ */
+/** Uma bolha com o atraso humano já sorteado. */
+export interface EnvioPlanejado {
+  texto: string;
+  /** Espera antes de começar a digitar, contada do fim da bolha anterior. */
+  esperaMs: number;
+  /** Quanto tempo mostrar "digitando...". */
+  digitandoMs: number;
+}
+
+export const MAX_BOLHAS = 3;
+export const MAX_CARACTERES_BOLHA = 220;
+
+export function limparBolha(texto: string): string {
+  return texto
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/^\s*[-*•]\s+/gm, "")
+    .replace(/^#+\s*/gm, "")
+    .replace(/,\s*,/g, ",")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([,.!?])/g, "$1")
+    .trim();
+}
+
+/**
+ * Frase inteira que é só enchimento de chatbot (Ghost Mode). Comparada sem
+ * acento e sem pontuação; frase com conteúdo junto ("Claro, custa R$ 80") fica.
+ */
+const FRASES_DE_CHATBOT = [
+  /^(otima|excelente|boa|que otima) pergunta$/,
+  /^com certeza$/,
+  /^(fico|ficamos) (muito )?(feliz|felizes|contente|contentes) em (te |lhe )?ajudar$/,
+  /^espero ter (te |lhe )?ajudado$/,
+  /^(estou|estamos|fico|ficamos|sigo|seguimos) (a )?(sua |a sua |inteira )?disposicao( pra| para)?( qualquer duvida| o que precisar)?$/,
+  /^qualquer (outra )?duvida(,)? (estou|estamos|fico|ficamos) (a )?(sua )?disposicao$/,
+  /^nao hesite em (nos )?(chamar|perguntar|entrar em contato)$/,
+  /^(agradeco|agradecemos) (o|pelo|seu|pelo seu) contato$/,
+  /^entendo (perfeitamente )?(a |sua |a sua )?preocupacao$/,
+  /^sinceramente$/,
+];
+
+function normal(f: string): string {
+  return f
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, "")
+    .replace(/[!?.,;:…"'()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function ehFraseDeChatbot(frase: string): boolean {
+  const n = normal(frase);
+  return n.length > 0 && FRASES_DE_CHATBOT.some((re) => re.test(n));
+}
+
+const RE_EMOJI = /\p{Extended_Pictographic}\uFE0F?(?:\u200D\p{Extended_Pictographic}\uFE0F?)*/gu;
+
+/** Tira frase de chatbot de cada bolha e deixa só o primeiro emoji da resposta. */
+export function semCaraDeIa(bolhas: string[]): string[] {
+  let emojis = 0;
+  return bolhas
+    .map((b) => {
+      const fs = frases(b);
+      const ficam = fs.filter((f) => !ehFraseDeChatbot(f));
+      const texto = ficam.length === fs.length ? b : ficam.join(" ");
+      return texto
+        .replace(RE_EMOJI, (e) => (emojis++ === 0 ? e : ""))
+        .replace(/[ \t]+/g, " ")
+        .replace(/\s+([,.!?])/g, "$1")
+        .trim();
+    })
+    .filter(Boolean);
+}
+
+/** Frases: fim em . ! ? ou … seguido de espaço (não quebra "R$ 1.500", "www.site.com.br" nem "3.5"). */
+export function frases(texto: string): string[] {
+  const out: string[] = [];
+  let ini = 0;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (c === "\n") {
+      if (texto.slice(ini, i).trim()) out.push(texto.slice(ini, i));
+      ini = i + 1;
+      continue;
+    }
+    if (".!?…".includes(c)) {
+      let j = i;
+      while (j + 1 < texto.length && ".!?…".includes(texto[j + 1])) j++;
+      const prox = texto[j + 1];
+      if (prox === undefined || /\s/.test(prox)) {
+        out.push(texto.slice(ini, j + 1));
+        ini = j + 1;
+        i = j;
+      }
+    }
+  }
+  if (texto.slice(ini).trim()) out.push(texto.slice(ini));
+  return out.map((f) => f.trim()).filter(Boolean);
+}
+
+function quebrarLonga(texto: string): string[] {
+  if (texto.length <= MAX_CARACTERES_BOLHA) return [texto];
+  const lista = frases(texto).map((f) => `${f} `);
+  const partes: string[] = [];
+  let atual = "";
+  for (const f of lista) {
+    if (atual && (atual + f).length > MAX_CARACTERES_BOLHA) {
+      partes.push(atual.trim());
+      atual = "";
+    }
+    atual += f;
+  }
+  if (atual.trim()) partes.push(atual.trim());
+  return partes;
+}
+
+/** Bolha com várias frases vira 2 ou 3 (quem escreve no WhatsApp manda picado). */
+export const DIVIDIR_A_PARTIR_DE = 110;
+
+function dividirPorFrase(texto: string): string[] {
+  const fs = frases(texto);
+  if (fs.length < 2 || (fs.length === 2 && texto.length < DIVIDIR_A_PARTIR_DE)) return [texto];
+  if (fs.length === 2) return fs;
+  if (fs.length === 3) return fs;
+  // 4 ou mais: em 3 grupos parecidos, sem cortar frase.
+  const alvo = Math.ceil(fs.length / 3);
+  const out: string[] = [];
+  for (let i = 0; i < fs.length; i += alvo) out.push(fs.slice(i, i + alvo).join(" "));
+  return out;
+}
+
+const tem_pergunta = (b: string) => b.includes("?");
+
+/** A pergunta vai pro fim: bolhas sem pergunta primeiro, na ordem; as com pergunta depois. */
+export function perguntaNoFim(bolhas: string[]): string[] {
+  if (bolhas.length < 2 || !bolhas.slice(0, -1).some(tem_pergunta)) return bolhas;
+  const semPergunta = bolhas.filter((b) => !tem_pergunta(b));
+  const comPergunta = bolhas.filter(tem_pergunta);
+  return [...semPergunta, ...comPergunta];
+}
+
+export function quebrarEmBolhas(entrada: string | string[]): string[] {
+  const brutas = (Array.isArray(entrada) ? entrada : [entrada]).flatMap((b) => String(b ?? "").split(/\n{2,}/));
+  const limpas0 = semCaraDeIa(brutas.map(limparBolha).filter(Boolean)).flatMap(quebrarLonga);
+  // O modelo mandou tudo numa bolha só: divide por frase.
+  const limpas = perguntaNoFim(limpas0.length === 1 ? dividirPorFrase(limpas0[0]) : limpas0);
+  if (limpas.length <= MAX_BOLHAS) return limpas;
+  // Junta o excedente na última bolha em vez de mandar 5 mensagens seguidas
+  // (a pergunta, que já está no fim, continua na última).
+  return [...limpas.slice(0, MAX_BOLHAS - 1), limpas.slice(MAX_BOLHAS - 1).join(" ")];
+}
+
+export type Sorteio = () => number;
+
+function entre(rng: Sorteio, min: number, max: number): number {
+  return Math.round(min + (max - min) * rng());
+}
+
+export interface OpcoesRitmo {
+  esperaInicialMinMs?: number;
+  esperaInicialMaxMs?: number;
+  /** Pausa fixa entre bolhas (Instagram: 1 a 4 s). Sem isso, vale o cálculo do WhatsApp. */
+  pausaEntreMinMs?: number;
+  pausaEntreMaxMs?: number;
+}
+
+export function planejarRitmo(bolhas: string[], rng: Sorteio = Math.random, opcoes: OpcoesRitmo = {}): EnvioPlanejado[] {
+  const iniMin = opcoes.esperaInicialMinMs ?? 20_000;
+  const iniMax = opcoes.esperaInicialMaxMs ?? 90_000;
+  return bolhas.map((texto, i) => {
+    const cps = 4 + 3 * rng();
+    const digitandoMs = Math.min(25_000, Math.max(1_500, Math.round((texto.length / cps) * 1000)));
+    // Entre bolhas: pausa curta de quem acabou de mandar a anterior, maior se ela era longa.
+    const anterior = i > 0 ? bolhas[i - 1].length : 0;
+    const pausa =
+      opcoes.pausaEntreMinMs !== undefined && opcoes.pausaEntreMaxMs !== undefined
+        ? entre(rng, opcoes.pausaEntreMinMs, opcoes.pausaEntreMaxMs)
+        : Math.min(6_000, entre(rng, 1_000, 3_000) + Math.round(anterior * 8));
+    const esperaMs = i === 0 ? entre(rng, iniMin, iniMax) : pausa;
+    return { texto, esperaMs, digitandoMs };
+  });
+}
+
+export function duracaoTotalMs(envios: EnvioPlanejado[]): number {
+  return envios.reduce((s, e) => s + e.esperaMs + e.digitandoMs, 0);
+}
+
+/**
+ * Ritmo do Instagram: a pessoa do Lead Engine já aprovou (ou o modo automático
+ * já decidiu esperar), então a 1ª parte sai sem espera extra e as outras com
+ * 1 a 4 s de pausa. "Digitando" dura a própria pausa (a API só liga e desliga).
+ */
+export function planejarRitmoInstagram(bolhas: string[], rng: Sorteio = Math.random, primeiraEsperaMs = 0): EnvioPlanejado[] {
+  return planejarRitmo(bolhas, rng, {
+    esperaInicialMinMs: primeiraEsperaMs,
+    esperaInicialMaxMs: primeiraEsperaMs,
+    pausaEntreMinMs: 1_000,
+    pausaEntreMaxMs: 4_000,
+  });
+}

@@ -49,6 +49,7 @@ echo "[cron] scheduler started, target $BASE_URL"
 last_slot=""
 last_daily=""
 last_wa=""
+last_vend=""
 
 while true; do
   now=$(date -u '+%Y-%m-%d %H:%M')
@@ -72,6 +73,13 @@ while true; do
       fi
       ;;
   esac
+
+  # Vendedor automático do Instagram (28/10/2026): a cada minuto, em segundo plano pra não segurar os
+  # outros jobs. Sem conta ligada (o padrão) ou com VENDEDOR_IG_DISABLED=1 a rota não faz nada.
+  if [ "$last_vend" != "$hhmm" ]; then
+    last_vend="$hhmm"
+    call vendedor-ig &
+  fi
 
   # Once a day, early: the token refresh has a 10-day window before expiry, so
   # the exact hour does not matter — only that it happens every day.

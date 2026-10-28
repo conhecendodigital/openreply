@@ -15,7 +15,10 @@ import { recordEvent } from "@/lib/contacts/record";
 import { isTakeoverActive } from "@/lib/messaging/takeover";
 import { isWindowOpen, isWindowClosedError, windowClosesAt } from "@/lib/messaging/window";
 import { isAmbiguousDeliveryError } from "@/lib/messaging/errors";
-import { sendDirectMessage } from "@/lib/meta/client";
+import { sendDirectMessage, sendTypingIndicator } from "@/lib/meta/client";
+import type { Sorteio } from "@/lib/messaging/bolhas";
+import { sendDmParts } from "@/lib/messaging/send-parts";
+import { shapeManualText, shapeVendedorText, splitDraftParts } from "@/lib/drafts/parts";
 import { sendTracked } from "@/lib/meta/send";
 import { decryptToken } from "@/lib/meta/oauth";
 import { channelOffCode, channelOffMessage, isChannelOffError, type ChannelOffCode } from "@/lib/channels/status";
@@ -66,10 +69,12 @@ export async function createDraft(input: {
   now?: Date;
 }): Promise<{ ok: true; draft: { id: string; status: string; expiresAt: Date | null } } | DraftFailure> {
   const now = input.now ?? new Date();
-  const text = input.text.trim();
-  if (!text || text.length > MAX_DRAFT_TEXT) {
+  const raw = input.text.trim();
+  if (!raw || raw.length > MAX_DRAFT_TEXT) {
     return { ok: false, status: 400, code: "invalid", error: `Text must have 1 to ${MAX_DRAFT_TEXT} characters` };
   }
+  // 28/10/2026: o texto vira 1 a 3 partes curtas (linha em branco entre elas).
+  const text = (input.origin === "vendedor" ? shapeVendedorText(raw) : shapeManualText(raw)).slice(0, MAX_DRAFT_TEXT);
 
   const contact = await prisma.contact.findFirst({
     where: { id: input.contactId, workspaceId: input.workspaceId },
@@ -135,15 +140,17 @@ export async function editDraft(input: {
   id: string;
   text?: string;
   reason?: string | null;
+  /** "vendedor" (chave de API): divide em partes como no createDraft. Pessoa: só respeita o que ela digitou. */
+  origin?: "vendedor" | "manual";
   now?: Date;
 }): Promise<{ ok: true } | DraftFailure> {
   const data: { text?: string; reason?: string | null; editedAt: Date } = { editedAt: input.now ?? new Date() };
   if (input.text !== undefined) {
-    const text = input.text.trim();
-    if (!text || text.length > MAX_DRAFT_TEXT) {
+    const raw = input.text.trim();
+    if (!raw || raw.length > MAX_DRAFT_TEXT) {
       return { ok: false, status: 400, code: "invalid", error: `Text must have 1 to ${MAX_DRAFT_TEXT} characters` };
     }
-    data.text = text;
+    data.text = (input.origin === "vendedor" ? shapeVendedorText(raw) : shapeManualText(raw)).slice(0, MAX_DRAFT_TEXT);
   }
   if (input.reason !== undefined) data.reason = input.reason?.trim().slice(0, MAX_DRAFT_REASON) || null;
 
@@ -196,7 +203,13 @@ export type Approval = {
    */
   expectedText?: string;
   now?: Date;
+  /** Testes: pausa entre as partes (padrão: setTimeout de verdade). */
+  sleep?: (ms: number) => Promise<void>;
+  /** Testes: sorteio do ritmo. */
+  rng?: Sorteio;
 };
+
+const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function sameText(a: string, b: string): boolean {
   return a.replace(/\r\n/g, "\n").trim() === b.replace(/\r\n/g, "\n").trim();
@@ -278,48 +291,74 @@ export async function approveAndSend(
     return { ok: false, status: 400, code: "no_token", error };
   }
 
-  let sentMid: string | null = null;
+  // 28/10/2026: o rascunho sai em 1 a 3 DMs curtas, com pausa humana (1 a 4 s) e "digitando"
+  // entre elas. Quem aprovou aprovou o conjunto; cada parte é uma DM no ledger.
+  const parts = splitDraftParts(text);
+  const toSend = parts.length > 0 ? parts : [text];
+  const sleep = input.sleep ?? realSleep;
+  let accessToken: string;
   try {
-    const accessToken = decryptToken(draft.instagramAccount.accessToken);
-    const result = await sendTracked(
-      {
-        workspaceId: draft.workspaceId,
-        instagramAccountId: draft.instagramAccountId,
-        contactIgUserId: draft.contact.igUserId,
-        origin: "draft",
-        refId: draft.id,
-        text,
-      },
-      (options) =>
-        sendDirectMessage(accessToken, draft.instagramAccount.instagramId, draft.contact.igUserId, text, options)
-    );
-    sentMid = result?.message_id ?? null;
+    accessToken = decryptToken(draft.instagramAccount.accessToken);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Send failed";
+    await prisma.draftReply.update({ where: { id: draft.id }, data: { status: "FAILED", error: message.slice(0, 1000) } });
+    return { ok: false, status: 502, code: "send_failed", error: message };
+  }
+  const sent = await sendDmParts({
+    parts: toSend,
+    sleep,
+    rng: input.rng,
+    typing: () => sendTypingIndicator(accessToken, draft.instagramAccount.instagramId, draft.contact.igUserId, "typing_on"),
+    send: (partText) =>
+      sendTracked(
+        {
+          workspaceId: draft.workspaceId,
+          instagramAccountId: draft.instagramAccountId,
+          contactIgUserId: draft.contact.igUserId,
+          origin: "draft",
+          refId: draft.id,
+          text: partText,
+        },
+        (options) =>
+          sendDirectMessage(accessToken, draft.instagramAccount.instagramId, draft.contact.igUserId, partText, options)
+      ),
+  });
+  const mids = sent.mids;
+  const sentMid = sent.lastMid;
+  const plan = toSend;
+  if (sent.failure) {
+    const { index: i, error } = sent.failure;
+    const partial = i > 0 ? ` Enviou ${i} de ${plan.length} partes antes disso.` : "";
+    const message = error instanceof Error ? error.message : "Send failed";
     if (isChannelOffError(error)) {
-      // Turned off between the check and the send: nothing went out, so the
-      // draft goes back to PENDING (same text, approval cleared).
-      await prisma.draftReply.update({
-        where: { id: draft.id },
-        data: { status: "PENDING", approvedBy: null, approvedVia: null, approvedTokenId: null, approvedAt: null },
-      });
-      return { ok: false, status: 409, code: error.code, error: error.message };
+      if (i === 0) {
+        // Turned off between the check and the send: nothing went out, so the
+        // draft goes back to PENDING (same text, approval cleared).
+        await prisma.draftReply.update({
+          where: { id: draft.id },
+          data: { status: "PENDING", approvedBy: null, approvedVia: null, approvedTokenId: null, approvedAt: null },
+        });
+        return { ok: false, status: 409, code: error.code, error: error.message };
+      }
+      const text2 = `${error.message}${partial}`.slice(0, 1000);
+      await prisma.draftReply.update({ where: { id: draft.id }, data: { status: "FAILED", error: text2, sentMid } });
+      return { ok: false, status: 409, code: error.code, error: text2 };
     }
     if (isWindowClosedError(error)) {
-      const text = `${windowClosedMessage(windowClosesAt(draft.contact))} (Meta: ${message})`.slice(0, 1000);
-      await prisma.draftReply.update({ where: { id: draft.id }, data: { status: "EXPIRED", error: text } });
-      return { ok: false, status: 409, code: "window_closed", error: text };
+      const text2 = `${windowClosedMessage(windowClosesAt(draft.contact))} (Meta: ${message})${partial}`.slice(0, 1000);
+      await prisma.draftReply.update({ where: { id: draft.id }, data: { status: "EXPIRED", error: text2, sentMid } });
+      return { ok: false, status: 409, code: "window_closed", error: text2 };
     }
     if (isAmbiguousDeliveryError(error)) {
-      const text = "Meta answered with an unknown error; the message may have been delivered. Check the Direct before sending again.";
-      await prisma.draftReply.update({ where: { id: draft.id }, data: { status: "FAILED", error: text } });
-      return { ok: false, status: 502, code: "maybe_sent", error: text };
+      const text2 = `Meta answered with an unknown error; the message may have been delivered. Check the Direct before sending again.${partial}`;
+      await prisma.draftReply.update({ where: { id: draft.id }, data: { status: "FAILED", error: text2, sentMid } });
+      return { ok: false, status: 502, code: "maybe_sent", error: text2 };
     }
     await prisma.draftReply.update({
       where: { id: draft.id },
-      data: { status: "FAILED", error: message.slice(0, 1000) },
+      data: { status: "FAILED", error: `${message}${partial}`.slice(0, 1000), sentMid },
     });
-    return { ok: false, status: 502, code: "send_failed", error: message };
+    return { ok: false, status: 502, code: "send_failed", error: `${message}${partial}` };
   }
 
   await prisma.draftReply.update({
@@ -339,7 +378,7 @@ export async function approveAndSend(
       refId: draft.id,
       occurredAt: now,
       text,
-      meta: { origin: draft.origin, approvedBy: input.approvedBy, approvedVia: input.approvedVia, mid: sentMid },
+      meta: { origin: draft.origin, approvedBy: input.approvedBy, approvedVia: input.approvedVia, mid: sentMid, parts: plan.length, mids },
     }
   ).catch(() => false);
   return { ok: true, draft: { id: draft.id, status: "SENT", sentMid } };

@@ -18,6 +18,7 @@ import {
   DRAFT_STATUS_COLORS,
   DRAFT_STATUS_LABELS,
   DraftCard,
+  DraftParts,
   TakeoverChip,
   type Draft,
 } from "@/components/messaging-ui";
@@ -203,6 +204,7 @@ export default function ApprovalsPage() {
                   </span>
                 </div>
                 <p className="whitespace-pre-wrap break-words text-sm">{d.text}</p>
+                {d.text.includes("\n\n") && <DraftParts text={d.text} />}
                 <p className="text-xs text-muted" title={dateTime(d.sentAt ?? d.approvedAt ?? d.updatedAt)}>
                   {d.status === "SENT" || d.status === "APPROVED"
                     ? d.approvedVia === "mcp"

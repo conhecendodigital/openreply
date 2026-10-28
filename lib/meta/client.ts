@@ -262,6 +262,33 @@ async function postMessage(
   }
 }
 
+/**
+ * "Digitando..." (sender_action typing_on). Confirmado na doc oficial da Meta
+ * (Instagram API with Instagram Login > Messaging API > Sender Actions, lida em
+ * 28/10/2026): POST /<IG_ID>/messages com só `recipient` e `sender_action`
+ * ("typing_on" | "typing_off" | "mark_seen"); só aparece se a pessoa estiver
+ * com o app aberto. É um enfeite: qualquer erro é engolido e NUNCA impede a DM.
+ * Desliga com META_TYPING_INDICATOR=0.
+ */
+export async function sendTypingIndicator(
+  accessToken: string,
+  instagramAccountId: string,
+  userId: string,
+  action: "typing_on" | "typing_off" = "typing_on"
+): Promise<boolean> {
+  if (process.env.META_TYPING_INDICATOR === "0") return false;
+  try {
+    const response = await fetch(`${graphBaseFor(accessToken)}/${instagramAccountId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ recipient: { id: userId }, sender_action: action }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 function buttonTemplate(text: string, buttons: unknown[]) {
   return {
     attachment: {
@@ -404,6 +431,34 @@ export async function getUserProfile(
     name: clean(data?.name),
     profilePic: clean(data?.profile_pic),
   };
+}
+
+/**
+ * Números oficiais de quem mandou DM (User Profile API, doc da Meta lida em 28/10/2026):
+ * GET /<IGSID>?fields=follower_count,is_user_follow_business com instagram_business_basic +
+ * instagram_business_manage_messages. Só responde para quem deu consentimento (mandou DM ou tocou
+ * num botão). Sem foto, sem mídia. Em token de Página do Facebook devolve nulos (não suportado aqui).
+ * Qualquer erro vira nulos: o vendedor segue sem o dado.
+ */
+export async function getUserProfileMetrics(
+  accessToken: string,
+  igsid: string
+): Promise<{ followerCount: number | null; followsBusiness: boolean | null; ok: boolean }> {
+  if (isFacebookPageToken(accessToken)) return { followerCount: null, followsBusiness: null, ok: false };
+  try {
+    const url = new URL(`${instagramGraphBase()}/${encodeURIComponent(igsid)}`);
+    url.searchParams.set("fields", "follower_count,is_user_follow_business");
+    const data = await handleResponse<{ follower_count?: number; is_user_follow_business?: boolean }>(
+      await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } })
+    );
+    return {
+      followerCount: typeof data?.follower_count === "number" ? data.follower_count : null,
+      followsBusiness: typeof data?.is_user_follow_business === "boolean" ? data.is_user_follow_business : null,
+      ok: true,
+    };
+  } catch {
+    return { followerCount: null, followsBusiness: null, ok: false };
+  }
 }
 
 export interface InstagramStory {

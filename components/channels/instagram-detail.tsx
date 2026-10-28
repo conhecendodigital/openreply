@@ -12,6 +12,7 @@ import { useDateTime, useTimeAgo } from "@/components/contact-ui";
 import { channelAlertText, isSeriousAlert } from "@/components/channel-alert-banner";
 import { useLang, useT } from "@/components/lang-provider";
 import { buildPermissionPanel } from "@/lib/meta/permissions";
+import { VendedorAutoPanel } from "@/components/channels/vendedor-auto";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import {
   STATUS_LABEL,
@@ -352,6 +353,8 @@ export function InstagramChannelDetail({
           </div>
         )}
       </div>
+
+      {card.status === "ACTIVE" && <VendedorAutoPanel accountId={card.id} canManage={canManage} />}
 
       {role === "OWNER" && <DeleteForReal card={card} onDeleted={onChanged} />}
     </article>

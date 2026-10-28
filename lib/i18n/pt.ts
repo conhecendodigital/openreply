@@ -20,6 +20,7 @@ import { ptCanais } from "@/lib/i18n/pt-canais";
 import { ptWaRegras } from "@/lib/i18n/pt-wa-regras";
 import { ptWaLeads } from "@/lib/i18n/pt-wa-leads";
 import { ptWaPalavra } from "@/lib/i18n/pt-wa-palavra";
+import { ptVendedor } from "@/lib/i18n/pt-vendedor";
 import { ptFacebook } from "@/lib/i18n/pt-facebook";
 import { ptTiktok } from "@/lib/i18n/pt-tiktok";
 import { ptTiktokSite } from "@/lib/i18n/pt-tiktok-site";
@@ -41,6 +42,7 @@ export const pt: Record<string, string> = {
   ...ptSecoes,
   ...ptAbas,
   ...ptWaPalavra,
+  ...ptVendedor,
   ...ptFacebook,
   ...ptTiktok,
   ...ptTiktokSite,

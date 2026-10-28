@@ -73,7 +73,7 @@ export function mensagemTeto(m: MotivoTeto | "limite_auto"): string {
 }
 
 export async function conferirTeto(
-  store: AgentStore,
+  store: Pick<AgentStore, "gastoDoDia">,
   input: { ownerUserId: string; workspaceId: string; dailyCap: number; custoPrevistoUsdMicro: number; now: Date; timeZone?: string },
   limites: Limites
 ): Promise<{ ok: true } | { ok: false; motivo: MotivoTeto }> {

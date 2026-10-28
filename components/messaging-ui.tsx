@@ -238,6 +238,30 @@ export function TakeoverChip({ takeover }: { takeover: TakeoverState | null | un
  * approval (it sends the edited text). Shows a clear warning when the 24-hour
  * window closed, since Instagram then refuses the message.
  */
+/** As partes que vão sair: uma DM por bolha, na ordem (a linha em branco separa). Só aparece com 2 ou 3 partes. */
+export function DraftParts({ text }: { text: string }) {
+  const t = useT();
+  const parts = text
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  const shown = parts.length > 3 ? [...parts.slice(0, 2), parts.slice(2).join("\n")] : parts;
+  return (
+    <div className="mt-2 space-y-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+        {t("Goes out as {n} messages, one after another", { n: shown.length })}
+      </p>
+      {shown.map((p, i) => (
+        <p key={i} className="max-w-[85%] whitespace-pre-wrap break-words rounded-3xl bg-surface-hover px-3.5 py-1.5 text-sm text-foreground">
+          {p}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function DraftCard({
   draft,
   onDone,
@@ -350,6 +374,7 @@ export function DraftCard({
         className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
       />
       {tooLong && <p className="mt-1 text-[11px] text-error">{t("At most 1000 characters")}</p>}
+      <DraftParts text={text} />
 
       {!windowOpen && (
         <p className="mt-2 rounded-lg bg-warning/10 px-3 py-2 text-xs text-foreground">

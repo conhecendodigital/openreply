@@ -24,6 +24,8 @@ export const OUTBOUND_ORIGINS = [
   "flow",
   // Etapa 5: a broadcast (refId = BroadcastRecipient.id). Never a message tag.
   "broadcast",
+  // 28/10/2026: o vendedor do Instagram no modo automático (refId = VendedorIgLog.id).
+  "vendedor_auto",
 ] as const;
 export type OutboundOrigin = (typeof OUTBOUND_ORIGINS)[number];
 
