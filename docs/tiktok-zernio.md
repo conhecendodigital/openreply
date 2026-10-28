@@ -9,6 +9,7 @@ O app de TikTok do Lead Engine não foi auditado pelo TikTok: em produção só 
 | `TIKTOK_VIA_ZERNIO=1` | Liga o modo. Sem ela, tudo continua como antes. |
 | `ZERNIO_API_KEY` | Chave da API da Zernio. Nunca no código, no log nem no navegador. |
 | `ZERNIO_TIKTOK_ACCOUNT_ID` | `accountId` da conta TikTok na Zernio (`GET /accounts`). Conta do Matheus: `6ae0f0d1f4ab38f6b78845ca` (omatheus.ai). |
+| `ZERNIO_OWNER_WORKSPACE_ID` | Id do workspace do dono. A conta única acima só vale para ele; sem esta variável nenhum workspace usa a conta única (falha fechado). Outros workspaces precisam de `ZERNIO_TIKTOK_ACCOUNT_MAP`. |
 | `ZERNIO_TIKTOK_ACCOUNT_MAP` | Opcional, para mais de uma conta: JSON `{"<id da SocialAccount ou username>": "<accountId da Zernio>"}`. Tem prioridade sobre a variável acima. |
 | `ZERNIO_FORCE_PRESIGN=1` | Opcional. Sempre envia o vídeo para a Zernio por upload (`/media/presign`) em vez de passar a URL. Sem ela, o provider passa a URL do nosso armazenamento e só usa o upload se a Zernio recusar a URL. |
 

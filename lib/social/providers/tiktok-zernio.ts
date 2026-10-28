@@ -29,7 +29,7 @@ function setupProblem(post: ProviderPost): ReadyProblem | null {
   const account = post.socialAccount;
   if (!account || account.status === "DISCONNECTED") return { message: "Pick a connected TikTok account first", code: "needs_reconnect" };
   if (!zernioApiKey()) return { message: "TikTok publishing through Zernio is not configured on this server (ZERNIO_API_KEY)", code: "zernio_not_configured" };
-  if (!zernioAccountIdFor(account)) return { message: "This TikTok account is not linked to a Zernio account (ZERNIO_TIKTOK_ACCOUNT_ID)", code: "zernio_account_missing" };
+  if (!zernioAccountIdFor(account, post.workspaceId)) return { message: "Conecte seu TikTok: esta conta ainda não está ligada a uma conta de publicação", code: "zernio_account_missing" };
   return null;
 }
 
@@ -82,7 +82,7 @@ export const tiktokZernioProvider: SocialProvider = {
     if ("problem" in checked) return checked.problem;
     if (checkRemote) {
       try {
-        const accountId = zernioAccountIdFor(post.socialAccount)!;
+        const accountId = zernioAccountIdFor(post.socialAccount, post.workspaceId)!;
         const dry = await dryRunTikTokPost(inputFor(post, checked.settings, post.mediaUrl, accountId));
         if (!dry.canPublish) return { message: "Zernio says this post cannot be published right now", code: "zernio_rejected" };
       } catch (error) {
@@ -107,7 +107,7 @@ export const tiktokZernioProvider: SocialProvider = {
     if (setup) throw new Error(setup.message);
     const checked = settingsProblemZernio(post.settings);
     if ("problem" in checked) throw new Error(checked.problem.message);
-    const accountId = zernioAccountIdFor(post.socialAccount)!;
+    const accountId = zernioAccountIdFor(post.socialAccount, post.workspaceId)!;
 
     let mediaUrl = post.mediaUrl;
     const filename = mediaUrl.split("?")[0].split("/").pop() || "video.mp4";

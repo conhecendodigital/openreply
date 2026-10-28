@@ -13,7 +13,7 @@ import { normalizeSettings, privacyLabel, validateComposer, emptySettings, type 
 
 const KEY = "zk_test_SECRET_1234567890abcdef";
 const BASE = "https://midia.example.com/bucket";
-const ENV_KEYS = ["TIKTOK_VIA_ZERNIO", "ZERNIO_API_KEY", "ZERNIO_TIKTOK_ACCOUNT_ID", "ZERNIO_TIKTOK_ACCOUNT_MAP", "ZERNIO_FORCE_PRESIGN", "MEDIA_S3_ENDPOINT", "MEDIA_S3_BUCKET", "MEDIA_S3_ACCESS_KEY", "MEDIA_S3_SECRET_KEY", "MEDIA_PUBLIC_BASE_URL"];
+const ENV_KEYS = ["TIKTOK_VIA_ZERNIO", "ZERNIO_API_KEY", "ZERNIO_TIKTOK_ACCOUNT_ID", "ZERNIO_OWNER_WORKSPACE_ID", "ZERNIO_TIKTOK_ACCOUNT_MAP", "ZERNIO_FORCE_PRESIGN", "MEDIA_S3_ENDPOINT", "MEDIA_S3_BUCKET", "MEDIA_S3_ACCESS_KEY", "MEDIA_S3_SECRET_KEY", "MEDIA_PUBLIC_BASE_URL"];
 const saved: Record<string, string | undefined> = {};
 
 const settings = (over: Record<string, unknown> = {}) => ({
@@ -51,6 +51,7 @@ beforeEach(() => {
   process.env.TIKTOK_VIA_ZERNIO = "1";
   process.env.ZERNIO_API_KEY = KEY;
   process.env.ZERNIO_TIKTOK_ACCOUNT_ID = "acc_zernio_1";
+  process.env.ZERNIO_OWNER_WORKSPACE_ID = "w1";
   delete process.env.ZERNIO_TIKTOK_ACCOUNT_MAP;
   delete process.env.ZERNIO_FORCE_PRESIGN;
   process.env.MEDIA_S3_ENDPOINT = "https://s3.example.com";
@@ -254,11 +255,41 @@ describe("readyProblem", () => {
     delete process.env.ZERNIO_TIKTOK_ACCOUNT_ID;
     expect((await tiktokZernioProvider.readyProblem(post(), { checkRemote: false }))?.code).toBe("zernio_account_missing");
     process.env.ZERNIO_TIKTOK_ACCOUNT_ID = "acc";
+    process.env.ZERNIO_OWNER_WORKSPACE_ID = "w1";
     expect((await tiktokZernioProvider.readyProblem(post({ settings: settings({ privacyLevel: "FOLLOWER_OF_CREATOR" }) }), { checkRemote: false }))?.code).toBe("privacy_not_allowed");
     expect((await tiktokZernioProvider.readyProblem(post({ settings: settings({ commercial: { enabled: true, yourBrand: true, brandedContent: false } }) }), { checkRemote: false }))?.code).toBe("invalid_settings");
     expect((await tiktokZernioProvider.readyProblem(post({ mediaContentType: "video/webm" }), { checkRemote: false }))?.code).toBe("invalid_media");
     expect((await tiktokZernioProvider.readyProblem(post({ mediaUrl: "https://evil.example.com/v.mp4" }), { checkRemote: false }))?.code).toBe("invalid_media");
     expect((await tiktokZernioProvider.readyProblem(post({ socialAccount: null }), { checkRemote: false }))?.code).toBe("needs_reconnect");
+  });
+});
+
+describe("isolamento por workspace", () => {
+  it("dono (w1) usa a conta única", async () => {
+    fetchMock.mockResolvedValueOnce(json(201, { id: "zp_o" }));
+    await tiktokZernioProvider.publish(post(), ctx());
+    expect(calls()[0].body.platforms[0].accountId).toBe("acc_zernio_1");
+  });
+  it("outro workspace NÃO cai na conta do dono: erro 'conecte seu TikTok' e nenhuma chamada", async () => {
+    const other = post({ workspaceId: "w2" });
+    expect((await tiktokZernioProvider.readyProblem(other, { checkRemote: false }))?.code).toBe("zernio_account_missing");
+    expect((await tiktokZernioProvider.readyProblem(other, { checkRemote: false }))?.message).toMatch(/Conecte seu TikTok/);
+    await expect(tiktokZernioProvider.publish(other, ctx())).rejects.toThrow(/Conecte seu TikTok/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("sem ZERNIO_OWNER_WORKSPACE_ID falha fechado até para w1", async () => {
+    delete process.env.ZERNIO_OWNER_WORKSPACE_ID;
+    expect((await tiktokZernioProvider.readyProblem(post(), { checkRemote: false }))?.code).toBe("zernio_account_missing");
+  });
+  it("outro workspace com mapeamento próprio publica na conta mapeada", async () => {
+    process.env.ZERNIO_TIKTOK_ACCOUNT_MAP = JSON.stringify({ sa9: "acc_cliente" });
+    fetchMock.mockResolvedValueOnce(json(201, { id: "zp_c" }));
+    await tiktokZernioProvider.publish(post({ workspaceId: "w2", socialAccount: { id: "sa9", username: "cliente", status: "ACTIVE", platform: "TIKTOK" } as never }), ctx());
+    expect(calls()[0].body.platforms[0].accountId).toBe("acc_cliente");
+  });
+  it("mapa inválido não vira fallback para outro workspace", async () => {
+    process.env.ZERNIO_TIKTOK_ACCOUNT_MAP = "{quebrado";
+    expect((await tiktokZernioProvider.readyProblem(post({ workspaceId: "w2" }), { checkRemote: false }))?.code).toBe("zernio_account_missing");
   });
 });
 
