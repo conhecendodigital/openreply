@@ -31,6 +31,8 @@ export type VendedorConfig = {
   enabled: boolean;
   offerFacts: string;
   socialProof: string;
+  /** Lições do dono (até 2000 caracteres). Vazio = padrão (DEFAULT_LICOES). */
+  licoes: string;
   minGapSeconds: number;
   maxPerHour: number;
   maxPerDay: number;
@@ -48,6 +50,7 @@ export function defaultConfig(instagramAccountId: string, workspaceId: string): 
     enabled: false,
     offerFacts: "",
     socialProof: "",
+    licoes: "",
     minGapSeconds: 5,
     maxPerHour: 12,
     maxPerDay: 60,
@@ -91,6 +94,10 @@ export function validarPatch(body: Record<string, unknown>): { ok: true; patch: 
       if (typeof body[k] !== "string" || (body[k] as string).length > 6000) return { ok: false, error: `${k}: texto de até 6000 caracteres` };
       patch[k] = (body[k] as string).trim();
     }
+  }
+  if ("licoes" in body) {
+    if (typeof body.licoes !== "string" || body.licoes.length > 2000) return { ok: false, error: "licoes: texto de até 2000 caracteres" };
+    patch.licoes = body.licoes.trim();
   }
   const nums: [keyof ConfigPatch, number, number][] = [
     ["minGapSeconds", 5, 600],

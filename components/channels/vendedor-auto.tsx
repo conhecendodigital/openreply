@@ -8,12 +8,14 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "@/components/lang-provider";
+import { VendedorFichas } from "@/components/channels/vendedor-fichas";
 import { channelBtnPrimary, channelBtnSecondary } from "@/components/channels/types";
 
 type Config = {
   enabled: boolean;
   offerFacts: string;
   socialProof: string;
+  licoes: string;
   minGapSeconds: number;
   maxPerHour: number;
   maxPerDay: number;
@@ -24,7 +26,7 @@ type Config = {
   quietEnd: string | null;
 };
 type Today = { enviadas: number; mensagensEnviadas: number; rascunhos: number; puladas: number; paradas: number; erros: number; gastoUsd: number; porMotivo: { motivo: string; total: number }[] };
-type Payload = { config: Config; envDisabled: boolean; defaultOfferFacts: string; today?: Today };
+type Payload = { config: Config; envDisabled: boolean; defaultOfferFacts: string; defaultLicoes: string; today?: Today };
 
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50";
 
@@ -148,6 +150,17 @@ export function VendedorAutoPanel({ accountId, canManage }: { accountId: string;
         <textarea rows={3} value={form.socialProof} onChange={(e) => setForm({ ...form, socialProof: e.target.value })} disabled={!canManage} className={field} />
       </label>
 
+      <label className="block text-xs text-muted">
+        {t("Seller lessons (short rules from you: what to avoid, what to repeat; up to 2000 characters)")}
+        <textarea
+          rows={6}
+          maxLength={2000}
+          value={form.licoes || data.defaultLicoes}
+          onChange={(e) => setForm({ ...form, licoes: e.target.value })}
+          disabled={!canManage}
+          className={field}
+        />
+      </label>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {num("minGapSeconds", "Seconds between conversations")}
         {num("maxPerHour", "Max per hour")}
@@ -174,6 +187,8 @@ export function VendedorAutoPanel({ accountId, canManage }: { accountId: string;
           {msg && <span className="text-xs text-muted">{t(msg)}</span>}
         </div>
       )}
+
+      <VendedorFichas accountId={accountId} canManage={canManage} />
     </section>
   );
 }
