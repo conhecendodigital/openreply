@@ -83,7 +83,29 @@ function linhaDaMensagem(m: StoredMessage): string {
   return `${quem}: ${corpo}`;
 }
 
-export type ExtrasVariaveis = { ficha?: string; aberturas?: string[]; exemplos?: ExemploVendedor[] };
+export type ExtrasVariaveis = { ficha?: string; aberturas?: string[]; exemplos?: ExemploVendedor[]; modo?: "normal" | "retomada" };
+
+/** Pedido que vai no lugar da "última mensagem da pessoa" quando o modo é retomada. */
+export const MENSAGEM_RETOMADA = "(retomada: a pessoa não respondeu à nossa última mensagem. Escreva a mensagem de continuação.)";
+
+/**
+ * Modo retomada (29/10/2026): a última mensagem da conversa é NOSSA (o fluxo mandou a oferta) e a pessoa não respondeu.
+ * Vale no lugar das regras 2 (1 a 3 partes), 9, 12, 13 e 22 enquanto este bloco estiver presente.
+ */
+export const BLOCO_RETOMADA = `MODO RETOMADA (vale por cima das regras 2, 9, 12, 13 e 22 desta vez):
+- A última mensagem da conversa é NOSSA (o fluxo automático mandou a oferta) e a pessoa não respondeu ou parou no meio. Você puxa a conversa de novo, de leve, como o Matheus faria horas depois.
+- Esta é a primeira mensagem sua pra essa pessoa. NÃO se apresente e NÃO repita o texto do fluxo. Parta do que ela recebeu ou clicou (veja as etiquetas do cartão, como teste-gemini-video-curto, o Reel que comentou e a ficha) e escreva uma continuação natural, ligada ao interesse dela.
+- 1 a 2 partes curtas e UMA pergunta, só na última parte. Sem preço, sem link, sem pressão ("viu minha mensagem?", "última chance"). Varie a abertura.
+- Se o cartão e a conversa não dão nenhum gancho real, use passar_pro_dono: true em vez de inventar.`;
+
+/** Travas extras da retomada: sem preço, sem link, no máximo 2 partes. Qualquer uma vira rascunho. */
+export function violacoesDeRetomada(texto: string, partes: number): string[] {
+  const v: string[] = [];
+  if (/R\$|\b\d+\s*x\s*de\b|\b(pre[cç]o|pix|[aà] vista|parcela)/i.test(texto)) v.push("retomada falou de preço (não pode)");
+  if (/https?:\/\/|www\.|\.com\b|\.com\.br/i.test(texto)) v.push("retomada mandou link (não pode)");
+  if (partes > 2) v.push("retomada com mais de 2 partes");
+  return v;
+}
 
 export function sistemaVariavel(cartao: string, mensagens: StoredMessage[], nome: string | null, extras: ExtrasVariaveis = {}): string {
   const conversa = mensagens.map(linhaDaMensagem).join("\n");
@@ -92,6 +114,7 @@ export function sistemaVariavel(cartao: string, mensagens: StoredMessage[], nome
     extras.ficha ?? "",
     blocoExemplos(extras.exemplos ?? []),
     blocoAberturas(extras.aberturas ?? []),
+    extras.modo === "retomada" ? BLOCO_RETOMADA : "",
     nome ? `Nome da pessoa: ${nome.split(/\s+/)[0]} (use de vez em quando, não em toda mensagem).` : "",
     `CONVERSA (da mais antiga pra mais nova; a última linha é a que você vai responder):\n${blocoDeDados("conversa", conversa)}`,
   ]

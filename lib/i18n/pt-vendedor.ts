@@ -47,4 +47,12 @@ export const ptVendedor: Record<string, string> = {
   "quiz": "quiz",
   "official profile": "perfil oficial",
   "you": "você",
+  "Follow-up": "Retomada",
+  "When the flow sent the offer and the person did not answer, the seller starts the conversation once, after the hours below, only inside the 24-hour window. Off by default.":
+    "Quando o fluxo mandou a oferta e a pessoa não respondeu, o vendedor puxa a conversa uma vez, depois das horas abaixo, só dentro da janela de 24 horas. Vem desligada.",
+  "Turn the follow-up on? The seller will message people who did not answer the flow.": "Ligar a retomada? O vendedor vai chamar quem não respondeu ao fluxo.",
+  "Turn on the follow-up": "Ligar a retomada",
+  "Turn off the follow-up": "Desligar a retomada",
+  "Hours before following up": "Horas até retomar",
+  "Max follow-ups per hour": "Máximo de retomadas por hora",
 };

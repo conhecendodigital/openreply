@@ -24,6 +24,9 @@ type Config = {
   replyDelayMaxSec: number;
   quietStart: string | null;
   quietEnd: string | null;
+  retomadaEnabled: boolean;
+  retomadaHoras: number;
+  retomadaMaxPorHora: number;
 };
 type Today = { enviadas: number; mensagensEnviadas: number; rascunhos: number; puladas: number; paradas: number; erros: number; gastoUsd: number; porMotivo: { motivo: string; total: number }[] };
 type Payload = { config: Config; envDisabled: boolean; defaultOfferFacts: string; defaultLicoes: string; today?: Today };
@@ -121,6 +124,37 @@ export function VendedorAutoPanel({ accountId, canManage }: { accountId: string;
       ) : (
         <p className="text-xs text-muted">{t("Only owners and admins can change this.")}</p>
       )}
+
+      <div className="space-y-2 rounded-lg border border-border p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h4 className="text-xs font-semibold">{t("Follow-up")}</h4>
+            <p className="text-xs text-muted">
+              {t("When the flow sent the offer and the person did not answer, the seller starts the conversation once, after the hours below, only inside the 24-hour window. Off by default.")}
+            </p>
+          </div>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${data.config.retomadaEnabled ? "bg-success/10 text-success" : "bg-surface-hover text-muted"}`}>
+            {data.config.retomadaEnabled ? t("On") : t("Off")}
+          </span>
+        </div>
+        {canManage && (
+          <button
+            type="button"
+            disabled={busy}
+            className={data.config.retomadaEnabled ? channelBtnSecondary : channelBtnPrimary}
+            onClick={() => {
+              if (!data.config.retomadaEnabled && !window.confirm(t("Turn the follow-up on? The seller will message people who did not answer the flow."))) return;
+              void save({ retomadaEnabled: !data.config.retomadaEnabled }, data.config.retomadaEnabled ? "Turned off." : "Turned on.");
+            }}
+          >
+            {data.config.retomadaEnabled ? t("Turn off the follow-up") : t("Turn on the follow-up")}
+          </button>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          {num("retomadaHoras", "Hours before following up")}
+          {num("retomadaMaxPorHora", "Max follow-ups per hour")}
+        </div>
+      </div>
 
       {data.today && (
         <p className="text-xs text-muted">
