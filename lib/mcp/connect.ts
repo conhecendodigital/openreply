@@ -9,8 +9,8 @@
 export type ConnectClient = "claude-code" | "codex";
 export type ConnectPlatform = "unix" | "windows";
 
-export const MCP_SERVER_NAME = "openreply";
-export const MCP_KEY_ENV = "OPENREPLY_API_KEY";
+export const MCP_SERVER_NAME = "leadengine";
+export const MCP_KEY_ENV = "LEADENGINE_API_KEY";
 
 const KEY_RE = /^or_[A-Za-z0-9_-]{20,}$/;
 
@@ -79,14 +79,14 @@ function codexUnix(url: string, token: string): string {
   return `#!/bin/bash
 # Lead Engine: conecta o Codex ao seu workspace.
 # Este arquivo contém a sua chave. Não envie para ninguém e não cole no chat.
-mkdir -p "$HOME/.codex" "$HOME/.openreply"
-ENVFILE="$HOME/.openreply/mcp.env"
+mkdir -p "$HOME/.codex" "$HOME/.leadengine"
+ENVFILE="$HOME/.leadengine/mcp.env"
 umask 077
 printf 'export ${MCP_KEY_ENV}=%s\\n' '${token}' > "$ENVFILE"
 chmod 600 "$ENVFILE"
 for RC in "$HOME/.zshrc" "$HOME/.bashrc"; do
   [ -f "$RC" ] || continue
-  grep -q '.openreply/mcp.env' "$RC" || printf '\\n[ -f "$HOME/.openreply/mcp.env" ] && . "$HOME/.openreply/mcp.env"\\n' >> "$RC"
+  grep -q '.leadengine/mcp.env' "$RC" || printf '\\n[ -f "$HOME/.leadengine/mcp.env" ] && . "$HOME/.leadengine/mcp.env"\\n' >> "$RC"
 done
 CFG="$HOME/.codex/config.toml"
 if grep -q '^\\[mcp_servers\\.${MCP_SERVER_NAME}\\]' "$CFG" 2>/dev/null; then
