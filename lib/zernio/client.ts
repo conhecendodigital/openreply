@@ -56,7 +56,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   try {
     res = await fetch(`${ZERNIO_BASE_URL}${path}`, {
       method,
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "User-Agent": "openreply-zernio/1" },
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "User-Agent": "leadengine-zernio/1" },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

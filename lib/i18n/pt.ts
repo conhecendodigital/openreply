@@ -399,8 +399,8 @@ export const pt: Record<string, string> = {
   "No keys created here yet.": "Nenhuma chave criada aqui ainda.",
   "… · created": "… · criada",
   "· last used": "· último uso",
-  "A key is also set on the server (OPENREPLY_API_TOKEN). It keeps working until it is removed from the server environment.":
-    "Também existe uma chave no servidor (OPENREPLY_API_TOKEN). Ela continua valendo até ser tirada do ambiente do servidor.",
+  "A key is also set on the server. It keeps working until it is removed from the server environment.":
+    "Também existe uma chave no servidor. Ela continua valendo até ser tirada do ambiente do servidor.",
   "Key name, e.g. Claude on my Mac": "Nome da chave, ex.: Claude no meu Mac",
   "Create key": "Criar chave",
   "Creating...": "Criando...",

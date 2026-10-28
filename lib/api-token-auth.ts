@@ -29,7 +29,7 @@ export type ResolvedApiToken = {
 
 /** Scopes of the deploy-level key: OPENREPLY_API_TOKEN_SCOPES, comma separated. */
 function envTokenScopes(): string[] {
-  return (process.env.OPENREPLY_API_TOKEN_SCOPES ?? "")
+  return ((process.env.LEADENGINE_API_TOKEN_SCOPES ?? process.env.OPENREPLY_API_TOKEN_SCOPES) ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter((s): s is ApiTokenScope => (API_TOKEN_SCOPES as readonly string[]).includes(s));
@@ -47,8 +47,8 @@ export async function resolveApiToken(
   const token = extractBearer(authorization);
   if (!token || token.length < MIN_API_TOKEN_LENGTH) return null;
 
-  if (bearerMatches(authorization, process.env.OPENREPLY_API_TOKEN)) {
-    const email = process.env.OPENREPLY_API_USER_EMAIL;
+  if (bearerMatches(authorization, (process.env.LEADENGINE_API_TOKEN ?? process.env.OPENREPLY_API_TOKEN))) {
+    const email = (process.env.LEADENGINE_API_USER_EMAIL ?? process.env.OPENREPLY_API_USER_EMAIL);
     let userId: string | null = null;
     if (email) {
       const user = await prisma.user.findUnique({
