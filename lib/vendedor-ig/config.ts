@@ -29,7 +29,8 @@ VOCABULÁRIO: sempre "Comando" (nunca "prompt") e "habilidade" (nunca "skill"). 
  * Preço oficial (dono, 28/10/2026). Vale SEMPRE, mesmo que o documento de fatos salvo na tela não tenha esta linha.
  * Ordem de fala: primeiro o parcelado, depois o à vista, e só no fim da conversa.
  */
-export const PRECO_OFICIAL = "PREÇO OFICIAL: 12x de R$ 10,03 no cartão (fale este primeiro) ou R$ 97 à vista (fale depois, ou se a pessoa pedir à vista/Pix).";
+export const PRECO_OFICIAL =
+  "PREÇO OFICIAL: 12x de R$ 10,03 no cartão (fale este primeiro; no total dá R$ 120,36 por causa dos juros) ou R$ 97 à vista no Pix (fale depois, ou se a pessoa pedir à vista/Pix). Se a pessoa hesitar no parcelado, achar caro ou perguntar do Pix, mostre que o Pix sai mais em conta: R$ 97 contra R$ 120,36 no cartão, R$ 23,36 a menos. Não invente outro desconto.";
 
 /**
  * Base de ferramentas (estudo de 28/10/2026, páginas oficiais lidas). O vendedor SÓ afirma o que está aqui sobre
