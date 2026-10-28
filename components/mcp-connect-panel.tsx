@@ -179,7 +179,7 @@ export function McpConnectPanel() {
           <Step n={3}>{platform === "unix"
             ? t("Mac: open the Terminal, type chmod +x and drag the file in, press Enter, then run the file the same way. Or right-click the file and choose Open.")
             : t("Windows: right-click the .ps1 file and choose Run with PowerShell.")}</Step>
-          <Step n={4}>{t("Open Claude Code and type /mcp. The server openreply should appear as connected.")}</Step>
+          <Step n={4}>{t("Open Claude Code and type /mcp. The server leadengine should appear as connected.")}</Step>
         </ol>
         <button type="button" disabled={!data || busy === "claude-code"} onClick={() => void downloadFile("claude-code")} className={btn}>
           {busy === "claude-code" ? t("Creating...") : t("Download Claude Code file")}

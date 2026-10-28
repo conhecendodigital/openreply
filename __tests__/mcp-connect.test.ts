@@ -21,21 +21,21 @@ describe("arquivos de conexão do MCP", () => {
 
   it("Claude Code usa o comando documentado e leva a chave só no cabeçalho", () => {
     const sh = buildConnectFile("claude-code", "unix", URL_OK, token);
-    expect(sh).toContain(`claude mcp add --transport http --scope user openreply '${URL_OK}' --header 'Authorization: Bearer ${token}'`);
+    expect(sh).toContain(`claude mcp add --transport http --scope user leadengine '${URL_OK}' --header 'Authorization: Bearer ${token}'`);
     const ps = buildConnectFile("claude-code", "windows", URL_OK, token);
     expect(ps).toContain(`--header 'Authorization: Bearer ${token}'`);
   });
 
   it("Codex guarda a chave em variável de ambiente, nunca no config.toml", () => {
     const sh = buildConnectFile("codex", "unix", URL_OK, token);
-    expect(sh).toContain('bearer_token_env_var = "OPENREPLY_API_KEY"');
+    expect(sh).toContain('bearer_token_env_var = "LEADENGINE_API_KEY"');
     expect(sh).toContain(`url = "${URL_OK}"`);
     // a chave aparece uma vez só: no arquivo .env protegido
     expect(sh.split(token).length - 1).toBe(1);
     expect(sh).toContain("chmod 600");
     const ps = buildConnectFile("codex", "windows", URL_OK, token);
     expect(ps.split(token).length - 1).toBe(1);
-    expect(ps).toContain("SetEnvironmentVariable('OPENREPLY_API_KEY'");
+    expect(ps).toContain("SetEnvironmentVariable('LEADENGINE_API_KEY'");
   });
 
   it("os scripts de shell têm sintaxe válida", () => {

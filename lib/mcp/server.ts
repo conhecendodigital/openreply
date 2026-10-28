@@ -37,7 +37,7 @@ type Tool = {
 };
 
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
-const SERVER_INFO = { name: "openreply", version: "0.1.0" };
+const SERVER_INFO = { name: "leadengine", version: "0.1.0" };
 
 const str = { type: "string" };
 const bool = { type: "boolean" };

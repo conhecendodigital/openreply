@@ -21,7 +21,7 @@ export const ptMcp: Record<string, string> = {
   "Mac: open the Terminal, type chmod +x and drag the file in, press Enter, then run the file the same way. Or right-click the file and choose Open.":
     "Mac: abra o Terminal, digite chmod +x e arraste o arquivo pra lá, aperte Enter e rode o arquivo do mesmo jeito. Ou clique com o botão direito no arquivo e escolha Abrir.",
   "Windows: right-click the .ps1 file and choose Run with PowerShell.": "Windows: clique com o botão direito no arquivo .ps1 e escolha Executar com o PowerShell.",
-  "Open Claude Code and type /mcp. The server openreply should appear as connected.": "Abra o Claude Code e digite /mcp. O servidor openreply deve aparecer como conectado.",
+  "Open Claude Code and type /mcp. The server leadengine should appear as connected.": "Abra o Claude Code e digite /mcp. O servidor leadengine deve aparecer como conectado.",
   "Download Claude Code file": "Baixar arquivo do Claude Code",
   "Click the button to download the connection file (same system chosen above).": "Clique no botão pra baixar o arquivo de conexão (mesmo sistema escolhido acima).",
   "Run it. It saves the key in a protected file on your computer and adds the server to the Codex config.toml, with the key in an environment variable, never inside config.toml.":
