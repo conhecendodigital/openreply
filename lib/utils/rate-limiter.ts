@@ -246,6 +246,20 @@ export async function reserveBroadcastSlot(
 }
 
 /**
+ * Só LÊ o balde horário de respostas privadas (rate:dm:<instagramId>), sem
+ * reservar. Usado pelo "Resgatar comentários" pra se manter abaixo do teto da
+ * Meta sem disputar vaga com os webhooks. ttlMs = quando o balde zera.
+ */
+export async function dmBucketState(
+  instagramAccountId: string
+): Promise<{ count: number; max: number; ttlMs: number }> {
+  const client = getRedis();
+  const key = `rate:dm:${instagramAccountId}`;
+  const [raw, ttl] = await Promise.all([client.get(key), client.pttl(key).catch(() => -1)]);
+  return { count: raw ? Number.parseInt(raw, 10) || 0 : 0, max: RATE_LIMIT_MAX, ttlMs: ttl > 0 ? ttl : 0 };
+}
+
+/**
  * Backwards-compatible helper for tests and admin scripts.
  * Prefer reserveDMSlot in workers.
  */

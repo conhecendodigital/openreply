@@ -97,6 +97,8 @@ export interface InstagramComment {
   replies?: {
     data?: { id: string; from?: { id: string; username?: string } }[];
   };
+  /** Só em resposta a outro comentário (listAllMediaComments). */
+  parent_id?: string;
 }
 
 /** A comment as the Pages API returns it (message/created_time, from.name). */
@@ -771,6 +773,41 @@ export async function getRecentMediaComments(
   return results
     .filter((c) => !c.timestamp || Date.parse(c.timestamp) >= sinceMs)
     .slice(0, max);
+}
+
+/**
+ * Resgatar comentários (28/10/2026): TODOS os comentários de um post, do mais
+ * novo pro mais velho, sem filtro de data e sem pedir as respostas de cada um
+ * (payload menor: um reel com milhares de comentários). Só leitura. O corte de
+ * 7 dias é de quem chama. `truncated` = parou no teto `max` com mais páginas.
+ * Se a Meta falhar no meio, a função lança: quem chama não executa nada com
+ * uma leitura incompleta.
+ */
+export async function listAllMediaComments(
+  accessToken: string,
+  mediaId: string,
+  max = 20_000
+): Promise<{ comments: InstagramComment[]; truncated: boolean }> {
+  if (isFacebookPageToken(accessToken)) {
+    const comments = await getRecentMediaComments(accessToken, mediaId, 0, max);
+    return { comments, truncated: comments.length >= max };
+  }
+  const first = new URL(`${graphBaseFor(accessToken)}/${mediaId}/comments`);
+  first.searchParams.set("fields", "id,text,timestamp,from,parent_id");
+  first.searchParams.set("limit", "50");
+  first.searchParams.set("access_token", accessToken);
+  const comments: InstagramComment[] = [];
+  let nextUrl: string | null = first.toString();
+  while (nextUrl !== null && comments.length < max) {
+    const response: Response = await fetch(nextUrl);
+    const page = await handleResponse<{
+      data: (InstagramComment & { parent_id?: string })[];
+      paging?: { next?: string };
+    }>(response);
+    comments.push(...(page.data ?? []));
+    nextUrl = page.paging?.next ?? null;
+  }
+  return { comments: comments.slice(0, max), truncated: nextUrl !== null };
 }
 
 // --- Direct message inbox (Conversations API) ---------------------------

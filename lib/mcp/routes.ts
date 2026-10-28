@@ -81,6 +81,7 @@ import * as instagramAccountsRoute from "@/app/api/instagram/accounts/route";
 import * as instagramProfileRoute from "@/app/api/instagram/profile/route";
 import * as instagramStoriesRoute from "@/app/api/instagram/stories/route";
 import * as reportsExportRoute from "@/app/api/reports/export/route";
+import * as resgateRoute from "@/app/api/resgate/route";
 import * as reportsVendasRoute from "@/app/api/reports/vendas/route";
 import * as automationAbRoute from "@/app/api/automations/[id]/ab/route";
 import * as automationSequenceRoute from "@/app/api/automations/[id]/sequence/route";
@@ -173,6 +174,8 @@ export function resolveHandler(
     [/^\/api\/instagram\/stories$/, instagramStoriesRoute],
     [/^\/api\/reports\/export$/, reportsExportRoute],
     [/^\/api\/reports\/vendas$/, reportsVendasRoute],
+    // 28/10/2026: resgatar_comentarios (interruptor: RESGATE_DISABLED=1 / MCP_FLUXOS_DISABLED=1).
+    [/^\/api\/resgate$/, resgateRoute],
     [/^\/api\/automations\/([^/]+)\/ab$/, automationAbRoute],
     [/^\/api\/automations\/([^/]+)\/sequence$/, automationSequenceRoute],
   ];

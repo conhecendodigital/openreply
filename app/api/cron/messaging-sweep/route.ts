@@ -3,6 +3,7 @@ import { expireTakeovers } from "@/lib/messaging/takeover";
 import { expireDrafts } from "@/lib/drafts/drafts";
 import { expireWaitingEnrollments } from "@/lib/sequences/engine";
 import { sweepBroadcasts } from "@/lib/broadcasts/engine";
+import { sweepResgates } from "@/lib/resgate/service";
 import { isCronAuthorized } from "@/lib/cron-auth";
 
 /**
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
   }
 
   const now = new Date();
-  const [takeovers, drafts, sequences, broadcasts] = await Promise.all([
+  const [takeovers, drafts, sequences, broadcasts, resgates] = await Promise.all([
     expireTakeovers(now),
     expireDrafts(now),
     expireWaitingEnrollments(now),
@@ -27,6 +28,11 @@ export async function GET(request: NextRequest) {
       console.warn("[Sweep] broadcasts:", error instanceof Error ? error.message : error);
       return null;
     }),
+    // 28/10/2026: retoma "Resgatar comentários" pausado/parado (idempotente).
+    sweepResgates(now).catch((error) => {
+      console.warn("[Sweep] resgates:", error instanceof Error ? error.message : error);
+      return null;
+    }),
   ]);
-  return NextResponse.json({ success: true, data: { takeovers, drafts, sequences, broadcasts } });
+  return NextResponse.json({ success: true, data: { takeovers, drafts, sequences, broadcasts, resgates } });
 }
