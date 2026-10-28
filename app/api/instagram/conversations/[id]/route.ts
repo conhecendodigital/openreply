@@ -11,6 +11,7 @@ import {
 } from "@/lib/meta/message-media";
 import { prisma } from "@/lib/db/client";
 import { saveKnownUsernames } from "@/lib/contacts/profile";
+import { messagePreviewText } from "@/lib/dm/message-preview";
 import { previewTextsByMid } from "@/lib/messages/preview";
 
 export interface ThreadTemplate {
@@ -30,6 +31,10 @@ export interface ThreadMessage {
   template?: ThreadTemplate | null;
   /** The person replied to (or mentioned us in) a story. */
   storyReply?: boolean;
+  /** reply (to our story) | mention (of us in theirs). */
+  storyKind?: string | null;
+  /** Label for a message with no text/card/media ('📷 Foto', '🚫 ...'). */
+  preview?: string;
   deleted?: boolean;
 }
 
@@ -132,6 +137,8 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
         })),
       template: (m.template as ThreadTemplate | null) ?? null,
       storyReply: m.storyReply,
+      storyKind: m.storyKind ?? null,
+      preview: messagePreviewText({ ...m, media: m.media }),
       deleted: m.deleted,
     });
   }

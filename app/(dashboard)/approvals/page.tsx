@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ContactAvatar, contactDisplayName, inboxHref, TagChip, useDateTime, useTimeAgo } from "@/components/contact-ui";
+import { UNKNOWN_MESSAGE_PREVIEW } from "@/lib/dm/message-preview";
 import { useT } from "@/components/lang-provider";
 import {
   DRAFT_STATUS_COLORS,
@@ -38,8 +39,8 @@ function LastMessages({ draft }: { draft: Draft }) {
               m.fromMe ? "bg-surface-hover text-foreground" : "border border-border bg-surface text-foreground"
             }`}
           >
-            {m.storyReply && <span className="mr-1 text-[11px] text-muted">{t("(story reply)")}</span>}
-            {m.text || <span className="italic text-muted">{t("(no text)")}</span>}
+            {m.storyReply && m.text && <span className="mr-1 text-[11px] text-muted">{t(m.storyKind === "mention" ? "(story mention)" : "(story reply)")}</span>}
+            {m.preview || m.text || UNKNOWN_MESSAGE_PREVIEW}
           </p>
           <span className="px-2 text-[10px] text-muted">{timeAgo(m.sentAt)}</span>
         </div>

@@ -181,6 +181,7 @@ export const pt: Record<string, string> = {
   "Message without text (sticker, reaction or a format Meta doesn't deliver)":
     "Mensagem sem texto (figurinha, reação ou formato que a Meta não entrega)",
   "Replied to your story": "Respondeu ao seu story",
+  "(story mention)": "(menção em story)",
   "You replied to their story": "Você respondeu ao story",
   "Story (may have expired) ↗": "Story (pode ter expirado) ↗",
   Story: "Story",

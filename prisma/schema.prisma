@@ -173,6 +173,9 @@ model DirectMessage {
   /// Our story's id when the person replied to it (a mention carries none).
   storyId     String?
   deleted     Boolean  @default(false)
+  /// Attachment types the webhook reported (image, video, audio, file, share,
+  /// story_mention, ig_reel, reel, unsupported), even with no URL (ephemeral media).
+  attachmentKinds String[] @default([])
   sentAt      DateTime
   createdAt   DateTime @default(now())
 
