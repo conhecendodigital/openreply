@@ -784,6 +784,26 @@ export async function getConversations(
 }
 
 /**
+ * The conversation id of ONE person, even when it is not among the recent
+ * ones getConversations returns. Meta Conversations API ("Find a conversation
+ * with a specific person"): GET /<IG_ID>/conversations?user_id=<IGSID>.
+ * Only for Instagram tokens (the doc does not cover the Page/messenger case).
+ */
+export async function findConversationIdByUser(
+  accessToken: string,
+  igUserId: string,
+  contactIgUserId: string
+): Promise<string | null> {
+  if (isFacebookPageToken(accessToken)) return null;
+  const url = new URL(`${graphBaseFor(accessToken)}/${igUserId}/conversations`);
+  url.searchParams.set("platform", "instagram");
+  url.searchParams.set("user_id", contactIgUserId);
+  url.searchParams.set("access_token", accessToken);
+  const data = await handleResponse<{ data?: { id: string }[] }>(await fetch(url.toString()));
+  return data.data?.[0]?.id ?? null;
+}
+
+/**
  * The messages in a conversation, with content. Meta only returns full details
  * for the 20 most recent messages, newest first.
  */

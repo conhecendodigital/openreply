@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db/client";
 import { saveKnownUsernames } from "@/lib/contacts/profile";
 import { messagePreviewText } from "@/lib/dm/message-preview";
 import { previewTextsByMid } from "@/lib/messages/preview";
+import { isSavedConversationId, SAVED_PREFIX } from "@/lib/inbox/saved-conversation";
 
 export interface ThreadTemplate {
   title: string;
@@ -44,6 +45,8 @@ export interface ThreadResponse {
   saved: number;
 }
 
+class SavedOnly extends Error {}
+
 type RouteProps = { params: Promise<{ id: string }> };
 
 const MEDIA_TYPE: Record<string, MessageMedia["type"]> = {
@@ -72,7 +75,13 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
   let apiMessages: ThreadMessage[] = [];
   let apiError: string | null = null;
 
+  // "saved:<igsid>": a conversation Instagram does not list among the recent
+  // ones. Only our saved history is shown; Meta is not called (no real id).
+  const savedOnly = isSavedConversationId(conversationId);
+  if (savedOnly) contactId = conversationId.slice(SAVED_PREFIX.length);
+
   try {
+    if (savedOnly) throw new SavedOnly();
     // Channel off: the saved history still shows, Meta is not called.
     if (account.status !== "ACTIVE" || !account.accessToken) {
       throw new ChannelOffError(channelOffCode(account.status));
@@ -99,12 +108,13 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
       contactId = other?.from?.id ?? raw[0]?.to?.data?.find((p) => p.id !== account.instagramId)?.id ?? "";
     }
   } catch (err) {
-    if (!isChannelOffError(err)) {
+    if (!(err instanceof SavedOnly) && !isChannelOffError(err)) {
       console.error("[Conversation Messages] API error:", err);
       await noteMetaError({ id: account.id }, err);
     }
-    apiError =
-      err instanceof MetaApiError || isChannelOffError(err) ? err.message : "Failed to load messages";
+    apiError = err instanceof SavedOnly
+      ? "No saved messages for this person."
+      : err instanceof MetaApiError || isChannelOffError(err) ? err.message : "Failed to load messages";
   }
 
   const saved = contactId
