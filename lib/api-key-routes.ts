@@ -78,6 +78,8 @@ export const API_KEY_ROUTES: readonly RegExp[] = [
   // 2026-10-28: publicar_fluxo, ligar_fluxo, desligar_fluxo, ativar_automacao, desativar_automacao (MCP), pedido do dono. Interruptor: MCP_FLUXOS_DISABLED=1.
   /^\/api\/mcp-fluxos\/[^/]+\/(publish|ligar|desligar)$/,
   /^\/api\/mcp-automacoes\/[^/]+\/(ligar|desligar)$/,
+  // 2026-10-28: resgatar_comentarios (MCP), pedido do dono. Interruptor: RESGATE_DISABLED=1 / MCP_FLUXOS_DISABLED=1.
+  /^\/api\/resgate$/,
 ];
 
 /**

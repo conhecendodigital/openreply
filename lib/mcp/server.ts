@@ -7,6 +7,7 @@
 import { AUTOMATION_TRIGGERS, triggerLabel, type AutomationTriggerValue } from "@/lib/automations/trigger";
 import { FUNNEL_TOOLS } from "@/lib/mcp/funnel-tools";
 import { VENDAS_TOOLS } from "@/lib/mcp/vendas-tools";
+import { RESGATE_TOOLS } from "@/lib/mcp/resgate-tools";
 
 export type InternalCall = (
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
@@ -1862,6 +1863,8 @@ export const TOOLS: Tool[] = [
   ...FUNNEL_TOOLS,
   // Vendas por origem (somente leitura).
   ...VENDAS_TOOLS,
+  // 28/10/2026: resgatar_comentarios (dryRun por padrão; interruptor RESGATE_DISABLED=1).
+  ...RESGATE_TOOLS,
 ];
 
 type CtrRowData = { name: string; sent: number; clicks: number; ctr: number };

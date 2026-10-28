@@ -48,6 +48,8 @@ import { enrollInSequence, runSequenceStep } from "@/lib/sequences/engine";
 import { decryptToken } from "@/lib/meta/oauth";
 import { matchKeywords } from "@/lib/utils/keyword-matcher";
 import { reserveDMSlot } from "@/lib/utils/rate-limiter";
+import { RESGATE_STEP_JOB_NAME, type ResgateStepJob } from "@/lib/resgate/jobs";
+import { runResgateStep } from "@/lib/resgate/service";
 import {
   releaseWorkspaceDMReservation,
   reserveWorkspaceDMSend,
@@ -2248,6 +2250,11 @@ async function runJob(job: Job<DmQueueJob>): Promise<void> {
   }
   if (job.name === FLOW_REPLY_TIMEOUT_JOB_NAME) {
     await runReplyTimeout(job.data as FlowReplyTimeoutJob);
+    return;
+  }
+  // 28/10/2026: Resgatar comentários (lib/resgate). Sem "commentId" também.
+  if (job.name === RESGATE_STEP_JOB_NAME) {
+    await runResgateStep(job.data as ResgateStepJob);
     return;
   }
   // Etapa 5: broadcasts (lib/broadcasts/jobs.ts). No "commentId" either.

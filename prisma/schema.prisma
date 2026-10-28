@@ -2729,3 +2729,63 @@ model VendedorIgPerfil {
 
   @@schema("public")
 }
+
+// ─── Resgatar comentários (28/10/2026) ───────────────────────────────────────
+// Comentários de um post que não viraram DM (grafia errada da palavra,
+// campanha desligada, falha). Uma execução = um lote lento e pausável.
+// Sem FK pro workspace/conta de propósito: nada existente muda.
+
+model ResgateRun {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  /// InstagramAccount.id interno.
+  instagramAccountId String
+  /// Um dos dois: fluxo (Flow.id) ou campanha (Automation.id).
+  flowId             String?
+  automationId       String?
+  mediaId            String
+  postRef            String?
+  /// RUNNING | PAUSED | DONE | CANCELED | FAILED
+  status             String    @default("RUNNING")
+  intervaloMinMs     Int       @default(2000)
+  intervaloMaxMs     Int       @default(4000)
+  tetoHora           Int       @default(400)
+  pausedUntil        DateTime?
+  pauseReason        String?
+  lastError          String?
+  /// Contagens do planejamento (lidos, já atendidos, vencidos...).
+  planSummary        Json?
+  createdBy          String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  finishedAt         DateTime?
+
+  items ResgateItem[]
+
+  @@index([workspaceId, createdAt])
+  @@index([status])
+  @@schema("public")
+}
+
+model ResgateItem {
+  id          String    @id @default(cuid())
+  runId       String
+  commentId   String
+  igUserId    String
+  username    String?
+  text        String
+  commentAt   DateTime
+  /// PENDING | SENDING | SENT | FAILED | SKIPPED
+  status      String    @default("PENDING")
+  reason      String?
+  attempts    Int       @default(0)
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  run ResgateRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, commentId])
+  @@index([runId, status])
+  @@index([commentId])
+  @@schema("public")
+}
