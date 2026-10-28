@@ -169,7 +169,7 @@ export function ApiKeysPanel() {
         )}
         {data?.envTokenConfigured && (
           <p className="text-xs text-muted">
-            {t("A key is also set on the server (OPENREPLY_API_TOKEN). It keeps working until it is removed from the server environment.")}
+            {t("A key is also set on the server. It keeps working until it is removed from the server environment.")}
           </p>
         )}
       </div>

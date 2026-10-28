@@ -1,8 +1,8 @@
 # Meta App Review notes
 
-You only need App Review if you want people who are not testers on your app to connect their own Instagram accounts. If you run OpenReply for your own accounts, skip this. See the "Letting other people use your instance" section of [docs/setup.md](docs/setup.md).
+You only need App Review if you want people who are not testers on your app to connect their own Instagram accounts. If you run Lead Engine for your own accounts, skip this. See the "Letting other people use your instance" section of [docs/setup.md](docs/setup.md).
 
-OpenReply uses the official Instagram API to send a private reply to someone who comments on a connected professional account's post or reel.
+Lead Engine uses the official Instagram API to send a private reply to someone who comments on a connected professional account's post or reel.
 
 ## Permissions to request
 
@@ -62,4 +62,4 @@ Test it with Meta's tool after deploying, on a test account, never on a producti
 
 ## Business verification
 
-Meta usually requires business verification before granting Advanced Access. It asks for a document proving a legal entity: a business registration or license, articles of incorporation, a business tax document, or a business bank statement. If you do not have a registered business, you cannot complete this step, and the practical path is to run OpenReply for your own accounts instead, which never needs review.
+Meta usually requires business verification before granting Advanced Access. It asks for a document proving a legal entity: a business registration or license, articles of incorporation, a business tax document, or a business bank statement. If you do not have a registered business, you cannot complete this step, and the practical path is to run Lead Engine for your own accounts instead, which never needs review.

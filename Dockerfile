@@ -1,4 +1,4 @@
-# OpenReply — self-hosted Docker image
+# Lead Engine — self-hosted Docker image
 #
 # Two runtime processes ship from this image:
 #   - web:    `npm run start`  → next start (needs .next + node_modules)

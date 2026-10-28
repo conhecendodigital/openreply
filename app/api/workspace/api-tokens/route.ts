@@ -67,7 +67,7 @@ export async function GET() {
         mcpUrl: `${getBaseUrl().replace(/\/$/, "")}/api/mcp`,
         // Informativo: o ID do workspace não é segredo e não substitui a chave.
         workspaceId: context.workspaceId,
-        envTokenConfigured: Boolean(process.env.OPENREPLY_API_TOKEN),
+        envTokenConfigured: Boolean(process.env.LEADENGINE_API_TOKEN ?? process.env.OPENREPLY_API_TOKEN),
         availableScopes: API_TOKEN_SCOPES,
       },
     },
