@@ -17,12 +17,24 @@ export function zernioApiKey(): string | null {
   return key || null;
 }
 
+/** Workspace do dono (ZERNIO_OWNER_WORKSPACE_ID). Só nele vale a conta única ZERNIO_TIKTOK_ACCOUNT_ID. */
+export function zernioOwnerWorkspaceId(): string | null {
+  return (process.env.ZERNIO_OWNER_WORKSPACE_ID ?? "").trim() || null;
+}
+
 /**
  * Conta da Zernio que corresponde à conta de TikTok do Lead Engine.
  * 1. ZERNIO_TIKTOK_ACCOUNT_MAP: JSON {"<id da SocialAccount ou @username>": "<accountId da Zernio>"}.
- * 2. ZERNIO_TIKTOK_ACCOUNT_ID: uma conta só (o caso do Matheus).
+ *    Vale para qualquer workspace (é mapeamento por conta).
+ * 2. ZERNIO_TIKTOK_ACCOUNT_ID: conta única, SÓ para o workspace do dono
+ *    (ZERNIO_OWNER_WORKSPACE_ID). Sem essa variável, ou em outro workspace, não há
+ *    fallback: retorna null (falha fechado) e o TikTok do cliente nunca publica no canal do dono.
+ * `workspaceId` é o workspace da conta/post; se vier vazio, a conta única não vale.
  */
-export function zernioAccountIdFor(account: Pick<SocialAccount, "id" | "username"> | null | undefined): string | null {
+export function zernioAccountIdFor(
+  account: Pick<SocialAccount, "id" | "username"> | null | undefined,
+  workspaceId?: string | null
+): string | null {
   if (!account) return null;
   const raw = (process.env.ZERNIO_TIKTOK_ACCOUNT_MAP ?? "").trim();
   if (raw) {
@@ -34,9 +46,11 @@ export function zernioAccountIdFor(account: Pick<SocialAccount, "id" | "username
         if (typeof v === "string" && v.trim()) return v.trim();
       }
     } catch {
-      // Mapa inválido: cai para a conta única.
+      // Mapa inválido: ignora o mapa (a conta única continua só para o dono).
     }
   }
+  const owner = zernioOwnerWorkspaceId();
+  if (!owner || !workspaceId || workspaceId !== owner) return null;
   const single = (process.env.ZERNIO_TIKTOK_ACCOUNT_ID ?? "").trim();
   return single || null;
 }

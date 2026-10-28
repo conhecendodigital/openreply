@@ -10,7 +10,19 @@ export function mediaUrlProblem(workspaceId: string, mediaUrl: string): string |
   const config = readMediaStorageConfig();
   if (!config) return "Video storage is not configured on this server";
   const prefix = `${config.publicBaseUrl}/${workspaceId}/posts/`;
-  return mediaUrl.startsWith(prefix) ? null : "The video must be uploaded through the Lead Engine";
+  if (!mediaUrl.startsWith(prefix)) return "The video must be uploaded through the Lead Engine";
+  // Isolamento: "<pasta>/posts/../../<outro-workspace>/..." passa no startsWith mas resolve em outro workspace.
+  const rest = mediaUrl.slice(prefix.length);
+  let decoded = rest;
+  try {
+    decoded = decodeURIComponent(rest);
+  } catch {
+    return "The video must be uploaded through the Lead Engine";
+  }
+  if (/(^|[\\/])\.\.?([\\/]|$)/.test(decoded) || /[\\?#\u0000-\u001f]/.test(decoded) || /(^|\/)\.\.?(\/|$)/.test(rest)) {
+    return "The video must be uploaded through the Lead Engine";
+  }
+  return null;
 }
 
 /** Regras comuns a toda rede: vídeo nosso, tipo e tamanho aceitos, legenda dentro do limite. */
