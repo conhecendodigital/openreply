@@ -18,7 +18,8 @@ import { LINK_CHECKOUT, LINK_PAGINA, type VendedorConfig } from "./config";
 import { assuntoSensivel, decidir, perguntouSeERobo, RESPOSTA_SOU_IA, type Contagens, type EstadoContato } from "./regras";
 import { problemasDaResposta, pedidoDeReescrita, type ExemploVendedor, exemplosDoPrompt } from "./conversa";
 import { avancarEstagio, fichaParaCartao, fichaVazia, lerEstagio, mesclar, validarExtracao, comSeguidores, type Ficha, type Fonte } from "./ficha";
-import { fontesPermitidas, lerSaidaVendedor, MAX_TOKENS_VENDEDOR, sistemaFixo, sistemaVariavel, violacoesDeVoz } from "./prompt";
+import { decidirRetomada, PREFIXO_RETOMADA } from "./retomada";
+import { fontesPermitidas, lerSaidaVendedor, MAX_TOKENS_VENDEDOR, MENSAGEM_RETOMADA, sistemaFixo, sistemaVariavel, violacoesDeRetomada, violacoesDeVoz } from "./prompt";
 
 /** Abaixo disso o vendedor não envia sozinho: vira rascunho. */
 export const CONFIANCA_MINIMA = 0.6;
@@ -69,7 +70,15 @@ export interface DepsVendedor {
   exemplos?(): Promise<ExemploVendedor[]>;
   /** Dado oficial do perfil (seguidores) para a ficha. */
   seguidores?(): Promise<number | null>;
+  /** Retomada: o vendedor já mandou/rascunhou algo pra essa pessoa? Sem isto a retomada não roda. */
+  jaFalouComVendedor?(): Promise<boolean>;
+  /** Retomada: tem tag de compra ("comprou:...")? Sem isto a retomada não roda. */
+  temTagCompra?(): Promise<boolean>;
+  /** Retomada: quantas retomadas a conta enviou na última hora. Sem isto a retomada não roda. */
+  retomadasNaHora?(): Promise<number>;
 }
+
+export type OpcoesConversa = { modo?: "normal" | "retomada" };
 
 async function seguro<T>(f: (() => Promise<T>) | undefined, vazio: T): Promise<T> {
   if (!f) return vazio;
@@ -85,27 +94,50 @@ function ultimaDaPessoa(msgs: StoredMessage[]): StoredMessage | null {
   return null;
 }
 
-export async function processarConversa(deps: DepsVendedor): Promise<Resultado> {
+export async function processarConversa(deps: DepsVendedor, opcoes: OpcoesConversa = {}): Promise<Resultado> {
   const now = deps.agora();
   const { config } = deps;
   const msgs = await deps.mensagens();
   const lite = msgs.map((m) => ({ mid: m.mid, fromMe: m.fromMe, text: m.kind === "text" || m.kind === "story" ? m.text : m.fromMe ? m.text : null, storyReply: m.storyReply, sentAt: m.sentAt }));
-  const ultima = ultimaDaPessoa(msgs);
-  if (!ultima || msgs[msgs.length - 1].fromMe) return { outcome: "esperar", motivo: "a última mensagem é nossa" };
+  const retomada = opcoes.modo === "retomada";
+  const ultimaPessoa = ultimaDaPessoa(msgs);
+  const ultimaMsg = msgs[msgs.length - 1];
+  // Retomada: a âncora é a NOSSA última mensagem (do fluxo). Normal: a última da pessoa.
+  const ultima = retomada ? (ultimaMsg?.fromMe ? ultimaMsg : null) : ultimaPessoa;
+  if (!ultima || (!retomada && ultimaMsg.fromMe)) return { outcome: "esperar", motivo: retomada ? "a última mensagem não é nossa" : "a última mensagem é nossa" };
+  const midDaDecisao = retomada ? `${PREFIXO_RETOMADA}${ultima.mid}` : ultima.mid;
 
-  const decisao = decidir({
-    now,
-    config,
-    contato: await deps.contato(),
-    mensagens: lite,
-    temRascunhoPendente: await deps.temRascunhoPendente(),
-    paradoAntes: await deps.paradoAntes(),
-    contagens: await deps.contagens(),
-  });
+  let decisao;
+  if (retomada) {
+    if (!deps.jaFalouComVendedor || !deps.temTagCompra || !deps.retomadasNaHora) return { outcome: "esperar", motivo: "retomada sem os dados de segurança" };
+    decisao = decidirRetomada({
+      now,
+      config,
+      contato: await deps.contato(),
+      ultimaNossa: { speaker: ultima.speaker, sentAt: ultima.sentAt },
+      ultimaDaPessoaTexto: ultimaPessoa?.text ?? null,
+      temRascunhoPendente: await deps.temRascunhoPendente(),
+      paradoAntes: await deps.paradoAntes(),
+      jaTeveVendedor: await deps.jaFalouComVendedor(),
+      temTagCompra: await deps.temTagCompra(),
+      contagens: await deps.contagens(),
+      retomadasNaHora: await deps.retomadasNaHora(),
+    });
+  } else {
+    decisao = decidir({
+      now,
+      config,
+      contato: await deps.contato(),
+      mensagens: lite,
+      temRascunhoPendente: await deps.temRascunhoPendente(),
+      paradoAntes: await deps.paradoAntes(),
+      contagens: await deps.contagens(),
+    });
+  }
   if (decisao.acao === "esperar") return { outcome: "esperar", motivo: decisao.motivo };
 
-  // A partir daqui a DM vira uma decisão registrada (uma por DM).
-  const logId = await deps.reservar(ultima.mid);
+  // A partir daqui a DM vira uma decisão registrada (uma por DM; na retomada, uma por mensagem do fluxo).
+  const logId = await deps.reservar(midDaDecisao);
   if (!logId) return { outcome: "esperar", motivo: "essa DM já foi tratada" };
   const fim = async (outcome: Outcome, reason: string, extra: Partial<Parameters<DepsVendedor["finalizar"]>[1]> = {}): Promise<Resultado> => {
     await deps.finalizar(logId, { outcome, reason, ...extra });
@@ -118,11 +150,11 @@ export async function processarConversa(deps: DepsVendedor): Promise<Resultado> 
   }
   if (decisao.acao === "pular") return fim("skipped", decisao.motivo);
 
-  const textoDela = ultima.text ?? "";
+  const textoDela = retomada ? (ultimaPessoa?.text ?? "") : (ultima.text ?? "");
   if (assuntoSensivel(textoDela)) return fim("skipped", "assunto sensível ou que só você resolve: ficou pra você");
 
   // Pergunta sincera se é robô: resposta fixa e honesta, e chama o dono.
-  if (perguntouSeERobo(textoDela)) {
+  if (!retomada && perguntouSeERobo(textoDela)) {
     const env = await deps.enviar(RESPOSTA_SOU_IA.split(/\n{2,}/), logId);
     if (env.falha) return fim("error", `não enviou a resposta sobre ser IA: ${env.falha.mensagem}`, { mids: env.mids });
     await deps.chamarDono("a pessoa perguntou se fala com robô ou pessoa");
@@ -152,11 +184,11 @@ export async function processarConversa(deps: DepsVendedor): Promise<Resultado> 
   const sistemaFixoTexto = sistemaFixo(config);
   try {
     const cartao = await deps.cartao();
-    sistemaVar = sistemaVariavel(cartao, msgs, deps.nomeDaPessoa(), { ficha: fichaParaCartao(fichaAntes), aberturas, exemplos });
+    sistemaVar = sistemaVariavel(cartao, msgs, deps.nomeDaPessoa(), { ficha: fichaParaCartao(fichaAntes), aberturas, exemplos, modo: retomada ? "retomada" : "normal" });
     resposta = await deps.perguntarIa({
       sistemaFixo: sistemaFixoTexto,
       sistemaVariavel: sistemaVar,
-      mensagem: textoDela || ultima.preview,
+      mensagem: retomada ? MENSAGEM_RETOMADA : textoDela || ultima.preview,
       dificil: false,
     });
   } catch (e) {
@@ -223,6 +255,7 @@ export async function processarConversa(deps: DepsVendedor): Promise<Resultado> 
   const inventadas = afirmacoesInventadas(texto, fontesPermitidas(config));
   if (inventadas.length) avisos.push(descreverInventadas(inventadas));
   for (const v of violacoesDeVoz(texto)) avisos.push(v);
+  if (retomada) for (const v of violacoesDeRetomada(texto, partes.length)) avisos.push(v);
 
   if (avisos.length > 0) {
     const r = await deps.criarRascunho(texto, `Vendedor automático em dúvida: ${avisos.join("; ")}`.slice(0, 900));
@@ -233,11 +266,27 @@ export async function processarConversa(deps: DepsVendedor): Promise<Resultado> 
   // Recheca logo antes de enviar: takeover novo, janela, DM nova da pessoa (o que escrevi já ficou velho).
   const msgs2 = await deps.mensagens();
   const nova = ultimaDaPessoa(msgs2);
-  if (!nova || nova.mid !== ultima.mid || msgs2[msgs2.length - 1].fromMe) {
+  const ultima2 = msgs2[msgs2.length - 1];
+  const mudou = retomada ? !ultima2 || !ultima2.fromMe || ultima2.mid !== ultima.mid || nova?.mid !== ultimaPessoa?.mid : !nova || nova.mid !== ultima.mid || ultima2.fromMe;
+  if (mudou) {
     return fim("skipped", "a pessoa mandou outra mensagem (ou alguém respondeu) enquanto eu escrevia: nada enviado", comIa);
   }
   const estado2 = await deps.contato();
-  const redecisao = decidir({
+  const redecisao = retomada
+    ? decidirRetomada({
+        now: deps.agora(),
+        config: { ...config, retomadaHoras: 0, retomadaMaxPorHora: 1_000_000, replyDelayMinSec: 0, replyDelayMaxSec: 0, minGapSeconds: 0, quietStart: null, quietEnd: null },
+        contato: estado2,
+        ultimaNossa: { speaker: ultima.speaker, sentAt: ultima.sentAt },
+        ultimaDaPessoaTexto: nova?.text ?? null,
+        temRascunhoPendente: false,
+        paradoAntes: await deps.paradoAntes(),
+        jaTeveVendedor: false,
+        temTagCompra: await (deps.temTagCompra?.() ?? Promise.resolve(true)),
+        contagens: { hora: 0, dia: 0, pessoaDia: 0, ultimoEnvioEm: null },
+        retomadasNaHora: 0,
+      })
+    : decidir({
     now: deps.agora(),
     config: { ...config, replyDelayMinSec: 0, replyDelayMaxSec: 0, minGapSeconds: 0, quietStart: null, quietEnd: null },
     contato: estado2,

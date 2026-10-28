@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db/client";
 import { carregarConfig, criarDeps, type ContaIg } from "./dados";
 import { vendedorDesligadoPorEnv } from "./config";
 import { processarConversa, type Resultado } from "./motor";
+import { buscarCandidatosRetomada, MAX_RETOMADAS_POR_RODADA } from "./retomada";
 import { inicioDoDia } from "@/lib/whatsapp/agentes/teto";
 
 export const MAX_ENVIOS_POR_RODADA = 5;
@@ -23,10 +24,12 @@ export type ResumoRodada = {
   rascunhos: number;
   puladas: number;
   erros: number;
+  /** Das enviadas, quantas foram retomadas. */
+  retomadas: number;
 };
 
 export async function rodarVendedorIg(opts: { now?: Date; sleep?: (ms: number) => Promise<void> } = {}): Promise<ResumoRodada> {
-  const vazio: ResumoRodada = { contas: 0, avaliadas: 0, enviadas: 0, rascunhos: 0, puladas: 0, erros: 0 };
+  const vazio: ResumoRodada = { contas: 0, avaliadas: 0, enviadas: 0, rascunhos: 0, puladas: 0, erros: 0, retomadas: 0 };
   if (vendedorDesligadoPorEnv()) return { ...vazio, desligado: "env" };
   if (rodando) return { ...vazio, desligado: "ocupado" };
   rodando = true;
@@ -79,6 +82,35 @@ export async function rodarVendedorIg(opts: { now?: Date; sleep?: (ms: number) =
         } else if (r.outcome === "draft") resumo.rascunhos++;
         else if (r.outcome === "error") resumo.erros++;
         else resumo.puladas++;
+      }
+
+      // Segunda passada (devagar): retomada de quem recebeu o fluxo e não respondeu. Interruptor próprio.
+      if (config.retomadaEnabled && envios < MAX_ENVIOS_POR_RODADA) {
+        let retomadas = 0;
+        const quem = await buscarCandidatosRetomada(prisma as never, acc.id, config, now);
+        for (const c of quem) {
+          if (retomadas >= MAX_RETOMADAS_POR_RODADA || envios >= MAX_ENVIOS_POR_RODADA) break;
+          if (vendedorDesligadoPorEnv()) return { ...resumo, desligado: "env" };
+          let r: Resultado;
+          try {
+            r = await processarConversa(criarDeps(conta, c, config, rodada), { modo: "retomada" });
+          } catch (e) {
+            console.warn("[VendedorIG] retomada falhou:", e instanceof Error ? e.message.slice(0, 200) : "erro");
+            resumo.erros++;
+            continue;
+          }
+          if (r.outcome === "esperar") continue;
+          resumo.avaliadas++;
+          if (r.outcome === "sent") {
+            resumo.enviadas++;
+            resumo.retomadas++;
+            retomadas++;
+            envios++;
+            await sleep(config.minGapSeconds * 1000);
+          } else if (r.outcome === "draft") resumo.rascunhos++;
+          else if (r.outcome === "error") resumo.erros++;
+          else resumo.puladas++;
+        }
       }
     }
     return resumo;

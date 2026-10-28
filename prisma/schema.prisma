@@ -2684,6 +2684,11 @@ model VendedorIgConfig {
   quietEnd           String?   @default("07:00")
   /// "Lições do vendedor" (29/10/2026): texto curto do dono (até ~2000 caracteres) que entra no Comando. Vazio = padrão.
   licoes             String    @default("")
+  /// Retomada (29/10/2026): depois que o fluxo mandou a oferta e a pessoa não respondeu, o vendedor puxa conversa
+  /// 1 vez, após `retomadaHoras`, só com a janela de 24 h aberta. Desligada por padrão (interruptor separado).
+  retomadaEnabled    Boolean   @default(false)
+  retomadaHoras      Int       @default(3)
+  retomadaMaxPorHora Int       @default(6)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

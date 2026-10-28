@@ -63,6 +63,12 @@ export type VendedorConfig = {
   replyDelayMaxSec: number;
   quietStart: string | null;
   quietEnd: string | null;
+  /** Retomada: liga separada da resposta. Desligada por padrão. */
+  retomadaEnabled: boolean;
+  /** Horas desde a mensagem do fluxo antes de puxar conversa (padrão 3). */
+  retomadaHoras: number;
+  /** Máximo de retomadas por hora (além dos limites gerais). */
+  retomadaMaxPorHora: number;
 };
 
 export function defaultConfig(instagramAccountId: string, workspaceId: string): VendedorConfig {
@@ -81,6 +87,9 @@ export function defaultConfig(instagramAccountId: string, workspaceId: string): 
     replyDelayMaxSec: 90,
     quietStart: "23:00",
     quietEnd: "07:00",
+    retomadaEnabled: false,
+    retomadaHoras: 3,
+    retomadaMaxPorHora: 6,
   };
 }
 
@@ -111,6 +120,10 @@ export function validarPatch(body: Record<string, unknown>): { ok: true; patch: 
     if (typeof body.enabled !== "boolean") return { ok: false, error: "enabled deve ser verdadeiro ou falso" };
     patch.enabled = body.enabled;
   }
+  if ("retomadaEnabled" in body) {
+    if (typeof body.retomadaEnabled !== "boolean") return { ok: false, error: "retomadaEnabled deve ser verdadeiro ou falso" };
+    patch.retomadaEnabled = body.retomadaEnabled;
+  }
   for (const k of ["offerFacts", "socialProof"] as const) {
     if (k in body) {
       if (typeof body[k] !== "string" || (body[k] as string).length > 6000) return { ok: false, error: `${k}: texto de até 6000 caracteres` };
@@ -128,6 +141,8 @@ export function validarPatch(body: Record<string, unknown>): { ok: true; patch: 
     ["maxPerPersonDay", 1, 50],
     ["replyDelayMinSec", 5, 600],
     ["replyDelayMaxSec", 5, 900],
+    ["retomadaHoras", 1, 23],
+    ["retomadaMaxPorHora", 1, 60],
   ];
   for (const [k, min, max] of nums) {
     if (k in body) {

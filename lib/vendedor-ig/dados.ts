@@ -25,6 +25,7 @@ import { MAX_TOKENS_VENDEDOR } from "./prompt";
 import { MAX_CONSULTAS_PERFIL_POR_RODADA, montarCartao, perfilVencido } from "./pessoa";
 import type { Contagens } from "./regras";
 import { ABERTURAS_GUARDADAS, aberturaDe, type ExemploVendedor } from "./conversa";
+import { PREFIXO_RETOMADA } from "./retomada";
 import { lerFicha, type Ficha, type Fonte } from "./ficha";
 
 const HORA_MS = 3_600_000;
@@ -48,6 +49,9 @@ export async function carregarConfig(instagramAccountId: string, workspaceId: st
     replyDelayMaxSec: row.replyDelayMaxSec,
     quietStart: row.quietStart,
     quietEnd: row.quietEnd,
+    retomadaEnabled: row.retomadaEnabled,
+    retomadaHoras: row.retomadaHoras,
+    retomadaMaxPorHora: row.retomadaMaxPorHora,
   };
 }
 
@@ -104,6 +108,17 @@ export function criarDeps(conta: ContaIg, contato: ContatoIg, config: VendedorCo
         prisma.vendedorIgLog.findFirst({ where: contaram, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
       ]);
       return { hora, dia: doDia, pessoaDia, ultimoEnvioEm: ultimo?.createdAt ?? null };
+    },
+    async jaFalouComVendedor() {
+      return (await prisma.vendedorIgLog.count({ where: { contactId: contato.id, outcome: { in: ["sent", "sending", "draft"] } } })) > 0;
+    },
+    async temTagCompra() {
+      return (await prisma.contactTag.count({ where: { contactId: contato.id, name: { startsWith: "comprou:" } } })) > 0;
+    },
+    async retomadasNaHora() {
+      return prisma.vendedorIgLog.count({
+        where: { instagramAccountId: conta.id, inboundMid: { startsWith: PREFIXO_RETOMADA }, outcome: { in: ["sent", "sending"] }, createdAt: { gte: new Date(agora().getTime() - HORA_MS) } },
+      });
     },
     async temRascunhoPendente() {
       return (await prisma.draftReply.count({ where: { contactId: contato.id, status: "PENDING" } })) > 0;
