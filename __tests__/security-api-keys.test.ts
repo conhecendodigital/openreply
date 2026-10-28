@@ -175,12 +175,11 @@ describe("campanha: chave de API nunca liga", () => {
     expect(db.automation.update).not.toHaveBeenCalled();
   });
 
-  it("ativar_automacao do MCP não chama a API e avisa que é com o dono", async () => {
-    const call = vi.fn() as unknown as InternalCall;
+  it("ativar_automacao do MCP (28/10, dono autorizou) chama a rota própria /api/mcp-automacoes, não o PATCH da tela", async () => {
+    const call = vi.fn(async () => ({ status: 200, json: { success: true, data: { conferencia: "CONFERE", ligada: true } } })) as unknown as InternalCall;
     const result = await TOOLS.find((t) => t.name === "ativar_automacao")!.run({ id: "auto_1" }, call);
-    expect(call).not.toHaveBeenCalled();
-    expect(result.isError).toBe(true);
-    expect(JSON.stringify(result.content)).toContain("dono");
+    expect(call).toHaveBeenCalledWith("POST", "/api/mcp-automacoes/auto_1/ligar", { desligarConflitantes: false });
+    expect(result.isError).toBeFalsy();
   });
 });
 

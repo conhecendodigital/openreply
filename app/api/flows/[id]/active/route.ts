@@ -1,9 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/db/client";
 import { fail, ok, readJson, requireContext } from "@/lib/api-helpers";
-import { FLOW_SELECT, findFlow, humanOnly } from "@/lib/flows/api";
-import { definitionOrNull, findCampaignConflicts, presentFlowSummary } from "@/lib/flows/service";
+import { findFlow, humanOnly } from "@/lib/flows/api";
+import { findCampaignConflicts, presentFlowSummary, setFlowActive } from "@/lib/flows/service";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +28,9 @@ export async function POST(request: NextRequest, { params }: RouteProps) {
   const flow = await findFlow(id, auth.context.workspaceId);
   if (!flow) return fail("Flow not found", 404);
 
-  const live = definitionOrNull(flow.published);
-  if (isActive && (!live || !flow.triggerType)) {
-    return fail("Publish the flow before turning it on", 409, { code: "not_published" });
-  }
-
-  const updated = await prisma.flow.update({ where: { id: flow.id }, data: { isActive }, select: FLOW_SELECT });
+  const result = await setFlowActive(flow, isActive);
+  if (!result.ok) return fail(result.message, result.status, { code: result.code });
+  const { updated, live } = result;
   // Runs already inside an off flow stop on their next step (STOPPED_OFF).
   const conflicts = live ? await findCampaignConflicts(flow.instagramAccountId, live.trigger) : [];
   return ok({ ...presentFlowSummary(updated), conflicts });

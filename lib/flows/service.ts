@@ -15,6 +15,7 @@ import {
   type FlowTrigger,
 } from "@/lib/flows/schema";
 import { validateFlow, type FlowValidation } from "@/lib/flows/validate";
+import { FLOW_SELECT } from "@/lib/flows/api";
 
 /** Columns the worker filters on, copied from the PUBLISHED trigger. */
 export function triggerColumns(trigger: FlowTrigger) {
@@ -32,7 +33,7 @@ export function triggerColumns(trigger: FlowTrigger) {
   };
 }
 
-function wordsOverlap(
+export function wordsOverlap(
   a: { keywords: string[]; matchAnyWord: boolean; wholeWordMatch: boolean },
   b: { keywords: string[]; matchAnyWord: boolean; wholeWordMatch: boolean }
 ): boolean {
@@ -243,4 +244,56 @@ export async function flowReport(flowId: string) {
   }
   const total = Object.values(byStatus).reduce((a, b) => a + b, 0);
   return { totals: { runs: total, byStatus }, nodes };
+}
+
+type FlowForAction = FlowRow & { workspaceId: string };
+
+export type PublishCheckResult =
+  | { ok: false; status: number; message: string; details?: unknown }
+  | { ok: true; unchanged: boolean; version: number; definition: FlowDefinition; warnings: FlowValidation["warnings"] };
+
+/**
+ * Publish rule shared by the screen route and the MCP (one place): the draft must parse,
+ * pass validateFlow, and a conversation-link trigger needs its link on the same account.
+ * skipIfUnchanged (MCP): an already published flow with no draft changes keeps its version.
+ */
+export async function publishFlowChecked(input: {
+  flow: FlowForAction;
+  userId: string;
+  skipIfUnchanged?: boolean;
+}): Promise<PublishCheckResult> {
+  const { flow } = input;
+  const parsed = parseFlowDefinition(flow.draft);
+  if (!parsed.ok) return { ok: false, status: 400, message: "Invalid flow definition", details: parsed.issues };
+  const validation = validateFlow(parsed.definition);
+  if (!validation.ok) {
+    return { ok: false, status: 400, message: "Fix the flow before publishing", details: { code: "invalid_flow", ...validation } };
+  }
+  const trigger = parsed.definition.trigger;
+  if (trigger.type === "CONVERSATION_LINK") {
+    const link = await prisma.conversationLink.findFirst({
+      where: { id: trigger.conversationLinkId ?? "", workspaceId: flow.workspaceId, instagramAccountId: flow.instagramAccountId },
+      select: { id: true },
+    });
+    if (!link) return { ok: false, status: 400, message: "Conversation link not found on this account", details: { code: "link_not_found" } };
+  }
+  if (input.skipIfUnchanged && !hasUnpublishedChanges(flow)) {
+    return { ok: true, unchanged: true, version: flow.publishedVersion, definition: parsed.definition, warnings: validation.warnings };
+  }
+  const { version } = await publishFlow({
+    flow: { id: flow.id, workspaceId: flow.workspaceId },
+    definition: parsed.definition,
+    userId: input.userId,
+  });
+  return { ok: true, unchanged: false, version, definition: parsed.definition, warnings: validation.warnings };
+}
+
+/** Turn a flow on/off (shared by the screen route and the MCP). On needs a published flow. */
+export async function setFlowActive(flow: { id: string; published: unknown; triggerType: string | null }, isActive: boolean) {
+  const live = definitionOrNull(flow.published);
+  if (isActive && (!live || !flow.triggerType)) {
+    return { ok: false as const, status: 409, message: "Publish the flow before turning it on", code: "not_published" };
+  }
+  const updated = await prisma.flow.update({ where: { id: flow.id }, data: { isActive }, select: FLOW_SELECT });
+  return { ok: true as const, updated, live };
 }
