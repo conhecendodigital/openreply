@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import type { AccountOption } from "@/components/account-select";
 import { ApiKeysPanel } from "@/components/api-keys-panel";
+import { McpConnectPanel } from "@/components/mcp-connect-panel";
 import { SecurityPanel } from "@/components/security-panel";
 import { AiUsageReport } from "@/components/ai-usage-report";
 import { InstagramConnectNotice } from "@/components/instagram-connect-notice";
@@ -191,7 +192,7 @@ export default function SettingsPage() {
     { id: "equipe", label: t("Team"), badge: memberError ? { tone: "error", label: memberError } : membersData ? { text: String(memberCount) } : null },
     { id: "seguranca", label: t("Security") },
     { id: "gastos-ia", label: t("AI spending tab") },
-    ...(canManageMembers ? [{ id: "pixel-meta", label: t("Pixel tab") }, { id: "api-mcp", label: t("API & MCP") }] : []),
+    ...(canManageMembers ? [{ id: "pixel-meta", label: t("Pixel tab") }, { id: "mcp", label: "MCP" }, { id: "api-mcp", label: t("API & MCP") }] : []),
     { id: "uso", label: t("Usage") },
   ];
 
@@ -491,6 +492,12 @@ export default function SettingsPage() {
             {t("Open Connections and keys")}
           </a>
         </CollapsibleSection>
+        </TabPanel>
+      )}
+
+      {canManageMembers && (
+        <TabPanel id="mcp">
+          <McpConnectPanel />
         </TabPanel>
       )}
 
