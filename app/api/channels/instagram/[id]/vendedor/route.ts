@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { fail, ok, readJson, requireContext } from "@/lib/api-helpers";
 import { humanOnly } from "@/lib/flows/api";
 import { DEFAULT_OFFER_FACTS, validarPatch, vendedorDesligadoPorEnv } from "@/lib/vendedor-ig/config";
+import { DEFAULT_LICOES } from "@/lib/vendedor-ig/conversa";
 import { carregarConfig } from "@/lib/vendedor-ig/dados";
 import { resumoDoDia } from "@/lib/vendedor-ig/rodar";
 
@@ -22,7 +23,7 @@ export async function GET(_request: NextRequest, { params }: RouteProps) {
   if (!account) return fail("Instagram account not found", 404);
   const config = await carregarConfig(id, auth.context.workspaceId);
   const resumo = await resumoDoDia(id);
-  return ok({ config, envDisabled: vendedorDesligadoPorEnv(), defaultOfferFacts: DEFAULT_OFFER_FACTS, today: resumo });
+  return ok({ config, envDisabled: vendedorDesligadoPorEnv(), defaultOfferFacts: DEFAULT_OFFER_FACTS, defaultLicoes: DEFAULT_LICOES, today: resumo });
 }
 
 export async function PUT(request: NextRequest, { params }: RouteProps) {

@@ -2682,6 +2682,8 @@ model VendedorIgConfig {
   /// Horário de silêncio no fuso de São Paulo ("23:00" a "07:00"); vazio = sem silêncio.
   quietStart         String?   @default("23:00")
   quietEnd           String?   @default("07:00")
+  /// "Lições do vendedor" (29/10/2026): texto curto do dono (até ~2000 caracteres) que entra no Comando. Vazio = padrão.
+  licoes             String    @default("")
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -2787,5 +2789,40 @@ model ResgateItem {
   @@unique([runId, commentId])
   @@index([runId, status])
   @@index([commentId])
+  @@schema("public")
+}
+
+/// Ficha do lead (29/10/2026): o que o vendedor SABE da pessoa, só de fato dito/mostrado por ela (com a origem de cada campo).
+/// `campos` = { negocio, oQueFaz, local, dor, objetivo, objecoes, seguidores: { valor, origem, evidencia?, em } }.
+model VendedorIgFicha {
+  contactId          String   @id
+  workspaceId        String
+  instagramAccountId String
+  campos             Json     @default("{}")
+  /// novo | entendendo | viu_valor | recebeu_link | sumiu | comprou
+  estagio            String   @default("novo")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([instagramAccountId, updatedAt])
+  @@schema("public")
+}
+
+/// Exemplo anonimizado: rascunho do vendedor vs versão do dono. Só referência no Comando, nunca regra dura.
+model VendedorIgExemplo {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String
+  /// edicao | assumir
+  origem             String
+  /// id do rascunho (não guarda duas vezes)
+  origemId           String
+  pergunta           String
+  rascunho           String?
+  resposta           String
+  createdAt          DateTime @default(now())
+
+  @@unique([instagramAccountId, origemId])
+  @@index([instagramAccountId, createdAt(sort: Desc)])
   @@schema("public")
 }

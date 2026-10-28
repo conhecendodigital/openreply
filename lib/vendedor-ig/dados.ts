@@ -24,6 +24,8 @@ import type { DepsVendedor, Outcome, RespostaIa } from "./motor";
 import { MAX_TOKENS_VENDEDOR } from "./prompt";
 import { MAX_CONSULTAS_PERFIL_POR_RODADA, montarCartao, perfilVencido } from "./pessoa";
 import type { Contagens } from "./regras";
+import { ABERTURAS_GUARDADAS, aberturaDe, type ExemploVendedor } from "./conversa";
+import { lerFicha, type Ficha, type Fonte } from "./ficha";
 
 const HORA_MS = 3_600_000;
 const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -37,6 +39,7 @@ export async function carregarConfig(instagramAccountId: string, workspaceId: st
     enabled: row.enabled,
     offerFacts: row.offerFacts,
     socialProof: row.socialProof,
+    licoes: row.licoes,
     minGapSeconds: row.minGapSeconds,
     maxPerHour: row.maxPerHour,
     maxPerDay: row.maxPerDay,
@@ -77,6 +80,7 @@ export function criarDeps(conta: ContaIg, contato: ContatoIg, config: VendedorCo
   const sleep = rodada.sleep ?? realSleep;
   let inboundMid: string | null = null;
   const token = () => decryptToken(conta.accessToken);
+  let seguidoresOficiais: number | null = null;
 
   return {
     agora,
@@ -163,6 +167,7 @@ export function criarDeps(conta: ContaIg, contato: ContatoIg, config: VendedorCo
       const quiz: Record<string, string> = {};
       const answers = leads[0]?.answers as Record<string, unknown> | undefined;
       for (const [k, v] of Object.entries(answers ?? {})) if (typeof v === "string") quiz[k] = v;
+      seguidoresOficiais = perfil?.status === "ok" ? perfil.followerCount : null;
       return montarCartao({
         nome: c.name,
         username: c.username,
@@ -175,6 +180,57 @@ export function criarDeps(conta: ContaIg, contato: ContatoIg, config: VendedorCo
       });
     },
     nomeDaPessoa: () => contato.name,
+    async ficha() {
+      const row = await prisma.vendedorIgFicha.findUnique({ where: { contactId: contato.id } });
+      return row ? lerFicha(row.campos, row.estagio) : null;
+    },
+    async fontesDaPessoa() {
+      const [comentarios, leads] = await Promise.all([
+        prisma.contactEvent.findMany({ where: { contactId: contato.id, type: "COMMENT" }, select: { text: true }, orderBy: { occurredAt: "desc" }, take: 5 }),
+        prisma.funnelLead.findMany({ where: { contactId: contato.id }, select: { answers: true }, orderBy: { createdAt: "desc" }, take: 1 }),
+      ]);
+      const fontes: Fonte[] = comentarios.filter((e) => e.text).map((e) => ({ origem: "comentario" as const, texto: e.text as string }));
+      for (const v of Object.values((leads[0]?.answers as Record<string, unknown> | undefined) ?? {})) if (typeof v === "string") fontes.push({ origem: "quiz", texto: v });
+      return fontes;
+    },
+    async salvarFicha(f: Ficha) {
+      const data = { campos: f.campos as object, estagio: f.estagio };
+      await prisma.vendedorIgFicha.upsert({
+        where: { contactId: contato.id },
+        create: { contactId: contato.id, workspaceId: conta.workspaceId, instagramAccountId: conta.id, ...data },
+        update: data,
+      });
+    },
+    async seguidores() {
+      return seguidoresOficiais;
+    },
+    async aberturasRecentes() {
+      const rows = await prisma.vendedorIgLog.findMany({
+        where: { instagramAccountId: conta.id, outcome: { in: ["sent", "draft"] }, text: { not: null } },
+        orderBy: { createdAt: "desc" },
+        take: ABERTURAS_GUARDADAS,
+        select: { text: true },
+      });
+      return rows.map((r) => aberturaDe(r.text ?? "")).filter(Boolean);
+    },
+    async textosRecentes() {
+      const rows = await prisma.vendedorIgLog.findMany({
+        where: { instagramAccountId: conta.id, outcome: { in: ["sent", "draft"] }, text: { not: null } },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+        select: { text: true },
+      });
+      return rows.map((r) => r.text ?? "").filter(Boolean);
+    },
+    async exemplos(): Promise<ExemploVendedor[]> {
+      const rows = await prisma.vendedorIgExemplo.findMany({
+        where: { instagramAccountId: conta.id },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: { pergunta: true, rascunho: true, resposta: true, createdAt: true },
+      });
+      return rows;
+    },
     async perguntarIa(input): Promise<RespostaIa> {
       const cfg = await getAgentModelConfig("atendimento");
       const cred = await getAiCredential(cfg.provider);

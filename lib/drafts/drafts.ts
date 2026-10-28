@@ -154,11 +154,30 @@ export async function editDraft(input: {
   }
   if (input.reason !== undefined) data.reason = input.reason?.trim().slice(0, MAX_DRAFT_REASON) || null;
 
+  // Texto antes da edição: vira exemplo anonimizado do vendedor (melhor esforço, nunca atrapalha).
+  let antes: { text: string; origin: string } | null = null;
+  if (data.text !== undefined) {
+    try {
+      antes = (await prisma.draftReply.findFirst({ where: { id: input.id, workspaceId: input.workspaceId, status: "PENDING" }, select: { text: true, origin: true } })) ?? null;
+    } catch {
+      antes = null;
+    }
+  }
   const { count } = await prisma.draftReply.updateMany({
     where: { id: input.id, workspaceId: input.workspaceId, status: "PENDING" },
     data,
   });
-  if (count === 1) return { ok: true };
+  if (count === 1) {
+    if (antes && antes.origin === "vendedor" && data.text !== undefined && antes.text !== data.text) {
+      try {
+        const m = await import("@/lib/vendedor-ig/aprender");
+        await m.registrarExemploDeEdicao({ draftId: input.id, workspaceId: input.workspaceId, textoOriginal: antes.text, textoNovo: data.text as string });
+      } catch {
+        // aprender é extra: nunca atrapalha a edição
+      }
+    }
+    return { ok: true };
+  }
   const exists = await prisma.draftReply.findFirst({
     where: { id: input.id, workspaceId: input.workspaceId },
     select: { status: true },
