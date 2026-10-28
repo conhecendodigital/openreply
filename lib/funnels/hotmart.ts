@@ -103,9 +103,10 @@ export function parseHotmartPayload(json: unknown): HotmartPurchase | null {
       amountCents: cents(price.value),
       currency: str(price.currency_value, 10),
       buyerEmail: str(buyer.email, 254)?.toLowerCase() ?? null,
-      src: str(origin.src),
-      sck: str(origin.sck),
-      xcod: str(origin.xcod),
+      // origin first; some payloads carry the tracking at purchase/data level.
+      src: str(origin.src) ?? str(purchase.src) ?? str(data.src),
+      sck: str(origin.sck) ?? str(purchase.sck) ?? str(data.sck),
+      xcod: str(origin.xcod) ?? str(purchase.xcod) ?? str(data.xcod),
       occurredAt: dateOf(body.creation_date ?? purchase.approved_date),
     };
   }
@@ -170,6 +171,29 @@ export async function applyHotmartPurchase(
     });
     if (lead) {
       match = { visitId: lead.visitId, funnelId: lead.funnelId, workspaceId: lead.workspaceId, leadId: lead.id, contactId: lead.contactId };
+    }
+  }
+
+  // Later events of the same sale (refund, chargeback) often arrive without
+  // the origin or the e-mail. Inherit what the first event of this transaction
+  // already knew, so the sale keeps its sck and its visit.
+  const prior = await prisma.funnelPurchase
+    .findFirst({
+      where: { provider: "hotmart", transaction: parsed.transaction },
+      orderBy: { occurredAt: "asc" },
+      select: { workspaceId: true, funnelId: true, visitId: true, leadId: true, contactId: true, sck: true, src: true, xcod: true },
+    })
+    .catch(() => null);
+  if (prior) {
+    parsed = { ...parsed, sck: parsed.sck ?? prior.sck, src: parsed.src ?? prior.src, xcod: parsed.xcod ?? prior.xcod };
+    if (!match && prior.workspaceId && prior.funnelId) {
+      match = {
+        visitId: prior.visitId,
+        funnelId: prior.funnelId,
+        workspaceId: prior.workspaceId,
+        leadId: prior.leadId,
+        contactId: prior.contactId,
+      };
     }
   }
 
