@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
   for (const contact of candidates) {
     if (out.length >= limit) break;
     if (isTakeoverActive(contact, now)) continue;
-    const presented = await presentContact(contact, { messages: 5, now });
+    const presented = await presentContact(contact, { now });
     const last = presented.lastMessages[presented.lastMessages.length - 1];
     const unanswered = last
       ? !last.fromMe

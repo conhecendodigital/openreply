@@ -86,12 +86,13 @@ model VerificationToken {
 }
 
 model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  ownerId   String
-  owner     User     @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String             @id @default(cuid())
+  vendedorConfigs VendedorIgConfig[]
+  name            String
+  ownerId         String
+  owner           User               @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   usagePeriodStart  DateTime @default(now())
   dmsSentThisPeriod Int      @default(0)
@@ -99,52 +100,52 @@ model Workspace {
   /// Domínio dos links rastreados (07/10/2026), ex.: comando.cloudmatheus.com.br.
   /// Só o host, sem https:// e sem caminho. null = links em NEXTAUTH_URL.
   /// Nesse host o app só responde /r/* (proxy.ts).
-  linkDomain        String?  @unique
+  linkDomain String? @unique
 
-  members            WorkspaceMember[]
-  invitations        WorkspaceInvitation[]
-  instagramAccounts  InstagramAccount[]
-  automations        Automation[]
-  dmLogs             DmLog[]
-  trackedLinks       TrackedLink[]
-  linkClicks         LinkClick[]
-  webhookEvents      WebhookEvent[]
-  operationalEvents  OperationalEvent[]
-  apiTokens          ApiToken[]
-  contacts           Contact[]
-  moderationSettings ModerationSettings[]
-  commentModerations CommentModeration[]
-  draftReplies       DraftReply[]
-  outboundMessages   OutboundMessage[]
-  sequences          Sequence[]
-  conversationLinks  ConversationLink[]
-  flows              Flow[]
-  segments           Segment[]
-  broadcasts         Broadcast[]
-  socialAccounts     SocialAccount[]
-  scheduledPosts     ScheduledPost[]
-  funnels            Funnel[]
-  funnelMedia        FunnelMedia[]
-  metaCapi           MetaCapiSettings?
-  waSessions         WaSession[]
-  waContacts         WaContact[]
-  waConversations    WaConversation[]
-  waMessages         WaMessage[]
-  waLabels           WaLabel[]
-  waAiUsage          WaAiUsage[]
-  waSendBlocks       WaSendBlock[]
-  waNumberDeletions  WaNumberDeletion[]
-  waAgentProfiles    WaAgentProfile[]
-  waAgentRuns        WaAgentRun[]
-  waAgentConfigs     WaAgentConfig[]
-  waAgentExamples    WaAgentExample[]
-  waAgentCases       WaAgentLearningCase[]
-  waAgentSuggestions WaAgentSuggestion[]
-  waLeadStageEvents  WaLeadStageEvent[]
-  waScheduledTexts   WaScheduledText[]
-  waKnowledgeDocs    WaKnowledgeDocument[]
-  waKnowledgeChunks  WaKnowledgeChunk[]
-  waContactMemories  WaContactMemory[]
+  members                WorkspaceMember[]
+  invitations            WorkspaceInvitation[]
+  instagramAccounts      InstagramAccount[]
+  automations            Automation[]
+  dmLogs                 DmLog[]
+  trackedLinks           TrackedLink[]
+  linkClicks             LinkClick[]
+  webhookEvents          WebhookEvent[]
+  operationalEvents      OperationalEvent[]
+  apiTokens              ApiToken[]
+  contacts               Contact[]
+  moderationSettings     ModerationSettings[]
+  commentModerations     CommentModeration[]
+  draftReplies           DraftReply[]
+  outboundMessages       OutboundMessage[]
+  sequences              Sequence[]
+  conversationLinks      ConversationLink[]
+  flows                  Flow[]
+  segments               Segment[]
+  broadcasts             Broadcast[]
+  socialAccounts         SocialAccount[]
+  scheduledPosts         ScheduledPost[]
+  funnels                Funnel[]
+  funnelMedia            FunnelMedia[]
+  metaCapi               MetaCapiSettings?
+  waSessions             WaSession[]
+  waContacts             WaContact[]
+  waConversations        WaConversation[]
+  waMessages             WaMessage[]
+  waLabels               WaLabel[]
+  waAiUsage              WaAiUsage[]
+  waSendBlocks           WaSendBlock[]
+  waNumberDeletions      WaNumberDeletion[]
+  waAgentProfiles        WaAgentProfile[]
+  waAgentRuns            WaAgentRun[]
+  waAgentConfigs         WaAgentConfig[]
+  waAgentExamples        WaAgentExample[]
+  waAgentCases           WaAgentLearningCase[]
+  waAgentSuggestions     WaAgentSuggestion[]
+  waLeadStageEvents      WaLeadStageEvent[]
+  waScheduledTexts       WaScheduledText[]
+  waKnowledgeDocs        WaKnowledgeDocument[]
+  waKnowledgeChunks      WaKnowledgeChunk[]
+  waContactMemories      WaContactMemory[]
   integrationCredentials WorkspaceIntegrationCredential[]
   integrationAudits      WorkspaceIntegrationAudit[]
   linkRecipients         TrackedLinkRecipient[]
@@ -156,28 +157,28 @@ model Workspace {
 /// Every DM seen by the webhook (inbound and our own echoes), so the inbox keeps
 /// the full history: the Conversations API only returns the latest 20 messages.
 model DirectMessage {
-  id          String   @id @default(cuid())
-  workspaceId String?
+  id              String   @id @default(cuid())
+  workspaceId     String?
   /// Our connected Instagram account (instagramId).
-  accountId   String
+  accountId       String
   /// The other person in the conversation (IGSID).
-  contactId   String
-  mid         String   @unique
-  fromMe      Boolean
-  text        String?
+  contactId       String
+  mid             String   @unique
+  fromMe          Boolean
+  text            String?
   /// Campaign/button DM: {title, subtitle, buttons:[{title,url}]}.
-  template    Json?
-  storyReply  Boolean  @default(false)
+  template        Json?
+  storyReply      Boolean  @default(false)
   /// "reply" (answered one of our stories) | "mention" (mentioned us in theirs).
-  storyKind   String?
+  storyKind       String?
   /// Our story's id when the person replied to it (a mention carries none).
-  storyId     String?
-  deleted     Boolean  @default(false)
+  storyId         String?
+  deleted         Boolean  @default(false)
   /// Attachment types the webhook reported (image, video, audio, file, share,
   /// story_mention, ig_reel, reel, unsupported), even with no URL (ephemeral media).
   attachmentKinds String[] @default([])
-  sentAt      DateTime
-  createdAt   DateTime @default(now())
+  sentAt          DateTime
+  createdAt       DateTime @default(now())
 
   media DirectMedia[]
 
@@ -313,6 +314,7 @@ model InstagramAccount {
   connectedAt       DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
+  vendedorConfig     VendedorIgConfig?
   workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   automations        Automation[]
   dmLogs             DmLog[]
@@ -546,20 +548,20 @@ model ProcessedComment {
 }
 
 model TrackedLink {
-  id             String   @id @default(cuid())
-  workspaceId    String
-  automationId   String
-  slug           String   @unique
-  label          String?
-  destinationUrl String
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  automationId       String
+  slug               String   @unique
+  label              String?
+  destinationUrl     String
   /// Prévia do link (07/10/2026): o que o Instagram, o WhatsApp e cia. mostram
   /// no cartão do link. null = vem da capa do quiz ou da página de destino.
   previewTitle       String?
   previewDescription String?
   /// https absoluta (mídia própria ou link).
   previewImageUrl    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   automation Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
@@ -1903,13 +1905,13 @@ model WaSession {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
-  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  owner         User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  contacts      WaContact[]
-  conversations WaConversation[]
-  messages      WaMessage[]
-  agentProfile  WaAgentProfile?
-  agentConfigs  WaAgentConfig[]
+  workspace        Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner            User                  @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  contacts         WaContact[]
+  conversations    WaConversation[]
+  messages         WaMessage[]
+  agentProfile     WaAgentProfile?
+  agentConfigs     WaAgentConfig[]
   agentExamples    WaAgentExample[]
   agentCases       WaAgentLearningCase[]
   agentSuggestions WaAgentSuggestion[]
@@ -1938,8 +1940,8 @@ model WaContact {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  session       WaSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session       WaSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   conversations WaConversation[]
   memories      WaContactMemory[]
 
@@ -1975,13 +1977,13 @@ model WaConversation {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  session     WaSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  contact     WaContact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  messages    WaMessage[]
-  labels      WaConversationLabel[]
-  agentRuns   WaAgentRun[]
-  stageEvents WaLeadStageEvent[]
+  workspace      Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        WaSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contact        WaContact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages       WaMessage[]
+  labels         WaConversationLabel[]
+  agentRuns      WaAgentRun[]
+  stageEvents    WaLeadStageEvent[]
   scheduledTexts WaScheduledText[]
 
   @@unique([sessionId, contactId])
@@ -2110,7 +2112,7 @@ model PlatformAiSettings {
 /// nomes da tabela do branch feat/wa-cerebro, com as colunas extras do
 /// relatório. lib/ai/usage.ts grava e lê.
 model WaAiUsage {
-  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   ownerUserId    String
   workspaceId    String
   /// embedding | memory | agent | triage
@@ -2121,16 +2123,16 @@ model WaAiUsage {
   model          String
   contactId      String?
   conversationId String?
-  tokensIn       Int       @default(0)
-  tokensOut      Int       @default(0)
-  cacheRead      Int       @default(0)
-  cacheWrite     Int       @default(0)
+  tokensIn       Int      @default(0)
+  tokensOut      Int      @default(0)
+  cacheRead      Int      @default(0)
+  cacheWrite     Int      @default(0)
   /// 1 = US$ 0,000001
-  costMicroUsd   BigInt    @default(0)
+  costMicroUsd   BigInt   @default(0)
   /// true = não chamou o modelo porque passaria do teto diário.
-  blocked        Boolean   @default(false)
+  blocked        Boolean  @default(false)
   refId          String?
-  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -2214,36 +2216,36 @@ model WaSendBlock {
 
 /// Perfil do agente por número (1 por WaSession).
 model WaAgentProfile {
-  id              String    @id @default(cuid())
-  workspaceId     String
-  ownerUserId     String
-  sessionId       String    @unique
+  id                String    @id @default(cuid())
+  workspaceId       String
+  ownerUserId       String
+  sessionId         String    @unique
   /// Comando base: o que o negócio faz e o que pode prometer.
-  baseCommand     String    @default("")
-  styleSummary    String?
-  styleExamples   Json?
+  baseCommand       String    @default("")
+  styleSummary      String?
+  styleExamples     Json?
   /// {"start":"21:00","end":"08:00"}
-  quietHours      Json?
-  maxAutoPerDay   Int       @default(50)
+  quietHours        Json?
+  maxAutoPerDay     Int       @default(50)
   /// Preços, prazos e links que o agente pode citar.
-  fatosPermitidos Json?
-  timeZone        String    @default("America/Sao_Paulo")
+  fatosPermitidos   Json?
+  timeZone          String    @default("America/Sao_Paulo")
   /// Atraso humano antes da 1ª bolha (envio automático).
-  delayMinSeconds Int       @default(20)
-  delayMaxSeconds Int       @default(90)
+  delayMinSeconds   Int       @default(20)
+  delayMaxSeconds   Int       @default(90)
   /// Regras duras do negócio, estruturadas (lib/whatsapp/regras/esquema.ts).
-  regrasNegocio   Json?
+  regrasNegocio     Json?
   /// Janela pra juntar mensagens seguidas antes de responder (3 a 30 s).
-  debounceSeconds Int       @default(10)
+  debounceSeconds   Int       @default(10)
   /// Nome e "oculto" de cada estágio do lead, por número.
-  estagiosLead    Json?
+  estagiosLead      Json?
   /// {"ligado": false, "telefone": "+55..."}: resumo do lead qualificado pro responsável.
   avisarResponsavel Json?
   /// [{"id","palavras":[...],"texto","ativo"}]: resposta fixa por palavra, sem IA (20/10/2026).
-  respostasPalavra Json?
-  learnedAt       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now()) @updatedAt
+  respostasPalavra  Json?
+  learnedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session   WaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -2578,31 +2580,31 @@ enum ScheduledPostStatus {
 /// Conta de rede social conectada por Login Kit (TikTok). Tokens cifrados
 /// (AES-256-GCM, mesma chave dos tokens do Instagram).
 model SocialAccount {
-  id               String              @id @default(cuid())
-  workspaceId      String
-  platform         String              @default("TIKTOK")
+  id                         String              @id @default(cuid())
+  workspaceId                String
+  platform                   String              @default("TIKTOK")
   /// open_id do TikTok.
-  externalId       String
-  displayName      String
-  username         String?
-  avatarUrl        String?
-  accessToken      String
-  refreshToken     String?
-  tokenExpiresAt   DateTime?
-  refreshExpiresAt DateTime?
-  scopes           String[]            @default([])
-  status           SocialAccountStatus @default(ACTIVE)
-  lastError        String?
-  connectedAt      DateTime            @default(now())
-  disconnectedAt   DateTime?
-  updatedAt        DateTime            @updatedAt
+  externalId                 String
+  displayName                String
+  username                   String?
+  avatarUrl                  String?
+  accessToken                String
+  refreshToken               String?
+  tokenExpiresAt             DateTime?
+  refreshExpiresAt           DateTime?
+  scopes                     String[]            @default([])
+  status                     SocialAccountStatus @default(ACTIVE)
+  lastError                  String?
+  connectedAt                DateTime            @default(now())
+  disconnectedAt             DateTime?
+  updatedAt                  DateTime            @updatedAt
   /// YouTube: declaração do DONO ao YouTube ("meus vídeos não são para crianças"). Só a tela liga (sessão humana).
-  youtubeNotForKidsDefault   Boolean   @default(false)
+  youtubeNotForKidsDefault   Boolean             @default(false)
   youtubeNotForKidsDefaultAt DateTime?
   /// userId de quem ligou/desligou (sem dado sensível).
   youtubeNotForKidsDefaultBy String?
 
-  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   posts     ScheduledPost[]
 
   @@unique([platform, externalId])
@@ -2644,12 +2646,86 @@ model ScheduledPost {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
-  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   socialAccount SocialAccount?    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
   channel       InstagramAccount? @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, status])
   @@index([status, scheduledAt])
   @@index([channelId])
+  @@schema("public")
+}
+
+/// 28/10/2026: MODO AUTOMÁTICO do vendedor do Instagram, uma linha por conta.
+/// Nasce DESLIGADO (enabled = false). Só o dono liga, pela tela (rota humanOnly: chave
+/// de API/MCP não consegue). VENDEDOR_IG_DISABLED=1 no ambiente desliga tudo, de emergência.
+model VendedorIgConfig {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String    @unique
+  enabled            Boolean   @default(false)
+  enabledAt          DateTime?
+  /// userId de quem ligou/desligou por último.
+  enabledBy          String?
+  /// Documento de fatos da oferta (preço, o que entrega, links). O vendedor só afirma o que estiver aqui.
+  offerFacts         String    @default("")
+  /// Prova social REAL cadastrada pelo dono (depoimentos, números). Vazio = o vendedor não cita nenhuma.
+  socialProof        String    @default("")
+  /// Fila global: espera mínima (s) depois de enviar numa conversa antes de atender outra.
+  minGapSeconds      Int       @default(5)
+  maxPerHour         Int       @default(12)
+  maxPerDay          Int       @default(60)
+  maxPerPersonDay    Int       @default(8)
+  /// Espera antes de responder à mensagem da pessoa (s): parece gente lendo.
+  replyDelayMinSec   Int       @default(20)
+  replyDelayMaxSec   Int       @default(90)
+  /// Horário de silêncio no fuso de São Paulo ("23:00" a "07:00"); vazio = sem silêncio.
+  quietStart         String?   @default("23:00")
+  quietEnd           String?   @default("07:00")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+/// Toda decisão do vendedor automático (enviou, virou rascunho, pulou, parou, erro) com o motivo.
+/// Também é o contador de limites (por hora, dia e pessoa) e a fonte do resumo diário.
+model VendedorIgLog {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String
+  contactId          String
+  /// A DM da pessoa que motivou a decisão. Uma decisão por DM.
+  inboundMid         String
+  /// sent | draft | skipped | stopped | error
+  outcome            String
+  reason             String
+  /// Texto que saiu (ou que virou rascunho), partes separadas por linha em branco.
+  text               String?
+  parts              Int      @default(0)
+  mids               String[] @default([])
+  draftId            String?
+  model              String?
+  costMicroUsd       Int      @default(0)
+  createdAt          DateTime @default(now())
+
+  @@unique([instagramAccountId, inboundMid])
+  @@index([instagramAccountId, createdAt])
+  @@index([contactId, createdAt])
+  @@schema("public")
+}
+
+/// Cartão da pessoa: dado oficial do perfil (User Profile API) com cache de 24 h. Sem foto, sem mídia.
+model VendedorIgPerfil {
+  contactId     String   @id
+  followerCount Int?
+  followsUs     Boolean?
+  /// ok | denied | error
+  status        String
+  fetchedAt     DateTime
+
   @@schema("public")
 }

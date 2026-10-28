@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { fail, ok, readJson, requireContext } from "@/lib/api-helpers";
 import { editDraft, MAX_DRAFT_REASON, MAX_DRAFT_TEXT } from "@/lib/drafts/drafts";
+import { getApiCaller } from "@/lib/auth";
 import { CONTEXT_CONTACT_SELECT, presentContact } from "@/lib/inbox/context";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export async function GET(_request: NextRequest, { params }: RouteProps) {
   });
   if (!draft) return fail("Draft not found", 404);
   const { contact, ...rest } = draft;
-  return ok({ ...rest, contact: await presentContact(contact, { messages: 10 }) });
+  return ok({ ...rest, contact: await presentContact(contact, {}) });
 }
 
 const patchSchema = z.object({
@@ -43,6 +44,7 @@ export async function PATCH(request: NextRequest, { params }: RouteProps) {
     id,
     text: parsed.data.text,
     reason: parsed.data.reason,
+    origin: (await getApiCaller()).kind === "token" ? "vendedor" : "manual",
   });
   if (!result.ok) return fail(result.error, result.status, { code: result.code });
   return ok({ id, edited: true });
